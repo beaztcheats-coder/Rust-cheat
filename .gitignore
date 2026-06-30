@@ -1,0 +1,29 @@
+# Visual Studio
+.vs/
+*.VC.db
+*.VC.VC.opendb
+*.suo
+*.user
+
+# Build artifacts
+**/x64/Release/*.obj
+**/x64/Release/*.res
+**/x64/Release/*.exp
+**/x64/Release/*.lib
+**/x64/Release/*.recipe
+**/x64/Release/*.tlog
+**/x64/Release/*.lastbuildstate
+**/x64/Release/*.FileListAbsolute.txt
+**/*.tlog/
+
+# Runtime outputs
+server.log
+frida_dump.txt
+
+# Optional local tools cache
+.opencode/node_modules/
+
+# Large generated files
+*.tri
+x64/Release/
+tools/build/Release/

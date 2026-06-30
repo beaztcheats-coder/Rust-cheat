@@ -1,0 +1,587 @@
+#include "aimbot.hpp"
+#include "../Cache/cache.hpp"
+#include <vector>
+#include "../../Logger.hpp"
+#include <unordered_map>
+#include <cmath>
+
+// Lightweight cache copy for aimbot — avoids copying 13 strings per player
+struct AimbotCacheData {
+    Vector3 headPos;
+    Vector3 velocity;
+    Vector3 bones[15];
+    std::string weaponName;
+    uint64_t teamId = 0;
+    bool skeletonValid = false;
+    bool isDead = false;
+    bool isSleeping = false;
+    bool isWounded = false;
+    bool isVisible = false;
+    bool isVisibleRaw = false;
+    bool isCrouching = false;
+    bool isGrounded = true;
+    uint64_t cacheTick = 0;
+};
+
+static AimbotCacheData CopyAimbotCache(const EspCacheData& src) {
+    AimbotCacheData d;
+    d.headPos = src.headPos;
+    d.velocity = src.velocity;
+    for (int i = 0; i < 15; i++) d.bones[i] = src.bones[i];
+    d.weaponName = src.weaponName;
+    d.teamId = src.teamId;
+    d.skeletonValid = src.skeletonValid;
+    d.isDead = src.isDead;
+    d.isSleeping = src.isSleeping;
+    d.isWounded = src.isWounded;
+    d.isVisible = src.isVisible;
+    d.isVisibleRaw = src.isVisibleRaw;
+    d.isCrouching = src.isCrouching;
+    d.isGrounded = src.isGrounded;
+    d.cacheTick = src.cacheTick;
+    return d;
+}
+
+static float GetFrameDt()
+{
+    static ULONGLONG last = 0;
+    ULONGLONG now = GetTickCount64();
+    float dt = (last == 0) ? 0.016f : (float)(now - last) / 1000.f;
+    last = now;
+    if (dt <= 0.f || dt > 0.5f) dt = 0.016f;
+    return dt;
+}
+
+static std::unordered_map<uintptr_t, Vector3> prevPositions;
+
+static int GetScreenMidX() { static int v = 0; if (!v) v = GetSystemMetrics(0) / 2; return v; }
+static int GetScreenMidY() { static int v = 0; if (!v) v = GetSystemMetrics(1) / 2; return v; }
+
+static bool ScreenPointValid(const Vector2& p)
+{
+    static int sw = 0, sh = 0;
+    if (!sw) { sw = GetSystemMetrics(SM_CXSCREEN); sh = GetSystemMetrics(SM_CYSCREEN); }
+    if (!std::isfinite(p.x) || !std::isfinite(p.y)) return false;
+    if (p.x <= 1.0f || p.y <= 1.0f) return false;
+    if (p.x >= (float)sw - 1.0f || p.y >= (float)sh - 1.0f) return false;
+    return true;
+}
+
+static int GetBestBone(Rust::BaseEntity* player)
+{
+    // 0=Head, 1=Neck, 2=Chest, 3=Pelvis, 4=ClosestToCrosshair, 5=Smart
+    if (AIMBOT::BonePriority <= 3) {
+        static const int singleBones[] = { 53, 52, 20, 14 };
+        return singleBones[AIMBOT::BonePriority];
+    }
+
+    // Priority 4/5: use CACHED bone positions
+    static const int bonePool[] = { 53, 52, 20, 14 };
+    static const int cacheIdx[] = { 0, 1, 2, 3 };
+    static const int boneCount = 4;
+
+    int screenMidX = GetScreenMidX();
+    int screenMidY = GetScreenMidY();
+
+    if (AIMBOT::BonePriority == 4 || AIMBOT::BonePriority == 5) {
+        int bestBone = 53;
+        float bestDist = FLT_MAX;
+
+        Vector3 cachedBones[15] = {};
+        bool hasCache = false;
+        bool isCrouching = false;
+        {
+            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            auto cd = g_EspCache.find((uintptr_t)player);
+            if (cd != g_EspCache.end() && cd->second.skeletonValid) {
+                hasCache = true;
+                for (int bi = 0; bi < 15; ++bi) cachedBones[bi] = cd->second.bones[bi];
+                isCrouching = cd->second.isCrouching;
+            }
+        }
+
+        for (int i = 0; i < boneCount; i++) {
+            Vector3 pos;
+            if (hasCache && cacheIdx[i] >= 0) {
+                pos = cachedBones[cacheIdx[i]];
+            } else {
+                pos = player->Get_ObjectPosition();
+                if (bonePool[i] == 53) pos.y += isCrouching ? 1.05f : 1.65f;
+                else if (bonePool[i] == 52) pos.y += isCrouching ? 0.90f : 1.50f;
+                else if (bonePool[i] == 20) pos.y += isCrouching ? 0.65f : 1.20f;
+                else if (bonePool[i] == 14) pos.y += isCrouching ? 0.25f : 0.50f;
+            }
+            if (pos.Empty()) continue;
+            auto screen = WorldToScreen(pos, src->GetMatrixSnapshot());
+            if (screen.Empty()) continue;
+            float dx = (float)(screen.x - screenMidX);
+            float dy = (float)(screen.y - screenMidY);
+            float dist = dx * dx + dy * dy;
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestBone = bonePool[i];
+            }
+        }
+
+        // Priority 5 (Smart): prefer head if within 1.5x FOV
+        if (AIMBOT::BonePriority == 5 && bestBone != 53) {
+            if (bestDist <= (float)(AIMBOT::FovSize * AIMBOT::FovSize) * 2.25f)
+                bestBone = 53;
+        }
+
+        return bestBone;
+    }
+
+    return AIMBOT::BoneSelector;
+}
+
+static Vector3 GetPredictedTargetPos(Rust::BaseEntity* player, int bone)
+{
+    Vector3 rootPos = player->Get_ObjectPosition();
+    if (rootPos.Empty()) return Vector3();
+
+    // Try cached skeleton bones first (no IOCTL calls)
+    // Cache index: 0=head(53), 1=neck(52), 2=spine1(20)
+    static const int boneToCache[] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, 3, -1, -1, -1, -1, -1,  // 0-19: r_hip=14→cache[3]
+        2, -1, -1, -1, -1, 9, 10, -1, -1, 11,   // 20: spine1→cache[2], 25=l_upperarm→9, 26=l_forearm→10, 29=l_hand→11
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, 1, 0, -1, -1, -1, -1, -1, -1,   // 52=neck→1, 53=head→0
+        -1, -1, -1, -1, -1, -1, -1, 12, 13, 14  // 60→-1, 61=r_upperarm→12, 62=r_forearm→13, 65=r_hand→14
+    };
+
+    Vector3 pos;
+    int cacheIdx = (bone >= 0 && bone < 66) ? boneToCache[bone] : -1;
+    if (cacheIdx >= 0) {
+        std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+        auto cd = g_EspCache.find((uintptr_t)player);
+        if (cd != g_EspCache.end() && cd->second.skeletonValid) {
+            pos = cd->second.bones[cacheIdx];
+        }
+    }
+
+    // Fallback: root + crouch-aware height offset
+    if (pos.Empty()) {
+        pos = rootPos;
+        // Use cached crouch state (zero IOCTLs)
+        bool isCrouching = false;
+        {
+            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            auto cd = g_EspCache.find((uintptr_t)player);
+            if (cd != g_EspCache.end()) isCrouching = cd->second.isCrouching;
+        }
+        if (bone == 53) pos.y += isCrouching ? 1.05f : 1.65f;
+        else if (bone == 52) pos.y += isCrouching ? 0.90f : 1.50f;
+        else if (bone == 20) pos.y += isCrouching ? 0.65f : 1.20f;
+        else if (bone == 14) pos.y += isCrouching ? 0.25f : 0.50f;
+        else pos.y += isCrouching ? 0.50f : 1.0f;
+    }
+
+    if (pos.Empty()) return pos;
+
+    if (AIMBOT::PredictionScale <= 0.001f) return pos;
+
+    // Cap prevPositions growth
+    {
+        static int cleanTick = 0;
+        if (++cleanTick >= 600) { cleanTick = 0; if (prevPositions.size() > 512) prevPositions.clear(); }
+    }
+
+    uintptr_t key = (uintptr_t)player;
+    auto it = prevPositions.find(key);
+    float dt = GetFrameDt();
+
+    if (it != prevPositions.end()) {
+        Vector3 diff = pos - it->second;
+        float idt = 1.f / dt;
+        Vector3 vel(diff.x * idt, diff.y * idt, diff.z * idt);
+        float speed = vel.Length();
+        if (speed > 0.1f && speed < 50.f) {
+            Vector3 predicted = pos + vel * (dt * AIMBOT::PredictionScale);
+            // Gravity compensation for bullet drop
+            predicted.y += 4.905f * (dt * AIMBOT::PredictionScale) * (dt * AIMBOT::PredictionScale);
+            prevPositions[key] = pos;
+            return predicted;
+        }
+    }
+    prevPositions[key] = pos;
+    return pos;
+}
+
+Rust::BaseEntity* aimbot::Get_BestEntity()
+{
+    if (!src->LocalPlayer || !is_valid((uintptr_t)src->LocalPlayer)) return nullptr;
+
+    float Closest = FLT_MAX;
+    Rust::BaseEntity* RPlayer = nullptr;
+
+    cac->entity_mutex.lock();
+    std::vector<Rust::BaseEntity*> list = entity_List;
+    cac->entity_mutex.unlock();
+
+    if (AIMBOT::KeepTarget && lastTarget) {
+        bool still_valid = false;
+        for (const auto& p : list) {
+            if (p == lastTarget && p && !p->IsDead()) {
+                // Use cached bones instead of live Get_Transformation
+                EspCacheData tc;
+                bool hasTc = false;
+                {
+                    std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+                    auto it = g_EspCache.find((uintptr_t)p);
+                    if (it != g_EspCache.end()) { tc = it->second; hasTc = true; }
+                }
+                if (hasTc) {
+                    int bone = GetBestBone(p);
+                    static const int boneToCache[] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                        -1, -1, -1, -1, 3, -1, -1, -1, -1, -1, 2, -1, -1, -1, -1, 9, 10, -1, -1, 11,
+                        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                        -1, -1, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 12, 13, 14
+                    };
+                    Vector3 pos;
+                    int ci = (bone >= 0 && bone < 66) ? boneToCache[bone] : -1;
+                    if (ci >= 0 && tc.skeletonValid) pos = tc.bones[ci];
+                    if (pos.Empty()) pos = tc.headPos;
+                    if (!pos.Empty()) {
+                        auto screen = WorldToScreen(pos, src->GetMatrixSnapshot());
+                        if (!screen.Empty()) {
+                            float len = sqrt(sqr(GetScreenMidX() - screen.x) + sqr(GetScreenMidY() - screen.y));
+                            if (len <= AIMBOT::FovSize) still_valid = true;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        if (still_valid) return lastTarget;
+        lastTarget = nullptr;
+    }
+
+    uint64_t myTeam = 0;
+    if (AIMBOT::IgnoreTeam)
+        myTeam = read<uint64_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::CurrentTeam);
+
+    for (const auto& Player : list) {
+        if (!Player) continue;
+
+        AimbotCacheData pcache;
+        bool hasCache = false;
+        {
+            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            auto it = g_EspCache.find((uintptr_t)Player);
+            if (it != g_EspCache.end()) {
+                pcache = CopyAimbotCache(it->second);
+                hasCache = true;
+            }
+        }
+        if (!hasCache) continue;
+        if (AIMBOT::IgnoreWounded && pcache.isWounded) continue;
+        if (AIMBOT::IgnoreSleepers && pcache.isSleeping) continue;
+        if (AIMBOT::VisibleOnly) {
+            bool vis = pcache.isVisible;
+            if (AIMBOT::VisibleStrict) vis = pcache.isVisibleRaw && vis;
+            if (!vis) continue;
+        }
+        if (AIMBOT::WeaponCheck) {
+            // Use cached weapon name instead of live read
+            if (pcache.weaponName.empty()) continue;
+            // Basic weapon check via cached name (non-ideal but zero IOCTL)
+        }
+
+        if (AIMBOT::IgnoreTeam && myTeam != 0) {
+            if (pcache.teamId == myTeam) continue;
+        }
+
+        // Use cached bone positions (zero IOCTLs) instead of Get_Transformation
+        int bone = GetBestBone(Player);
+        Vector3 pos;
+        {
+            static const int boneToCache[] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                -1, -1, -1, -1, 3, -1, -1, -1, -1, -1,
+                2, -1, -1, -1, -1, 9, 10, -1, -1, 11,
+                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                -1, -1, 1, 0, -1, -1, -1, -1, -1, -1,
+                -1, -1, -1, -1, -1, -1, -1, 12, 13, 14
+            };
+            int cacheIdx = (bone >= 0 && bone < 66) ? boneToCache[bone] : -1;
+            if (cacheIdx >= 0 && pcache.skeletonValid)
+                pos = pcache.bones[cacheIdx];
+            if (pos.Empty())
+                pos = pcache.headPos;
+        }
+        if (pos.Empty()) continue;
+        auto screen = WorldToScreen(pos, src->GetMatrixSnapshot());
+        if (screen.Empty()) continue;
+
+        float length = sqrt(sqr(GetScreenMidX() - screen.x) + sqr(GetScreenMidY() - screen.y));
+
+        // Distance cap — skip targets beyond max_distance_aim (use cached local pos, zero IOCTLs)
+        if (AIMBOT::MaxDistanceAim > 0.f) {
+            Vector3 lpPos;
+            {
+                std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex);
+                lpPos = g_LocalPlayerPos;
+            }
+            if (!lpPos.Empty()) {
+                float dist = lpPos.DistTo(pos);
+                if (dist > AIMBOT::MaxDistanceAim) continue;
+            }
+        }
+
+        if (length < Closest && length <= AIMBOT::FovSize) {
+            Closest = length;
+            RPlayer = Player;
+        }
+    }
+
+    lastTarget = RPlayer;
+    return RPlayer;
+}
+
+void aimbot::do_aimbot()
+{
+    if (!src->LocalPlayer || !is_valid((uintptr_t)src->LocalPlayer)) return;
+    if (g_BnStableCycles.load(std::memory_order_relaxed) < 3) return;
+
+    // Early-out: skip the entire aimbot loop when no feature is active
+    if (!AIMBOT::Memory && !AIMBOT::TargetLine && !AIMBOT::TargetText
+        && !AIMBOT::PredictionIndicator && !ESP::hotbar_text) return;
+
+    {
+        static ULONGLONG quarantineStart = 0;
+        static uintptr_t quarantineLp = 0;
+        static bool qLogged = false;
+        const ULONGLONG now = GetTickCount64();
+        const uintptr_t lp = (uintptr_t)src->LocalPlayer;
+        if (quarantineStart == 0 || lp != quarantineLp) {
+            quarantineStart = now;
+            quarantineLp = lp;
+            qLogged = false;
+        }
+        if ((now - quarantineStart) < 10000ULL) {
+            if (!qLogged) {
+                LOG("AIMBOT: WRITE SKIP (startup quarantine active: 10s)");
+                qLogged = true;
+            }
+            return;
+        }
+    }
+
+    const uint64_t lpGeneration = g_LocalPlayerGeneration.load(std::memory_order_acquire);
+    auto lpStillStable = [&]() -> bool {
+        return src->LocalPlayer
+            && is_valid((uintptr_t)src->LocalPlayer)
+            && g_BnStableCycles.load(std::memory_order_relaxed) >= 3
+            && g_LocalPlayerGeneration.load(std::memory_order_acquire) == lpGeneration;
+    };
+
+    auto BestEntity = Get_BestEntity();
+    if (!BestEntity) {
+        static int noTargetCount = 0;
+        if (noTargetCount < 3) {
+            LOG("AIMBOT: no target found (list=%d)", (int)entity_List.size());
+            noTargetCount++;
+        }
+        return;
+    }
+
+    // Diagnostic: first successful target acquisition
+    static bool aimTargetLogged = false;
+    if (!aimTargetLogged) {
+        aimTargetLogged = true;
+        LOG("AIMBOT: target acquired (0x%I64X) Memory=%d", (uint64_t)BestEntity, (int)AIMBOT::Memory);
+    }
+
+    if (ESP::hotbar_text) {
+        // Use cached belt from EspCacheData (zero IOCTLs) instead of live Get_Hotbar_list
+        EspCacheData tc;
+        bool hasTc = false;
+        {
+            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            auto it = g_EspCache.find((uintptr_t)BestEntity);
+            if (it != g_EspCache.end()) { tc = it->second; hasTc = true; }
+        }
+        if (hasTc) {
+            for (int i = 0; i < 6; i++) {
+                if (!tc.belt[i].empty()) {
+                    hotbar_mutex.lock();
+                    hotbar_list.push_back(tc.belt[i]);
+                    hotbar_mutex.unlock();
+                }
+            }
+        }
+    }
+
+    if (AIMBOT::Memory) {
+        int bone = GetBestBone(BestEntity);
+
+        // Get target position with prediction (handles velocity + gravity comp)
+        auto targetPos = GetPredictedTargetPos(BestEntity, bone);
+        // Override with SSE bone position if cache was stale (more accurate)
+        if (targetPos.Empty()) {
+            auto tr = BestEntity->Get_Transformation((BoneList)bone);
+            if (tr) targetPos = tr->Get_Position();
+        }
+        if (targetPos.Empty()) return;
+
+        // Get LOCAL player position — from globals (zero IOCTLs, written by fast thread)
+        Vector3 localPos;
+        {
+            std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex);
+            localPos = g_LocalNeckPos;
+        }
+        if (localPos.Empty()) {
+            auto localNeck = src->LocalPlayer->Get_Transformation(BoneList::neck);
+            if (localNeck) localPos = localNeck->Get_Position();
+        }
+        if (localPos.Empty()) return;
+        auto angle = CalcAngle(localPos, targetPos);
+        if (!angle.Empty()) {
+            Normalize(angle.y, angle.x);
+
+            static bool aim_logged = false;
+            static int aim_count = 0;
+            if (!aim_logged || aim_count < 10) {
+                uintptr_t inp = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
+                Vector3 cur = read<Vector3>(inp + offsets::PlayerInput::bodyAngles);
+                // Determine which eyes path was used
+                uintptr_t eyesRaw = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerEyes);
+                uint64_t handle = eyesRaw ? read<uint64_t>(eyesRaw + 0x18) : 0;
+                uintptr_t eyesResolved = handle ? decrypt::Il2cppGetHandle(handle) : 0;
+                const char* eyesSrc = eyesResolved ? "GCHandle" : "fallback";
+                LOG("AIMBOT_WRITE[%d]: bone=%d angle=(%.1f,%.1f) cur=(%.1f,%.1f) localY=%.1f targetY=%.1f eyes=%s",
+                    aim_count, bone, angle.x, angle.y, cur.x, cur.y,
+                    localPos.y, targetPos.y, eyesSrc);
+                aim_logged = true;
+                aim_count++;
+            }
+
+            uintptr_t input = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
+            if (is_valid(input) && is_valid(input + offsets::PlayerInput::bodyAngles)) {
+                int passes = AIMBOT::SpinWrites ? 3 : 1;
+                for (int p = 0; p < passes; p++) {
+                    if (!is_valid(input) || !is_valid(input + offsets::PlayerInput::bodyAngles)) break;
+                    if (p > 0) {
+                        if (!lpStillStable()) break;
+                        Sleep(0);
+                        Vector3 cur = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
+                        float dx = fabsf(angle.x - cur.x);
+                        float dy = fabsf(angle.y - cur.y);
+                        if (dy > 180.f) dy = 360.f - dy;
+                        if (dx < 0.5f && dy < 0.5f) break;
+                    }
+
+                    if (AIMBOT::SMOOTHING > 1.f) {
+                        if (!lpStillStable()) break;
+                        Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
+                        float smooth = AIMBOT::SMOOTHING;
+                        float deltaX = angle.x - currentAngle.x;
+                        float deltaY = angle.y - currentAngle.y;
+                        if (deltaY > 180.f) deltaY -= 360.f;
+                        if (deltaY < -180.f) deltaY += 360.f;
+                        Vector3 smoothed;
+                        smoothed.x = currentAngle.x + deltaX / smooth;
+                        smoothed.y = currentAngle.y + deltaY / smooth;
+                        smoothed.z = currentAngle.z;
+                        write<Vector3>(input + offsets::PlayerInput::bodyAngles, smoothed);
+                    }
+                    else {
+                        if (!lpStillStable()) break;
+                        Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
+                        float deltaX = angle.x - currentAngle.x;
+                        float deltaY = angle.y - currentAngle.y;
+                        if (deltaY > 180.f) deltaY -= 360.f;
+                        if (deltaY < -180.f) deltaY += 360.f;
+                        const float MAX_DELTA = 15.0f;
+                        if (fabsf(deltaX) > MAX_DELTA) deltaX = (deltaX > 0.f ? MAX_DELTA : -MAX_DELTA);
+                        if (fabsf(deltaY) > MAX_DELTA) deltaY = (deltaY > 0.f ? MAX_DELTA : -MAX_DELTA);
+                        Vector3 clamped(currentAngle.x + deltaX, currentAngle.y + deltaY, currentAngle.z);
+                        write<Vector3>(input + offsets::PlayerInput::bodyAngles, clamped);
+                    }
+
+                    // Silent aim — BodyRotation quaternion (no visible aim change)
+                    if (AIMBOT::Memory && AIMBOT::Silent) {
+                        if (!lpStillStable()) break;
+                        uintptr_t eyes = src->LocalPlayer->GetPlayerEyes();
+                        if (eyes) {
+                                float pr = angle.x * 3.141592f / 180.f;
+                                float yr = angle.y * 3.141592f / 180.f;
+                                float cy = cosf(yr * 0.5f), sy = sinf(yr * 0.5f);
+                                float cp = cosf(pr * 0.5f), sp = sinf(pr * 0.5f);
+                                write<Vector4>(eyes + offsets::PlayerEyes::bodyRotation, Vector4(cy * sp, sy * cp, sy * sp, cy * cp));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Target visuals (work independently of Memory Aimbot) — only if a visual feature is on
+    if (AIMBOT::TargetLine || AIMBOT::TargetText || (AIMBOT::PredictionIndicator && AIMBOT::PredictionScale > 0.001f))
+    {
+        int drawBone = GetBestBone(BestEntity);
+        // Use cached bone position instead of live Get_Transformation (zero IOCTLs)
+        Vector3 drawPos;
+        EspCacheData tc;
+        bool hasTc = false;
+        {
+            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            auto it = g_EspCache.find((uintptr_t)BestEntity);
+            if (it != g_EspCache.end()) { tc = it->second; hasTc = true; }
+        }
+        if (hasTc && tc.skeletonValid) {
+            static const int boneToCache[] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                -1, -1, -1, -1, 3, -1, -1, -1, -1, -1, 2, -1, -1, -1, -1, 9, 10, -1, -1, 11,
+                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                -1, -1, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 12, 13, 14
+            };
+            int ci = (drawBone >= 0 && drawBone < 66) ? boneToCache[drawBone] : -1;
+            if (ci >= 0) drawPos = tc.bones[ci];
+            if (drawPos.Empty()) drawPos = tc.headPos;
+        }
+        if (!drawPos.Empty()) {
+            auto drawScreen = WorldToScreen(drawPos, src->GetMatrixSnapshot());
+            if (ScreenPointValid(drawScreen)) {
+                if (AIMBOT::TargetLine) {
+                    Vector2 StartPos((float)GetScreenMidX(), (float)GetScreenMidY());
+                    if (AIMBOT::TargetLineFromMuzzle && src->LocalPlayer) {
+                        // Use cached local neck position (zero IOCTLs)
+                        Vector3 muzzlePos;
+                        {
+                            std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex);
+                            muzzlePos = g_LocalNeckPos;
+                        }
+                        if (!muzzlePos.Empty()) {
+                            Vector2 muzzleScreen = WorldToScreen(muzzlePos, src->GetMatrixSnapshot());
+                            if (ScreenPointValid(muzzleScreen)) StartPos = muzzleScreen;
+                        }
+                    }
+                    ImGui::GetBackgroundDrawList()->AddLine(
+                        ImVec2(StartPos.x, StartPos.y),
+                        ImVec2(drawScreen.x, drawScreen.y),
+                        AIMBOT::color::TargetLine,
+                        AIMBOT::TargetLineThickness);
+                }
+                if (AIMBOT::TargetText) {
+                    auto* dl = ImGui::GetBackgroundDrawList();
+                    dl->AddCircleFilled(ImVec2(drawScreen.x, drawScreen.y), 3.5f, AIMBOT::color::TargetText, 16);
+                    dl->AddCircle(ImVec2(drawScreen.x, drawScreen.y), 5.0f, IM_COL32(0, 0, 0, 180), 16, 1.3f);
+                }
+                if (AIMBOT::PredictionIndicator && AIMBOT::PredictionScale > 0.001f) {
+                    auto predPos = GetPredictedTargetPos(BestEntity, drawBone);
+                    if (!predPos.Empty()) {
+                        auto predScreen = WorldToScreen(predPos, src->GetMatrixSnapshot());
+                        if (ScreenPointValid(predScreen)) {
+                            auto* dl = ImGui::GetBackgroundDrawList();
+                            dl->AddLine(ImVec2(drawScreen.x, drawScreen.y), ImVec2(predScreen.x, predScreen.y), IM_COL32(255, 230, 80, 200), 1.5f);
+                            dl->AddCircle(ImVec2(predScreen.x, predScreen.y), 4.0f, IM_COL32(255, 230, 80, 230), 18, 1.6f);
+                            dl->AddCircleFilled(ImVec2(predScreen.x, predScreen.y), 1.5f, IM_COL32(255, 255, 255, 220));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

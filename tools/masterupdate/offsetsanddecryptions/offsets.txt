@@ -1,0 +1,109 @@
+// Auto-generated offsets
+
+namespace Action_invoke_impl_o {
+    inline uintptr_t klass = 0x0; // Action_invoke_impl
+}
+
+namespace Action_method_code_o {
+    inline uintptr_t klass = 0x0; // Action_method_code
+}
+
+namespace Action_method_o {
+    inline uintptr_t klass = 0x0; // Action_method
+}
+
+namespace CameraUpdateHook_action_o {
+    inline uintptr_t klass = 0x0; // CameraUpdateHook_action
+}
+
+namespace ListComponent_Projectile_c_o {
+    inline uintptr_t klass = 0xE3CFC20; // ListComponent_Projectile_c
+    inline uintptr_t instance = 0x28; // ListComponent_Projectile_c::instance
+    inline uintptr_t parent = 0x18; // ListComponent_Projectile_c::parent
+}
+
+namespace base_networkable_o {
+    inline uintptr_t klass = 0xE334210; // base_networkable
+    inline uintptr_t entity = 0x18; // base_networkable::entity
+    inline uintptr_t parent_static_fields = 0x10; // base_networkable::parent_static_fields
+    inline uintptr_t static_fields = 0xB8; // base_networkable::static_fields
+    inline uintptr_t wrapper_class_ptr = 0x20; // base_networkable::wrapper_class_ptr
+}
+
+namespace base_player_o {
+    inline uintptr_t active_item = 0x510; // base_player::active_item
+    inline uintptr_t base_movement = 0x308; // base_player::base_movement
+    inline uintptr_t current_team = 0x4E0; // base_player::current_team
+    inline uintptr_t display_name = 0x670; // base_player::display_name
+    inline uintptr_t model_state = 0x378; // base_player::model_state
+    inline uintptr_t player_input = 0x628; // base_player::player_input
+    inline uintptr_t player_model = 0x2C8; // base_player::player_model
+    inline uintptr_t steam_id = 0x408; // base_player::steam_id
+}
+
+namespace base_view_model_o {
+    inline uintptr_t viewmodel_bob = 0xC0; // base_view_model::viewmodel_bob
+    inline uintptr_t viewmodel_lower = 0xA8; // base_view_model::viewmodel_lower
+    inline uintptr_t viewmodel_sway = 0xC8; // base_view_model::viewmodel_sway
+}
+
+namespace effect_network_o {
+    inline uintptr_t klass = 0xE3790F8; // effect_network
+    inline uintptr_t instance = 0x48; // effect_network::instance
+}
+
+namespace game_manager_o {
+    inline uintptr_t klass = 0xE319048; // game_manager
+    inline uintptr_t instance = 0x8; // game_manager::instance
+}
+
+namespace il2_cpp_handle_o {
+    inline uintptr_t klass = 0x0; // il2_cpp_handle
+}
+
+namespace item_icon_c_o {
+    inline uintptr_t klass = 0xE331B50; // item_icon_c
+}
+
+namespace item_icon_o {
+    inline uintptr_t instance = 0x28; // item_icon::instance
+}
+
+namespace main_camera_c_o {
+    inline uintptr_t klass = 0xE37ACA0; // main_camera_c
+}
+
+namespace main_camera_o {
+    inline uintptr_t instance = 0x90; // main_camera::instance
+    inline uintptr_t static_fields = 0xB8; // main_camera::static_fields
+}
+
+namespace model_state_o {
+    inline uintptr_t flags = 0x1C; // model_state::flags
+}
+
+namespace player_eyes_c_o {
+    inline uintptr_t klass = 0x0; // player_eyes_c
+}
+
+namespace player_model_o {
+    inline uintptr_t skinned_mesh_renderer = 0x380; // player_model::skinned_mesh_renderer
+}
+
+namespace received_data_from_server_o {
+    inline uintptr_t klass = 0x27D3800; // received_data_from_server
+}
+
+namespace skinned_mesh_renderer_o {
+    inline uintptr_t list = 0x50; // skinned_mesh_renderer::list
+}
+
+namespace tod_sky_c_o {
+    inline uintptr_t klass = 0x0; // tod_sky_c
+}
+
+namespace tod_sky_o {
+    inline uintptr_t ctor_rva = 0xAB5F30; // tod_sky::ctor_rva
+    inline uintptr_t instance = 0x28; // tod_sky::instance
+    inline uintptr_t static_fields = 0xB8; // tod_sky::static_fields
+}

@@ -1,0 +1,580 @@
+broken 
+
+aimbot
+- target filter (does not filter by view aimbot dos not work when this is on)
+Line from muzzle doen niks
+weapon check not working - need to fix this does not filter correctly i can shoot people without weapons when its turned on - please fix
+change target text to target icon (text)
+recoil mod does not work on all guns only AK - Need to fix
+automatic and rapid fire - lets remove that completely from menu for now as well as the following under combat
+super melee
+instant bow
+fast bowno pullback
+instant compound
+extended melee
+ni animation
+no bob
+no sway
+no lower
+silent shot
+minigun bullet
+weapon chams
+touch underwater
+fast bulletno melee cooldown
+aim swayno punch
+hit sound
+text outline
+always sprint
+Omni sprintJump Shot
+Walk on walls
+No fall damage
+Shoot in air
+Reduced Gravity
+Moon Jump
+Spinbot
+Speedhack
+Fly Mode
+Fly safe mode
+High Jump
+Spiderman
+Walk on water
+Inf Jump
+No Wear Overlay
+Fast Horse
+Shoot in heli 
+
+
+//as i want to make a legit private cheat to not get banned by server admins
+
+re//move these from menu and comment out all these exploits and make changes as stated above to fix all as per latest rust update and new unity 6
+
+//visuals  
+
+//remove rayleigh mie scatter brightness star mod sun moon mesh tod colors - also swastica nzi sign crosshair in utility - also remove combat mode in utility aswell as vsync 
+
+//fix remove layers hotkey so that it actually works same with utility hotkeys
+
+//Settings config system is very very confusing and to many in there - should only be able to save configs via name or load configs or load preset - please fix 
+
+
+
+
+
+//remove "line from muzzle" in menu under combat
+
+//add disabling sleepers on radar
+
+??fix player esp to have a visible and invisible colour of both sceleton and box - but also check and analize frida dump for latest offsets and decrypts to fix this
+
+//make all changes in menu and child menu
+
+//remove all mentions of animations of menu and menu ui - not neccesary now will add later
+
+//still cant write config name in settings when i type nothing happens
+
+///bullet tracers does not work - the visual? please remove it from menu for now
+
+
+//remove tracer outline from menu
+
+//on dashboard - please take away presets and make 2 x presets - legit and rage - and predefine them with great colours with all features as per latest rust which you would recocomend be legit and be rage  - that includes aimbot etc where admin and eac wont catch you needs to be legit and when someone raids you it needs to be rage mode epreset - please also change v1 to v2 in whole menu
+//add logs when someone connects and i need to debug everything and why the crash or bann happened to be in their c drive where eac wont catch them - logs must auto clear after each injection
+//fix logs
+//ballista shows stag esp - please fix (make sure all is fixed all esp features etc)
+//in legit config - enable esp for animals and npc - no snaplines please - also enable off - but esp keep it close to player etc - change accordingly
+//analize https://www.unknowncheats.me/forum/rust/753212-runtime-dumper.html#google_vignette and see if this is a better version and can get all offsets? saved it here F:\github\dumper\rust-dumper
+//scrolling does not work in menu i have to drag down - please fix - main and child menu
+
+//free cam does nothing when i enable it please fix (debug camera) - should admin flags not be an option to enable? 
+//esp laggy
+//fix crash
+//add hotkey feature to zoom and fov changer 
+//clothing and item list does not work - remove from menu
+//esp range overlay out remove from meny
+//Remove reload bar from menu - unneccesary
+  
+//fix esp lag
+//p fix search aswell as config system
+//cant press backspace to selete text in configs - please add and fix - also when i tried to click anywhere else after opening up settings in menu i could not press anywhere else - and rust crashed
+scientist in outpost not showing on npc esp - add guard option in npc esp
+
+physx fix - now someone told me to fix visual or not visual with physics check - please analize -https://www.unknowncheats.me/forum/rust/164256-rust-reversal-structs-offsets-1227.html until page https://www.unknowncheats.me/forum/rust/164256-rust-reversal-structs-offsets-1247.html and get the latest fix for physics after unity 6 update in order to fix visable and not visable as its not working - it constantly shows not visable when changing feature in menu
+
+//esp laggy - please analize my overlay and modern techniques to make it super smooth and stick to player/animal esp etc in real time every frame by frame without breaking my cheat or overlay - i need a performance boost so esp is very smooth and on point
+
+//recoil working on ak not sure about other guns
+
+//need to verify TOD 
+fix aimbot shoots at feet - did you also fix my recoil etc and aimbot? also aimbot when crouching its shooting pelvis etc - please fix so that if its set on head it only shoots head even near or far same with smart and closest to crosshair etc fix all aswell as weird windwos crashes and bsod and auto reboots becaus of cheat sometimes especially when pressing end
+fix rage mode
+
+make new menu for other cheats
+//confirm world esp
+test dumper
+
+
+add bomza menu build - i would like to add a reseller of our's menu and reconfigure it with their logo etc - so when i do updates it must give me a bomzarust.dll thats seperate from mine now - with their menu gui etc - analize all - there should be rust external - then whitelabled dll - and then the new one bomza.dll
+
+#pragma once
+#ifdef BOMZATHEME
+#else
+#include "setting.h"
+#include "../obf.hpp"
+class c_gui {
+public:
+    void render();
+
+private:
+    void Aim();
+    void Pawn();
+    void Item();
+    void Map();
+    void Settting();
+    int main_tab = 0;
+};
+
+extern c_gui gui;
+
+#endif
+
+gui.h
+gui.cpp
+#ifdef BOMZATHEME
+#else
+#include "gui.h"
+#include "Overlay.h"
+#include <chrono>   // 时间库
+#include <ctime>    // 时间格式化
+#include <iomanip>
+
+using namespace ImGui;
+c_gui gui;
+
+void c_gui::Aim()
+{
+    auto size = ImGui::GetCurrentWindow()->Size;
+    ImGui::SetCursorPos(ImVec2(10, 20));
+    ImGui::BeginChild(obf("AimbotArea"), ImVec2(size.x - 20, size.y - 30), false);
+
+    ImGui::SeparatorText(obf(u8"Basic"));
+    ImGui::Checkbox(obf(u8"Aimbot Enable"), &set->Aimbot.Enable);
+    ImGui::Combo(obf(u8"Aim Mode"), &set->Aimbot.AimType, obf(u8"Magnetic Aim\0Silent Tracking\0"));
+
+    ImGui::SeparatorText(obf(u8"Hotkey Settings"));
+    Hotkey(obf(u8"Aim Hotkey [Lv1]"), &set->Aimbot.HotKey);
+    Hotkey(obf(u8"Aim Hotkey [Lv2]"), &set->Aimbot.HotKeyTwo);
+
+    ImGui::SeparatorText(obf(u8"Target Type"));
+    ImGui::Checkbox(obf(u8"Aim Players"), &set->Aimbot.AimPlayer);
+    ImGui::Checkbox(obf(u8"Aim Boss"), &set->Aimbot.AimBoss);
+    ImGui::Checkbox(obf(u8"Aim Elite"), &set->Aimbot.AimElite);
+    ImGui::Checkbox(obf(u8"Aim Bots"), &set->Aimbot.AimRobot);
+
+    ImGui::SeparatorText(obf(u8"Aim Position"));
+    ImGui::Combo(obf(u8"Position [Lv1]"), &set->Aimbot.AimPos, obf(u8"Random\0Head\0Chest\0Weak Spot\0Legs\0Neck\0"));
+    ImGui::Combo(obf(u8"Position [Lv2]"), &set->Aimbot.AimPosTwo, obf(u8"Random\0Head\0Chest\0Weak Spot\0Legs\0Neck\0"));
+    ImGui::Checkbox(obf(u8"SHIFT Force Head"), &set->Aimbot.ShiftForceHead);
+
+    ImGui::SeparatorText(obf(u8"Aim Range"));
+    ImGui::SliderFloat(obf(u8"Max Distance"), &set->Aimbot.maxDistance, 1.f, 500.f, "%.0f m");
+    ImGui::SliderFloat(obf(u8"FOV Range"), &set->Aimbot.AimFov, 1.f, 1000.f, "%.0f");
+
+    ImGui::SeparatorText(obf(u8"Speed Settings"));
+    ImGui::SliderFloat(obf(u8"X Axis Smooth"), &set->Aimbot.SmoothFactorX, 0.05f, 1.0f, "%.2f");
+    ImGui::SliderFloat(obf(u8"Y Axis Smooth"), &set->Aimbot.SmoothFactorY, 0.01f, 1.0f, "%.2f");
+
+    ImGui::SeparatorText(obf(u8"Display & Filter"));
+    ImGui::Checkbox(obf(u8"Show Aim FOV"), &set->Aimbot.showAimFov);
+    if (set->Aimbot.showAimFov)
+        ImGui::ColorEdit4(obf(u8"FOV Color"), (float*)&set->Aimbot.AimFovColor);
+    ImGui::Checkbox(obf(u8"Show Target"), &set->Aimbot.showTarget);
+    ImGui::Checkbox(obf(u8"Ignore Downed Targets"), &set->Aimbot.NotHealthZero);
+
+    ImGui::SeparatorText(obf(u8"Features"));
+    ImGui::Checkbox(obf(u8"Area Damage"), &set->GongNeng.范围开关);
+    if (set->GongNeng.范围开关)
+        ImGui::SliderInt(obf(u8"Damage Radius"), &set->GongNeng.范围数值, 30, 100);
+
+    //ImGui::Checkbox(u8"No Recoil", &set->GongNeng.无后座开关);
+    //ImGui::Checkbox(u8"Unlimited Breath", &set->GongNeng.无限屏息);
+
+    ImGui::EndChild();
+}
+
+void c_gui::Pawn()
+{
+    static int pawnIndex = 0;
+
+    c_set::c_Pawn* Pawn =
+        pawnIndex == 0 ? &set->玩家 :
+        pawnIndex == 1 ? &set->Boss :
+        pawnIndex == 2 ? &set->精英 :
+        &set->人机;
+
+    auto size = ImGui::GetCurrentWindow()->Size;
+    ImGui::SetCursorPos(ImVec2(10, 20));
+    ImGui::BeginChild(obf("PawnArea"), ImVec2(size.x - 20, size.y - 30), false);
+
+    ImGui::Combo(obf(u8"Type"), &pawnIndex, u8"Player\0Boss\0Elite\0Bot\0");
+    ImGui::Separator();
+    ImGui::SeparatorText(obf(u8"Display Settings"));
+    ImGui::Checkbox(obf(u8"Master Switch"), &Pawn->总开关);
+    ImGui::Checkbox(obf(u8"Skeleton"), &Pawn->骨骼开关);
+
+    ImGui::Checkbox(obf(u8"Box"), &Pawn->方框开关);
+
+    ImGui::Checkbox(obf(u8"Name"), &Pawn->名字开关);
+
+    ImGui::Checkbox(obf(u8"Weapon"), &Pawn->武器开关);
+
+    ImGui::Checkbox(obf(u8"Distance"), &Pawn->距离开关);
+
+    ImGui::Checkbox(obf(u8"Hero"), &Pawn->英雄开关);
+
+    ImGui::Checkbox(obf(u8"Team"), &Pawn->团队开关);
+    ImGui::Checkbox(obf(u8"Health"), &Pawn->血量开关);
+    ImGui::Checkbox(obf(u8"Helmet/Armor"), &Pawn->装备开关);
+
+    ImGui::SeparatorText(obf(u8"Equipment Level Filter"));
+    ImGui::Combo(obf(u8"Min Helmet Level"), &Pawn->头盔最小等级, u8"Off\0Lv1\0Lv2\0Lv3\0Lv4\0Lv5\0Lv6\0");
+    ImGui::Combo(obf(u8"Min Armor Level"), &Pawn->护甲最小等级, u8"Off\0Lv1\0Lv2\0Lv3\0Lv4\0Lv5\0Lv6\0");
+    ImGui::Combo(obf(u8"Min Chest Rig Level"), &Pawn->胸挂最小等级, u8"Off\0Lv1\0Lv2\0Lv3\0Lv4\0Lv5\0Lv6\0");
+    ImGui::Combo(obf(u8"Min Backpack Level"), &Pawn->背包最小等级, u8"Off\0Lv1\0Lv2\0Lv3\0Lv4\0Lv5\0Lv6\0");
+
+    ImGui::SeparatorText(obf(u8"Distance & Style"));
+    ImGui::SliderFloat(obf(u8"Max Distance"), &Pawn->最大距离, 1, 700, "%.fm");
+    ImGui::SliderFloat(obf(u8"Box Thickness"), &Pawn->方框粗细, 0.5f, 5.0f);
+    ImGui::SliderFloat(obf(u8"Skeleton Thickness"), &Pawn->SkeletonLine, 0.5f, 5.0f);
+    ImGui::SliderFloat(obf(u8"Font Size"), &Pawn->字体大小, 12, 32);
+
+    ImGui::EndChild();
+}
+
+void c_gui::Item()
+{
+    static int item_tab = 0;
+
+    auto size = ImGui::GetCurrentWindow()->Size;
+    ImGui::SetCursorPos(ImVec2(10, 20));
+    ImGui::BeginChild(obf("ItemArea"), ImVec2(size.x - 20, size.y - 30), false);
+
+    ImGui::Combo(obf(u8"Category"), &item_tab, u8"Ground Loot\0Containers\0Boxes\0Others\0");
+    ImGui::Separator();
+
+    // ================= Ground Loot =================
+    if (item_tab == 0)
+    {
+        ImGui::SeparatorText(obf(u8"Basic Settings"));
+        ImGui::Checkbox(obf(u8"Master Switch"), &set->Item.LootingItem.总开关);
+        ImGui::Checkbox(obf(u8"Value Filter"), &set->Item.LootingItem.价值过滤开关);
+        ImGui::Checkbox(obf(u8"High Value List"), &set->Item.LootingItem.高价值列表);
+        ImGui::SliderFloat(obf(u8"Filter Distance"), &set->Item.LootingItem.过滤距离, 1, 300, "%.fm");
+        ImGui::SliderFloat(obf(u8"Font Size"), &set->Item.LootingItem.字体大小, 12, 32);
+
+        if (set->Item.LootingItem.价值过滤开关)
+            ImGui::SliderFloat(obf(u8"Minimum Value"), &set->Item.LootingItem.最低价值, 0, 500000);
+
+        ImGui::SeparatorText(obf(u8"Item Levels"));
+        ImGui::Checkbox(obf(u8"White Items"), &set->Item.LootingItem.showLv1);
+        ImGui::Checkbox(obf(u8"Green Items"), &set->Item.LootingItem.showLv2);
+        ImGui::Checkbox(obf(u8"Blue Items"), &set->Item.LootingItem.showLv3);
+        ImGui::Checkbox(obf(u8"Purple Items"), &set->Item.LootingItem.showLv4);
+        ImGui::Checkbox(obf(u8"Gold Items"), &set->Item.LootingItem.showLv5);
+    }
+
+    // ================= Containers =================
+    if (item_tab == 1)
+    {
+        ImGui::SeparatorText(obf(u8"Container Settings"));
+        ImGui::Checkbox(obf(u8"Enable"), &set->Item.OpenBox.Enable);
+        ImGui::Checkbox(obf(u8"Container Loot"), &set->Item.OpenBox.showPickup);
+        ImGui::Checkbox(obf(u8"Open Filter"), &set->Item.OpenBox.openFiltering);
+
+        ImGui::Checkbox(obf(u8"Basic Container [Lv1]"), &set->Item.OpenBox.showOpenBox[0]);
+        ImGui::ColorEdit4(obf(u8"Lv1 Color"), (float*)&set->Item.OpenBox.OpenBoxColor[0].Value);
+
+        ImGui::Checkbox(obf(u8"Medium Container [Lv2]"), &set->Item.OpenBox.showOpenBox[1]);
+        ImGui::ColorEdit4(obf(u8"Lv2 Color"), (float*)&set->Item.OpenBox.OpenBoxColor[1].Value);
+
+        ImGui::Checkbox(obf(u8"Advanced Container [Lv3]"), &set->Item.OpenBox.showOpenBox[2]);
+        ImGui::ColorEdit4(obf(u8"Lv3 Color"), (float*)&set->Item.OpenBox.OpenBoxColor[2].Value);
+
+        ImGui::SliderFloat(obf(u8"Render Distance"), &set->Item.OpenBox.maxDistance, 1, 300);
+        ImGui::SliderFloat(obf(u8"Font Size"), &set->Item.OpenBox.fontSize, 12, 32);
+
+        ImGui::SeparatorText(obf(u8"Medium"));
+        ImGui::Checkbox(obf(u8"Medkit"), &set->Item.OpenBox.医疗包);
+        ImGui::Checkbox(obf(u8"Medical Supplies"), &set->Item.OpenBox.医疗物资堆);
+        ImGui::Checkbox(obf(u8"Large Weapon Box"), &set->Item.OpenBox.大武器箱);
+        ImGui::Checkbox(obf(u8"Delivery Box"), &set->Item.OpenBox.快递盒);
+        ImGui::Checkbox(obf(u8"Suitcase"), &set->Item.OpenBox.手提箱);
+        ImGui::Checkbox(obf(u8"Storage Box"), &set->Item.OpenBox.收纳盒);
+        ImGui::Checkbox(obf(u8"PC Case"), &set->Item.OpenBox.电脑机箱);
+        ImGui::Checkbox(obf(u8"Field Supply Box"), &set->Item.OpenBox.野外战备箱);
+
+        ImGui::SeparatorText(obf(u8"Advanced"));
+        ImGui::Checkbox(obf(u8"Clothing"), &set->Item.OpenBox.一件衣服);
+        ImGui::Checkbox(obf(u8"Safe"), &set->Item.OpenBox.保险柜);
+        ImGui::Checkbox(obf(u8"Strongbox"), &set->Item.OpenBox.保险箱);
+        ImGui::Checkbox(obf(u8"Small Safe"), &set->Item.OpenBox.小保险箱);
+        ImGui::Checkbox(obf(u8"Aviation Storage"), &set->Item.OpenBox.航空储物箱);
+        ImGui::Checkbox(obf(u8"Advanced Storage"), &set->Item.OpenBox.高级储物箱);
+        ImGui::Checkbox(obf(u8"Advanced Suitcase"), &set->Item.OpenBox.高级旅行箱);
+        ImGui::Checkbox(obf(u8"Bird Nest"), &set->Item.OpenBox.鸟窝);
+
+        ImGui::SeparatorText(obf(u8"Basic"));
+        ImGui::Checkbox(obf(u8"Military Medkit"), &set->Item.OpenBox.军用医疗包);
+        ImGui::Checkbox(obf(u8"Trash Can"), &set->Item.OpenBox.垃圾桶);
+        ImGui::Checkbox(obf(u8"Tool Cabinet"), &set->Item.OpenBox.工具柜);
+        ImGui::Checkbox(obf(u8"Ammunition Box"), &set->Item.OpenBox.弹药箱);
+        ImGui::Checkbox(obf(u8"Parcel Box"), &set->Item.OpenBox.快递箱);
+        ImGui::Checkbox(obf(u8"Travel Bag"), &set->Item.OpenBox.旅行包);
+        ImGui::Checkbox(obf(u8"Hidden Stash"), &set->Item.OpenBox.藏匿物);
+        ImGui::Checkbox(obf(u8"Field Loot Box"), &set->Item.OpenBox.野外物资箱);
+    }
+
+    // ================= Boxes =================
+    if (item_tab == 2)
+    {
+        ImGui::SeparatorText(obf(u8"Box Settings"));
+        ImGui::Checkbox(obf(u8"Enable"), &set->Item.DeadBody.Enable);
+        ImGui::Checkbox(obf(u8"Box Loot"), &set->Item.DeadBody.showPickup);
+        ImGui::Checkbox(obf(u8"Open Filter"), &set->Item.DeadBody.openFiltering);
+
+        ImGui::Checkbox(obf(u8"Player Box"), &set->Item.DeadBody.showPlayerBox);
+        ImGui::ColorEdit4(obf(u8"Player Box Color"), (float*)&set->Item.DeadBody.PlayerBoxColor);
+
+        ImGui::Checkbox(obf(u8"Boss Box"), &set->Item.DeadBody.showBossBox);
+        ImGui::ColorEdit4(obf(u8"Boss Box Color"), (float*)&set->Item.DeadBody.BossBoxColor);
+
+        ImGui::Checkbox(obf(u8"Elite Box"), &set->Item.DeadBody.showEliteBox);
+        ImGui::ColorEdit4(obf(u8"Elite Box Color"), (float*)&set->Item.DeadBody.EliteBoxColor);
+
+        ImGui::Checkbox(obf(u8"Bot Box"), &set->Item.DeadBody.showRobotBox);
+        ImGui::ColorEdit4(obf(u8"Bot Box Color"), (float*)&set->Item.DeadBody.RobotBoxColor);
+
+        ImGui::SliderFloat(obf(u8"Player Box Distance"), &set->Item.DeadBody.PlayerBoxDistance, 1, 300);
+        ImGui::SliderFloat(obf(u8"Boss Box Distance"), &set->Item.DeadBody.BossBoxDistance, 1, 300);
+        ImGui::SliderFloat(obf(u8"Elite Box Distance"), &set->Item.DeadBody.EliteBoxDistance, 1, 300);
+        ImGui::SliderFloat(obf(u8"Bot Box Distance"), &set->Item.DeadBody.RobotBoxDistance, 1, 300);
+        ImGui::SliderFloat(obf(u8"Font Size"), &set->Item.DeadBody.fontSize, 12, 32);
+    }
+
+    // ================= Others =================
+    if (item_tab == 3)
+    {
+        ImGui::SeparatorText(obf(u8"Basic"));
+        ImGui::Checkbox(obf(u8"Hack PC"), &set->Item.HackPC.Enable);
+        ImGui::ColorEdit4(obf(u8"HackPC Color"), (float*)&set->Item.HackPC.color);
+
+        ImGui::Checkbox(obf(u8"Code Lock Door"), &set->Item.CodeLock.Enable);
+        ImGui::ColorEdit4(obf(u8"Code Lock Color"), (float*)&set->Item.CodeLock.color);
+
+        ImGui::Checkbox(obf(u8"Switch"), &set->Item.ExitTrigger.Enable);
+        ImGui::ColorEdit4(obf(u8"Switch Color"), (float*)&set->Item.ExitTrigger.color);
+
+        ImGui::Checkbox(obf(u8"Extraction Point"), &set->Item.PlayerExit.Enable);
+        ImGui::ColorEdit4(obf(u8"Extraction Color"), (float*)&set->Item.PlayerExit.color);
+
+        ImGui::SeparatorText(obf(u8"Switch"));
+        ImGui::SliderFloat(obf(u8"V Font Size"), &set->Item.ExitTrigger.fontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"V Distance"), &set->Item.ExitTrigger.maxDistance, 1, 500);
+        ImGui::SliderFloat(obf(u8"M Font Size"), &set->Item.ExitTrigger.BigMapfontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"M Distance"), &set->Item.ExitTrigger.BigMapMaxDistance, 1, 800);
+
+        ImGui::SeparatorText(obf(u8"Hack PC"));
+        ImGui::SliderFloat(obf(u8"V Font Size"), &set->Item.HackPC.fontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"V Distance"), &set->Item.HackPC.maxDistance, 1, 500);
+        ImGui::SliderFloat(obf(u8"M Font Size"), &set->Item.HackPC.BigMapfontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"M Distance"), &set->Item.HackPC.BigMapMaxDistance, 1, 800);
+
+        ImGui::SeparatorText(obf(u8"Extraction"));
+        ImGui::SliderFloat(obf(u8"V Font Size"), &set->Item.PlayerExit.fontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"V Distance"), &set->Item.PlayerExit.maxDistance, 1, 500);
+        ImGui::SliderFloat(obf(u8"M Font Size"), &set->Item.PlayerExit.BigMapfontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"M Distance"), &set->Item.PlayerExit.BigMapMaxDistance, 1, 800);
+
+        ImGui::SeparatorText(obf(u8"Code Lock"));
+        ImGui::SliderFloat(obf(u8"V Font Size"), &set->Item.CodeLock.fontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"V Distance"), &set->Item.CodeLock.maxDistance, 1, 500);
+        ImGui::SliderFloat(obf(u8"M Font Size"), &set->Item.CodeLock.BigMapfontSize, 12, 32);
+        ImGui::SliderFloat(obf(u8"M Distance"), &set->Item.CodeLock.BigMapMaxDistance, 1, 800);
+    }
+
+    ImGui::EndChild();
+}
+
+void c_gui::Map()
+{
+    auto size = ImGui::GetCurrentWindow()->Size;
+    ImGui::SetCursorPos(ImVec2(10, 20));
+    ImGui::BeginChild(obf("MapArea"), ImVec2(size.x - 20, size.y - 30), false);
+
+    ImGui::Checkbox(obf(u8"Show Players"), &set->BigMap.showPlayer);
+    ImGui::Checkbox(obf(u8"Show Boss"), &set->BigMap.showBoss);
+    ImGui::ColorEdit4(obf(u8"Boss Color"), (float*)&set->BigMap.BossColor);
+
+    ImGui::SliderFloat(obf(u8"Render Distance"), &set->BigMap.PawnMaxDistance, 1, 800);
+    ImGui::SliderFloat(obf(u8"Font Size"), &set->BigMap.PawnFontSize, 12, 32);
+
+    ImGui::EndChild();
+}
+
+void c_gui::Settting()
+{
+    auto size = ImGui::GetCurrentWindow()->Size;
+    ImGui::SetCursorPos(ImVec2(10, 20));
+    ImGui::BeginChild(obf("SettingArea"), ImVec2(size.x - 20, size.y - 30), false);
+
+    ImGui::SeparatorText(obf(u8"Current Mode"));
+    ImGui::Combo(obf(u8"Mode"), &set->Setting.game_mode, u8"All-Out Warfare\0Hazard Zone\0");
+
+    ImGui::SeparatorText(obf(u8"Hotkeys"));
+    Hotkey(obf(u8"Show/Hide Menu"), &set->Setting.MemuKey);
+    Hotkey(obf(u8"Battle Mode (F2)"), &set->Setting.BattleMode);
+
+    ImGui::Text(set->Setting.战斗模式 ? u8"On - Hide Loot" : u8"Off");
+
+    ImGui::SeparatorText(obf(u8"Configuration"));
+    if (ImGui::Button(obf(u8"Load Config"))) set->load();
+    if (ImGui::Button(obf(u8"Save Config"))) set->save();
+
+    ImGui::SeparatorText(obf(u8"Other"));
+    if (ImGui::Button(set->Setting.ISBattleMode ? u8"Disable Anti-Screenshot" : u8"Enable Anti-Screenshot"))
+    {
+        HWND hwnd = Overlay::GetHWND();
+        if (hwnd)
+        {
+            set->Setting.ISBattleMode = !set->Setting.ISBattleMode;
+            SetWindowDisplayAffinity(hwnd,
+                set->Setting.ISBattleMode ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE);
+        }
+    }
+
+    ImGui::SeparatorText(obf(u8"Cursor Settings"));
+
+    if (ImGui::Button(showCursor ? u8"Disable Cursor" : u8"Enable Cursor"))
+    {
+        showCursor = !showCursor;
+
+        if (showCursor)
+        {
+            while (ShowCursor(TRUE) < 0);
+        }
+        else
+        {
+            while (ShowCursor(FALSE) >= 0);
+        }
+    }
+
+    Hotkey(obf(u8"Cursor Hotkey (F1)"), &set->Setting.cursorkey);
+
+    ImGui::EndChild();
+}
+
+void c_gui::render()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    // ===== New Dark + Red Theme =====
+    style.WindowRounding = 10.f;
+    style.ChildRounding = 8.f;
+    style.FrameRounding = 6.f;
+    style.ScrollbarRounding = 6.f;
+    style.GrabRounding = 6.f;
+
+    ImVec4* colors = style.Colors;
+
+    // Backgrounds
+    colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.07f, 0.09f, 1.00f);
+    colors[ImGuiCol_ChildBg] = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
+    colors[ImGuiCol_PopupBg] = ImVec4(0.12f, 0.12f, 0.15f, 1.00f);
+
+    // Frames
+    colors[ImGuiCol_FrameBg] = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.30f, 0.10f, 0.12f, 1.00f);
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.45f, 0.12f, 0.15f, 1.00f);
+
+    // Buttons
+    colors[ImGuiCol_Button] = ImVec4(0.25f, 0.08f, 0.10f, 1.00f);
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.60f, 0.10f, 0.15f, 1.00f);
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.75f, 0.12f, 0.18f, 1.00f);
+
+    // Headers / Tabs
+    colors[ImGuiCol_Header] = ImVec4(0.45f, 0.10f, 0.15f, 0.90f);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.70f, 0.15f, 0.20f, 1.00f);
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.85f, 0.20f, 0.25f, 1.00f);
+
+    colors[ImGuiCol_Tab] = ImVec4(0.20f, 0.08f, 0.10f, 1.00f);
+    colors[ImGuiCol_TabHovered] = ImVec4(0.65f, 0.12f, 0.18f, 1.00f);
+    colors[ImGuiCol_TabActive] = ImVec4(0.85f, 0.18f, 0.22f, 1.00f);
+
+    colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 0.25f, 0.30f, 1.00f);
+    colors[ImGuiCol_SliderGrab] = ImVec4(0.85f, 0.20f, 0.25f, 1.00f);
+    colors[ImGuiCol_SliderGrabActive] = ImVec4(1.00f, 0.30f, 0.35f, 1.00f);
+
+    colors[ImGuiCol_Border] = ImVec4(0.30f, 0.10f, 0.15f, 0.60f);
+    colors[ImGuiCol_Separator] = ImVec4(0.40f, 0.10f, 0.15f, 0.50f);
+    colors[ImGuiCol_NavHighlight] = ImVec4(0, 0, 0, 0);
+
+    // ===== Window =====
+    ImGui::SetNextWindowSize(ImVec2(1200, 750), ImGuiCond_Once);
+    ImGui::Begin("Delta Force", nullptr,
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoScrollbar);
+
+    // ===== Top Navigation Bar =====
+    ImGui::BeginChild("TopBar", ImVec2(0, 80), false);
+
+    ImGui::SetCursorPosY(20);
+
+    auto DrawTopTab = [&](const char* label, int index)
+        {
+            bool active = (main_tab == index);
+
+            if (active)
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.18f, 0.22f, 1.0f));
+
+            if (ImGui::Button(label, ImVec2(150, 40)))
+                main_tab = index;
+
+            if (active)
+                ImGui::PopStyleColor();
+
+            ImGui::SameLine();
+        };
+
+    ImGui::SetCursorPosX(30);
+
+    DrawTopTab("Aimbot", 0);
+    DrawTopTab("Visuals", 1);
+    DrawTopTab("Items", 2);
+    //DrawTopTab("Radar", 3);
+    DrawTopTab("Settings", 3);
+
+    ImGui::EndChild();
+
+    ImGui::Separator();
+
+    // ===== Main Content =====
+    ImGui::BeginChild("MainContent", ImVec2(0, 0), false);
+
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 15.f);
+
+    if (main_tab == 0) Aim();
+    if (main_tab == 1) Pawn();
+    if (main_tab == 2) Item();
+    //if (main_tab == 3) Map();
+    if (main_tab == 3) Settting();
+
+    ImGui::EndChild();
+    ImGui::End();
+}
+
+#endif
+
+logo in bites (will provide after this) 
+
+
+//add hotkey function for bomza menu - as there is no hotkey functions - also remove stuff thats removed in beazt private menu like debug cam in menu etc

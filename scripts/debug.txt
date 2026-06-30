@@ -1,0 +1,111 @@
+if (!players.local_player) return;
+
+	ULONGLONG now = GetTickCount64();
+	if ((GetAsyncKeyState(cfg.movement.fly_keybind) & 1) && (now - fly_toggle_cooldown) > 300)
+	{
+		fly_active = !fly_active;
+		fly_toggle_cooldown = now;
+	}
+
+	auto* base_movement = players.local_player->GetBaseMovement();
+	if (!base_movement || !driver->is_valid(reinterpret_cast<uintptr_t>(base_movement)))
+		return;
+
+	if (!fly_active)
+	{
+		if (!cfg.movement.fly_safe_mode)
+		{
+			base_movement->SetFlying(false);
+			base_movement->SetGravityMultiplier(1.0f);
+		}
+		return;
+	}
+
+	if (!cfg.movement.fly_safe_mode)
+	{
+		base_movement->SetFlying(true);
+		base_movement->SetGravityMultiplier(0.0f);
+	}
+
+	PlayerEyes* eyes = players.local_player->GetPlayerEyes();
+	if (!eyes || !driver->is_valid(reinterpret_cast<uintptr_t>(eyes)))
+		return;
+
+	Vector4 rotation = eyes->GetBodyRotationFly();
+	Vector3 target_movement = { 0, 0, 0 };
+
+	if (GetAsyncKeyState('W') & 0x8000)
+		target_movement += rotation * Vector3{ 0, 0, 1 };
+
+	if (GetAsyncKeyState('S') & 0x8000)
+		target_movement -= rotation * Vector3{ 0, 0, 1 };
+
+	if (GetAsyncKeyState('A') & 0x8000)
+		target_movement -= rotation * Vector3{ 1, 0, 0 };
+
+	if (GetAsyncKeyState('D') & 0x8000)
+		target_movement += rotation * Vector3{ 1, 0, 0 };
+
+	if (GetAsyncKeyState(VK_SPACE) & 0x8000)
+		target_movement.y += 1.0f;
+
+	if (GetAsyncKeyState(VK_LSHIFT) & 0x8000)
+		target_movement.y -= 1.0f;
+
+	float speed = cfg.movement.fly_speed;
+
+	if (GetAsyncKeyState(VK_CONTROL) & 0x8000)
+		speed *= 0.5f;
+
+	base_movement->SetTargetMovement(target_movement * speed);
+
+	if (target_movement.x == 0.0f && target_movement.y == 0.0f && target_movement.z == 0.0f)
+		base_movement->SetTargetMovement(Vector3{ 0, 0, 0 });
+fly.txt
+2 KB
+
+
+
+void dbg(bool enable) {
+    static uintptr_t flags_address = p->get_p().Local.Address() + o::bp::playerflags;
+
+    int current_flags = lcm->get_mp().read()<int>(flags_address);
+    int target_flags = current_flags;
+
+    if (enable) {
+        target_flags |= (PFlags::IsAdmin); 
+    } else {
+        target_flags &= ~(PFlags::IsAdmin);
+    }
+    if (current_flags != target_flags) {
+        lcm->get_mp().write()<int>(flags_address, target_flags);
+    }
+}
+IsAdmin = (1 << 2)
+uses bit masking total and the consience of the steate cuz we dont clear others flags if an admin spectates you will see that ur flags "connected" "alive" they're fine if u just write 4 he will see like dead bot for the server
+BeaZt — 01:17
+Thank you! Appreciate it! Will try it out!
+sha — 01:34
+void free_camera(bool enable) { // model state
+    uintptr_t local_player = p->get_p().Local.Address());
+    if (!local_player) return;
+    uintptr_t model_state_ptr = lcm->get_mp().read()<uintptr_t>(local_player + 0x660);
+    int current_model_flags = lcm->get_mp().read()<int>(model_state_ptr + 0x24);
+
+    int target_model_flags = current_model_flags;
+    if (enable) {
+        target_model_flags |= MState::Flying;
+    } else {
+        target_model_flags &= ~MState::Flying;
+    }
+
+    if (target_model_flags != current_model_flags) {
+        lcm->get_mp().write()<int>(model_state_ptr + 0x24, target_model_flags);
+    }
+    uintptr_t base_movement = lcm->get_mp().read()<uintptr_t>(local_player + 0x4A0);
+    if (base_movement) {
+        float speed = enable ? 5.0f : 1.0f;
+        lcm->get_mp().write()<float>(base_movement + 0x28, speed);
+    }
+}
+Flying = (1 << 6)

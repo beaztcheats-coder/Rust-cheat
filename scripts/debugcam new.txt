@@ -1,0 +1,112 @@
+```
+inline std::chrono::steady_clock::time_point lastUpdateTime;
+inline bool debugTimerStarted = false;
+bool DebugEnabled;
+float DebugCameraTimer;
+constexpr const static size_t Class_SingletonComponent_UI_LoadingScreen = 237451480;
+constexpr const static size_t Class_SingletonComponent_MixerSnapshotManager__c = 237771376;
+
+namespace MixerSnapshotManager {
+
+	// Offsets
+	constexpr const static size_t defaultSnapshot = 0x20;
+	constexpr const static size_t loadingSnapshot = 0x30;
+}
+
+namespace SingletonComponent {
+
+	// Offsets
+	constexpr const static size_t Instance = 0x18;
+}
+
+inline void AssignLoadingScreenData(bool TrueOrFalse)
+{
+	uint64_t MixerSnap = Memory::read<uint64_t>(GameAssembly + O::Classes::Class_SingletonComponent_MixerSnapshotManager__c); // "Name": "SingletonComponent\u003CMixerSnapshotManager\u003E_TypeInfo",
+
+	if (Memory::IsValidPointer((void*)MixerSnap))
+	{
+		uint64_t StaticF = Memory::read<uint64_t>(MixerSnap + 0xB8);
+
+		if (Memory::IsValidPointer((void*)StaticF))
+		{
+			uint64_t Instance = Memory::read<uint64_t>(StaticF + O::SingletonComponent::Instance);
+
+			if (Memory::IsValidPointer((void*)Instance))
+			{
+				if (!ptr.LoadingSC)
+					ptr.LoadingSC = Memory::read<uint64_t>(Instance + O::MixerSnapshotManager::loadingSnapshot);
+
+				uint64_t Nigger = Memory::read<uint64_t>(Instance + O::MixerSnapshotManager::defaultSnapshot);
+
+				if (!TrueOrFalse)
+					Nigger = ptr.LoadingSC;
+
+				hv::WriteMemory(reinterpret_cast<PVOID>(Instance + O::MixerSnapshotManager::loadingSnapshot), &Nigger, sizeof(uint64_t));
+			}
+		}
+	}
+
+	uint64_t LoadingScreen = Memory::read<uint64_t>(GameAssembly + O::Classes::Class_SingletonComponent_UI_LoadingScreen);// Proper Desync.
+	if (Memory::IsValidPointer((void*)LoadingScreen))
+	{
+		uint64_t LoadingScreenStatic = Memory::read<uint64_t>(LoadingScreen + 0xB8);
+		if (Memory::IsValidPointer((void*)LoadingScreenStatic))
+		{
+			uint64_t Instance = Memory::read<uint64_t>(LoadingScreenStatic + O::SingletonComponent::Instance);
+
+			if (Memory::IsValidPointer((void*)Instance))
+				hv::WriteMemory(reinterpret_cast<PVOID>(Instance + 0x20), &TrueOrFalse, sizeof(bool));
+		}
+	}
+}
+
+if (OnKeyPressCkey(GET_SETVAR(DebugVirtualKey, c_key)) && GET_SETVAR(Adminmode, bool))// && !ShouldBeginDesync)// DO NOT ALLOW THE USER TO DISABLE THE BYPASS WHILE IN DEBUGCAMERA!!!!
+	ptr.DebugEnabled = !ptr.DebugEnabled;
+
+if (!GET_SETVAR(Adminmode, bool))
+	ptr.DebugEnabled = false;
+
+if (ptr.DebugCameraTimer > 50.f)
+{
+	ptr.DebugCameraTimer = 0.f;
+	ptr.DebugEnabled = false;
+}
+
+inline void BeginDebugTimer()
+{
+	if (!debugTimerStarted)
+	{
+		lastUpdateTime = std::chrono::steady_clock::now();
+		ptr.DebugCameraTimer = 0.0f;
+		debugTimerStarted = true;
+		return;
+	}
+
+	auto now = std::chrono::steady_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdateTime);
+
+	if (elapsed.count() >= 1)
+	{
+		ptr.DebugCameraTimer += static_cast<float>(elapsed.count());
+		lastUpdateTime = now;
+	}
+}
+
+static bool wasgigga = false;
+if (ptr.DebugEnabled && ptr.DebugCameraTimer <= 50.f)
+{
+	ptr.LocalPlayer.Entity->SetPlayerFlag(0x4, true);
+	BeginDebugTimer();
+	AssignLoadingScreenData(true);
+	wasgigga = true;
+}
+else if (wasgigga) // Only needs ONE write.
+{
+	ptr.DebugEnabled = false;
+	ptr.LocalPlayer.Entity->StripPlayerFlag(0x4);
+	debugTimerStarted = false;
+	AssignLoadingScreenData(false);
+	wasgigga = false;
+}
+
+```

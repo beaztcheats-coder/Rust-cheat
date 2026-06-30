@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "LFlNPzYJqq0=",
+  "success": true,
+  "projectFilePath": "E:\\github\\rust\\tools\\masterupdate\\il2cpp_dumper\\DumpOffsets.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\ludwi\\.nuget\\packages\\dnlib\\4.4.0\\dnlib.4.4.0.nupkg.sha512",
+    "C:\\Users\\ludwi\\.nuget\\packages\\k4os.compression.lz4\\1.3.8\\k4os.compression.lz4.1.3.8.nupkg.sha512",
+    "C:\\Users\\ludwi\\.nuget\\packages\\mcmaster.netcore.plugins\\2.0.0\\mcmaster.netcore.plugins.2.0.0.nupkg.sha512",
+    "C:\\Users\\ludwi\\.nuget\\packages\\spectre.console\\0.50.0\\spectre.console.0.50.0.nupkg.sha512"
+  ],
+  "logs": []
+}

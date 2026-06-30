@@ -1,0 +1,81 @@
+    namespace TOD_Sky {
+
+        // Offsets
+        constexpr const static size_t Cycle = 0x40;
+        constexpr const static size_t Atmosphere = 0x50;
+        constexpr const static size_t Day = 0x58;
+        constexpr const static size_t Night = 0x60;
+        constexpr const static size_t Stars = 0x78;
+        constexpr const static size_t Clouds = 0x80;
+        constexpr const static size_t Ambient = 0x98;
+        constexpr const static size_t timeSinceAmbientUpdate = 0x23c;
+        constexpr const static size_t timeSinceReflectionUpdate = 0x240;
+
+        // Functions
+        constexpr const static size_t get_Instance = 0x93e1b0;
+        constexpr const static size_t TOD_Sky_UpdateCelestials = 0x9495C0;
+        constexpr const static size_t TOD_Sky_UpdateQualitySettings = 0x937110;
+        constexpr const static size_t TOD_Sky_UpdateRenderSettings = 0x91FE80;
+        constexpr const static size_t TOD_Sky_UpdateShaderKeywords = 0x92BA60;
+        constexpr const static size_t TOD_Sky_UpdateShaderProperties = 0x94C950;
+    }
+
+    // obf name: ::%b0f793ff738842ba8fb34c592e00ebf8f7ca5837
+#define TOD_Sky_Static_ClassName "TOD_Sky/%b0f793ff738842ba8fb34c592e00ebf8f7ca5837"
+#define TOD_Sky_Static_ClassNameShort "%b0f793ff738842ba8fb34c592e00ebf8f7ca5837"
+#define TOD_Sky_Static_TypeDefinitionIndex 9199
+
+    namespace TOD_Sky_Static {
+
+        // Offsets
+        constexpr const static size_t instances = 0x60;
+    }
+
+float AmbientCurrentValue = GET_SETVAR(AmbientMultiplier, float);
+float Saturation = GET_SETVAR(AmientSaturation, float);
+
+if (!ptr.TOD_SKY) // Clear this ptr every time you leave a server.
+{
+    uint64_t Tod_Sky = Memory::read<uint64_t>(GameAssembly + O::Classes::Class_TOD_Sky_Static); // kay TOD_Sky_Static_ClassName 7/4
+    if (Memory::IsValidPointer((void*)Tod_Sky))
+    {
+        uint64_t StaticShit = Memory::read<uint64_t>(Tod_Sky + 0xB8);
+
+        if (Memory::IsValidPointer((void*)StaticShit))
+        {
+            uint64_t Instance = Memory::read<uint64_t>(StaticShit + O::TOD_Sky_Static::instances);
+
+            if (Memory::IsValidPointer((void*)Instance))
+            {
+                uint64_t DeRef = Memory::read<uint64_t>(Instance + 0x10);
+
+                if (Memory::IsValidPointer((void*)DeRef))
+                {
+                    ptr.TOD_SKY = Memory::read<uint64_t>(DeRef + 0x20);
+                }
+            }
+        }
+    }
+}
+
+if (Memory::IsValidPointer((void*)ptr.TOD_SKY))
+{
+    if (GET_SETVAR(Ambient, bool))
+    {
+        uint64_t NightTest = Memory::read<uint64_t>(ptr.TOD_SKY + O::TOD_Sky::Night);
+        if (Memory::IsValidPointer((void*)NightTest))
+        {
+            hv::WriteMemory(reinterpret_cast<PVOID>(NightTest + 0x5C), &AmbientCurrentValue, sizeof(float));
+        }
+
+        uint64_t Ambient = Memory::read<uint64_t>(ptr.TOD_SKY + O::TOD_Sky::Ambient);
+        if (Memory::IsValidPointer((void*)Ambient))
+        {
+            hv::WriteMemory(reinterpret_cast<PVOID>(Ambient + O::TOD_AmbientParameters::Saturation), &Saturation, sizeof(float));
+
+            float UpdateInt = 0.6f;
+
+            hv::WriteMemory(reinterpret_cast<PVOID>(Ambient + 0x18), &UpdateInt, sizeof(float));
+        }
+    }
+}

@@ -1,0 +1,212 @@
+    bool updateseed_todriver(ULONG64 biosseed, ULONG64 diskseed)
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Set_Spoof_Seed;
+        req.SpoofData.BIOS_SEED = biosseed;
+        req.SpoofData.DISK_SEED = diskseed;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+
+    bool SpoofDisk()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_DISK;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofMAC()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_MAC;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofGPU()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_GPU;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofSMBIOS()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_SMBIOS;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool Spoof_ARP()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_ARP;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool Spoof_FIRMWAREENTRY()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_FIRMWAREENTRY;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofSMBIOSNULL()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_SMBIOSNULL;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofBootInfo()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_BOOTINFO;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofTPMSpoof()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_TPMNULL;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofMonitor()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_MONITOR;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool SpoofRegistry()
+    {
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::Spoof_REGISTRY;
+
+        if (SendIoctl(&req) && req.Result)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    void runafterspoof()
+    {
+        // TPM registry value deletions
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\" /v \"WindowsAIKHash\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\" /v \"TaskManufacturerId\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\" /v \"TaskInformationFlags\" /f >nul 2>&1");
+
+        // TPM registry subkey deletions
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\TaskStates\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\PlatformQuoteKeys\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\Endorsement\\EKCertStoreECC\\Certificates\" /f >nul 2>&1");
+
+        // More TPM value deletions
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\Endorsement\" /v \"EkRetryLast\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\Endorsement\" /v \"EKPub\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\Endorsement\" /v \"EkNoFetch\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\Endorsement\" /v \"EkTries\" /f >nul 2>&1");
+
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\Parameters\\Wdf\" /v \"TimeOfLastTelemetry\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\Admin\" /v \"SRKPub\" /f >nul 2>&1");
+
+        // Final TPM subkey deletions
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\WMI\\User\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\KeyAttestationKeys\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\Enum\" /f >nul 2>&1");
+        system("reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TPM\\ODUID\" /f >nul 2>&1");
+
+        system("net stop winmgmt /y >nul 2>&1");
+        Sleep(5);
+        system("net start winmgmt /y >nul 2>&1");
+        Sleep(5);
+        system("sc stop winmgmt >nul 2>&1");
+        Sleep(5);
+        system("sc start winmgmt >nul 2>&1");
+        Sleep(5);
+        system("ipconfig /flushdns >nul 2>&1");
+        Sleep(5);
+        system("netsh winsock reset >nul 2>&1");
+        Sleep(5);
+
+    }

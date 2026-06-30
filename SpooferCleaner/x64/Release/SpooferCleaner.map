@@ -1,0 +1,737 @@
+ SpooferCleaner
+
+ Timestamp is 6a3da233 (Thu Jun 25 23:48:35 2026)
+
+ Preferred load address is 0000000180000000
+
+ Start         Length     Name                   Class
+ 0001:00000000 000205c5H .text                   CODE
+ 0001:000205d0 00000c67H .text$mn                CODE
+ 0001:00021240 00000036H .text$mn$00             CODE
+ 0001:00021276 00000092H .text$x                 CODE
+ 0002:00000000 000086e0H .rdata                  DATA
+ 0002:000086f8 00000038H .00cfg                  DATA
+ 0002:00008730 00000008H .CRT$XCA                DATA
+ 0002:00008738 00000008H .CRT$XCZ                DATA
+ 0002:00008740 00000008H .CRT$XIA                DATA
+ 0002:00008748 00000008H .CRT$XIZ                DATA
+ 0002:00008750 00000008H .CRT$XPA                DATA
+ 0002:00008758 00000008H .CRT$XPZ                DATA
+ 0002:00008760 00000008H .CRT$XTA                DATA
+ 0002:00008768 00000008H .CRT$XTZ                DATA
+ 0002:00009250 00000008H .rtc$IAA                DATA
+ 0002:00009258 00000008H .rtc$IZZ                DATA
+ 0002:00009260 00000008H .rtc$TAA                DATA
+ 0002:00009268 00000008H .rtc$TZZ                DATA
+ 0002:00009270 0000022cH .xdata                  DATA
+ 0003:00000000 00005a34H .data                   DATA
+ 0003:00005a34 000048c0H .bss                    DATA
+ 0004:00000000 000014a0H .pdata                  DATA
+ 0005:00000000 00000058H .rsrc$01                DATA
+ 0005:00000060 00000178H .rsrc$02                DATA
+
+  Address         Publics by Value              Rva+Base               Lib:Object
+
+ 0000:00000000       __AbsoluteZero             0000000000000000     <absolute>
+ 0000:00000000       __guard_fids_table         0000000000000000     <absolute>
+ 0000:00000000       __guard_fids_count         0000000000000000     <absolute>
+ 0000:00000000       __guard_flags              0000000000000000     <absolute>
+ 0000:00000000       __guard_iat_table          0000000000000000     <absolute>
+ 0000:00000000       __guard_iat_count          0000000000000000     <absolute>
+ 0000:00000000       __guard_longjmp_table      0000000000000000     <absolute>
+ 0000:00000000       __guard_longjmp_count      0000000000000000     <absolute>
+ 0000:00000000       __enclave_config           0000000000000000     <absolute>
+ 0000:00000000       __guard_eh_cont_table      0000000000000000     <absolute>
+ 0000:00000000       __guard_eh_cont_count      0000000000000000     <absolute>
+ 0000:00000000       __AbsoluteZero             0000000000000000     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000003       @vol.md                    0000000000000003     <absolute>
+ 0000:00000000       __ImageBase                0000000180000000     <linker-defined>
+ 0001:00000000       RunSpooferCleaner          0000000180001000 f   SpooferCleanerMain.obj
+ 0001:00000bb0       DllMain                    0000000180001bb0 f   SpooferCleanerMain.obj
+ 0001:00000c00       printf                     0000000180001c00 f   SpooferCleanerMain.obj
+ 0001:00000cc0       __local_stdio_printf_options 0000000180001cc0 f   SpooferCleanerMain.obj
+ 0001:00002eb0       ?GetLastSpooferStatus@@YAAEBUSpooferStatus@@XZ 0000000180003eb0 f   spoofer.obj
+ 0001:00002ec0       ?RunSpoofer@@YA_NXZ        0000000180003ec0 f   spoofer.obj
+ 0001:0000af20       ?CleanFortnite@@YAXXZ      000000018000bf20 f   cleaner.obj
+ 0001:0000e240       ?CleanWarzone@@YAXXZ       000000018000f240 f   cleaner.obj
+ 0001:0000e770       ?CleanRust@@YAXXZ          000000018000f770 f   cleaner.obj
+ 0001:0000f280       ?CleanBootBIOS@@YAXXZ      0000000180010280 f   cleaner.obj
+ 0001:0000f8e0       snprintf                   00000001800108e0 f   cleaner.obj
+ 0001:0000f9a0       ?CleanerMenu@@YAXXZ        00000001800109a0 f   cleaner.obj
+ 0001:000205e0       __chkstk                   00000001800215e0 f   msvcrt:chkstk.obj
+ 0001:000205e0       _alloca_probe              00000001800215e0 f   msvcrt:chkstk.obj
+ 0001:00020944       _DllMainCRTStartup         0000000180021944 f   msvcrt:dll_dllmain.obj
+ 0001:00020984       __security_init_cookie     0000000180021984 f   msvcrt:gs_support.obj
+ 0001:00020a34       ?__scrt_initialize_type_info@@YAXXZ 0000000180021a34 f   msvcrt:tncleanup.obj
+ 0001:00020a44       ?__scrt_uninitialize_type_info@@YAXXZ 0000000180021a44 f   msvcrt:tncleanup.obj
+ 0001:00020a50       __scrt_initialize_default_local_stdio_options 0000000180021a50 f   msvcrt:default_local_stdio_options.obj
+ 0001:00020a6c       __local_stdio_scanf_options 0000000180021a6c f   msvcrt:default_local_stdio_options.obj
+ 0001:00020a74       __scrt_is_nonwritable_in_current_image 0000000180021a74 f   msvcrt:utility.obj
+ 0001:00020b0c       __scrt_acquire_startup_lock 0000000180021b0c f   msvcrt:utility.obj
+ 0001:00020b48       __scrt_release_startup_lock 0000000180021b48 f   msvcrt:utility.obj
+ 0001:00020b6c       __scrt_initialize_crt      0000000180021b6c f   msvcrt:utility.obj
+ 0001:00020ba8       __scrt_uninitialize_crt    0000000180021ba8 f   msvcrt:utility.obj
+ 0001:00020bd4       __scrt_initialize_onexit_tables 0000000180021bd4 f   msvcrt:utility.obj
+ 0001:00020c60       __scrt_dllmain_exception_filter 0000000180021c60 f   msvcrt:utility.obj
+ 0001:00020cc0       __scrt_dllmain_before_initialize_c 0000000180021cc0 f   msvcrt:utility.obj
+ 0001:00020cd8       __scrt_dllmain_after_initialize_c 0000000180021cd8 f   msvcrt:utility.obj
+ 0001:00020d0c       __scrt_dllmain_uninitialize_c 0000000180021d0c f   msvcrt:utility.obj
+ 0001:00020d3c       __scrt_dllmain_uninitialize_critical 0000000180021d3c f   msvcrt:utility.obj
+ 0001:00020d50       __scrt_dllmain_crt_thread_attach 0000000180021d50 f   msvcrt:utility.obj
+ 0001:00020d78       __scrt_dllmain_crt_thread_detach 0000000180021d78 f   msvcrt:utility.obj
+ 0001:00020d90       __scrt_get_dyn_tls_init_callback 0000000180021d90 f   msvcrt:dyn_tls_init.obj
+ 0001:00020d98       __crt_debugger_hook        0000000180021d98 f   msvcrt:utility_desktop.obj
+ 0001:00020da4       __scrt_fastfail            0000000180021da4 f   msvcrt:utility_desktop.obj
+ 0001:00020ef0       _RTC_Initialize            0000000180021ef0 f   msvcrt:initsect.obj
+ 0001:00020f2c       _RTC_Terminate             0000000180021f2c f   msvcrt:initsect.obj
+ 0001:00020f68       __isa_available_init       0000000180021f68 f   msvcrt:cpu_disp.obj
+ 0001:00021200       _get_startup_argv_mode     0000000180022200 f   msvcrt:argv_mode.obj
+ 0001:00021208       __scrt_is_ucrt_dll_in_use  0000000180022208 f   msvcrt:ucrt_detection.obj
+ 0001:00021220       _guard_check_icall_nop     0000000180022220 f   odbccp32:guard_check.obj
+ 0001:00021230       __scrt_stub_for_acrt_initialize 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_uninitialize 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_uninitialize_critical 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_thread_attach 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_thread_detach 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_initialize 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_uninitialize 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_uninitialize_critical 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_thread_attach 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_thread_detach 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_initialize 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_uninitialize 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_uninitialize_critical 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_thread_attach 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021230       __scrt_stub_for_acrt_thread_detach 0000000180022230 f   msvcrt:ucrt_stubs.obj
+ 0001:00021234       __scrt_stub_for_is_c_termination_complete 0000000180022234 f   msvcrt:ucrt_stubs.obj
+ 0001:00021234       __scrt_stub_for_is_c_termination_complete 0000000180022234 f   msvcrt:ucrt_stubs.obj
+ 0001:00021250       _guard_dispatch_icall_nop  0000000180022250 f   odbccp32:guard_dispatch.obj
+ 0001:00021270       _guard_xfg_dispatch_icall_nop 0000000180022270 f   odbccp32:guard_xfg_dispatch.obj
+ 0001:00021310       __C_specific_handler       0000000180022310     vcruntime:VCRUNTIME140.dll
+ 0001:00021320       __std_type_info_destroy_list 0000000180022320     vcruntime:VCRUNTIME140.dll
+ 0001:00021330       memset                     0000000180022330     vcruntime:VCRUNTIME140.dll
+ 0001:00021340       _cexit                     0000000180022340     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:00021350       _configure_narrow_argv     0000000180022350     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:00021360       _execute_onexit_table      0000000180022360     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:00021370       _initialize_narrow_environment 0000000180022370     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:00021380       _initialize_onexit_table   0000000180022380     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:00021390       _initterm                  0000000180022390     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:000213a0       _initterm_e                00000001800223a0     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:000213b0       _seh_filter_dll            00000001800223b0     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0001:000213c0       putchar                    00000001800223c0     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0001:000213d0       puts                       00000001800223d0     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0001:000213e0       memcpy                     00000001800223e0     vcruntime:VCRUNTIME140.dll
+ 0002:00008580       _pDefaultRawDllMain        000000018002b580     msvcrt:dll_dllmain.obj
+ 0002:00008580       _pDefaultRawDllMain        000000018002b580     msvcrt:dll_dllmain.obj
+ 0002:00008590       _load_config_used          000000018002b590     msvcrt:loadcfg.obj
+ 0002:000086d0       __xmm@ffffffffffffffffffffffffffffffff 000000018002b6d0     msvcrt:utility.obj
+ 0002:000086e0       ??_C@_1BE@OALGLELH@?$AA?2?$AA?2?$AA?4?$AA?2?$AAB?$AAf?$AAo?$AA6?$AA4?$AA?$AA@ 000000018002b6e0     spoofer.obj
+ 0002:000086f8       __guard_check_icall_fptr   000000018002b6f8     odbccp32:guard_support.obj
+ 0002:00008700       __guard_dispatch_icall_fptr 000000018002b700     odbccp32:guard_support.obj
+ 0002:00008708       __guard_xfg_check_icall_fptr 000000018002b708     odbccp32:guard_support.obj
+ 0002:00008710       __guard_xfg_dispatch_icall_fptr 000000018002b710     odbccp32:guard_support.obj
+ 0002:00008718       __guard_xfg_table_dispatch_icall_fptr 000000018002b718     odbccp32:guard_support.obj
+ 0002:00008720       __castguard_check_failure_os_handled_fptr 000000018002b720     odbccp32:guard_support.obj
+ 0002:00008728       __guard_memcpy_fptr        000000018002b728     vcruntime:softmemtag.obj
+ 0002:00008730       __xc_a                     000000018002b730     msvcrt:initializers.obj
+ 0002:00008738       __xc_z                     000000018002b738     msvcrt:initializers.obj
+ 0002:00008740       __xi_a                     000000018002b740     msvcrt:initializers.obj
+ 0002:00008748       __xi_z                     000000018002b748     msvcrt:initializers.obj
+ 0002:00008750       __xp_a                     000000018002b750     msvcrt:initializers.obj
+ 0002:00008758       __xp_z                     000000018002b758     msvcrt:initializers.obj
+ 0002:00008760       __xt_a                     000000018002b760     msvcrt:initializers.obj
+ 0002:00008768       __xt_z                     000000018002b768     msvcrt:initializers.obj
+ 0002:00008aa8       __imp_AllocConsole         000000018002baa8     kernel32:KERNEL32.dll
+ 0002:00008ab0       __imp_CloseHandle          000000018002bab0     kernel32:KERNEL32.dll
+ 0002:00008ab8       __imp_CreateFileA          000000018002bab8     kernel32:KERNEL32.dll
+ 0002:00008ac0       __imp_CreateFileW          000000018002bac0     kernel32:KERNEL32.dll
+ 0002:00008ac8       __imp_CreateProcessA       000000018002bac8     kernel32:KERNEL32.dll
+ 0002:00008ad0       __imp_CreateThread         000000018002bad0     kernel32:KERNEL32.dll
+ 0002:00008ad8       __imp_DeviceIoControl      000000018002bad8     kernel32:KERNEL32.dll
+ 0002:00008ae0       __imp_DisableThreadLibraryCalls 000000018002bae0     kernel32:KERNEL32.dll
+ 0002:00008ae8       __imp_FillConsoleOutputAttribute 000000018002bae8     kernel32:KERNEL32.dll
+ 0002:00008af0       __imp_FillConsoleOutputCharacterA 000000018002baf0     kernel32:KERNEL32.dll
+ 0002:00008af8       __imp_FreeConsole          000000018002baf8     kernel32:KERNEL32.dll
+ 0002:00008b00       __imp_FreeLibraryAndExitThread 000000018002bb00     kernel32:KERNEL32.dll
+ 0002:00008b08       __imp_GetConsoleScreenBufferInfo 000000018002bb08     kernel32:KERNEL32.dll
+ 0002:00008b10       __imp_GetConsoleWindow     000000018002bb10     kernel32:KERNEL32.dll
+ 0002:00008b18       __imp_GetCurrentProcessId  000000018002bb18     kernel32:KERNEL32.dll
+ 0002:00008b20       __imp_GetCurrentThreadId   000000018002bb20     kernel32:KERNEL32.dll
+ 0002:00008b28       __imp_GetLastError         000000018002bb28     kernel32:KERNEL32.dll
+ 0002:00008b30       __imp_GetModuleHandleA     000000018002bb30     kernel32:KERNEL32.dll
+ 0002:00008b38       __imp_GetStdHandle         000000018002bb38     kernel32:KERNEL32.dll
+ 0002:00008b40       __imp_GetSystemTimeAsFileTime 000000018002bb40     kernel32:KERNEL32.dll
+ 0002:00008b48       __imp_InitializeSListHead  000000018002bb48     kernel32:KERNEL32.dll
+ 0002:00008b50       __imp_IsDebuggerPresent    000000018002bb50     kernel32:KERNEL32.dll
+ 0002:00008b58       __imp_IsProcessorFeaturePresent 000000018002bb58     kernel32:KERNEL32.dll
+ 0002:00008b60       __imp_QueryPerformanceCounter 000000018002bb60     kernel32:KERNEL32.dll
+ 0002:00008b68       __imp_ReadFile             000000018002bb68     kernel32:KERNEL32.dll
+ 0002:00008b70       __imp_RtlCaptureContext    000000018002bb70     kernel32:KERNEL32.dll
+ 0002:00008b78       __imp_RtlLookupFunctionEntry 000000018002bb78     kernel32:KERNEL32.dll
+ 0002:00008b80       __imp_RtlVirtualUnwind     000000018002bb80     kernel32:KERNEL32.dll
+ 0002:00008b88       __imp_SetConsoleCursorPosition 000000018002bb88     kernel32:KERNEL32.dll
+ 0002:00008b90       __imp_SetConsoleTitleA     000000018002bb90     kernel32:KERNEL32.dll
+ 0002:00008b98       __imp_SetLastError         000000018002bb98     kernel32:KERNEL32.dll
+ 0002:00008ba0       __imp_SetUnhandledExceptionFilter 000000018002bba0     kernel32:KERNEL32.dll
+ 0002:00008ba8       __imp_Sleep                000000018002bba8     kernel32:KERNEL32.dll
+ 0002:00008bb0       __imp_UnhandledExceptionFilter 000000018002bbb0     kernel32:KERNEL32.dll
+ 0002:00008bb8       __imp_WriteConsoleA        000000018002bbb8     kernel32:KERNEL32.dll
+ 0002:00008bc0       __imp_WriteFile            000000018002bbc0     kernel32:KERNEL32.dll
+ 0002:00008bc8       __imp_lstrcmpA             000000018002bbc8     kernel32:KERNEL32.dll
+ 0002:00008bd0       __imp_lstrcpynA            000000018002bbd0     kernel32:KERNEL32.dll
+ 0002:00008bd8       __imp_lstrlenA             000000018002bbd8     kernel32:KERNEL32.dll
+ 0002:00008be8       __imp_SetWindowPos         000000018002bbe8     user32:USER32.dll
+ 0002:00008bf0       __imp_wsprintfA            000000018002bbf0     user32:USER32.dll
+ 0002:00008c00       __imp_RegCloseKey          000000018002bc00     advapi32:ADVAPI32.dll
+ 0002:00008c08       __imp_RegOpenKeyExA        000000018002bc08     advapi32:ADVAPI32.dll
+ 0002:00008c10       __imp_RegQueryValueExA     000000018002bc10     advapi32:ADVAPI32.dll
+ 0002:00008c20       __imp___C_specific_handler 000000018002bc20     vcruntime:VCRUNTIME140.dll
+ 0002:00008c28       __imp___std_type_info_destroy_list 000000018002bc28     vcruntime:VCRUNTIME140.dll
+ 0002:00008c30       __imp_memcpy               000000018002bc30     vcruntime:VCRUNTIME140.dll
+ 0002:00008c38       __imp_memset               000000018002bc38     vcruntime:VCRUNTIME140.dll
+ 0002:00008c48       __imp___acrt_iob_func      000000018002bc48     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0002:00008c50       __imp___stdio_common_vfprintf 000000018002bc50     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0002:00008c58       __imp___stdio_common_vsprintf 000000018002bc58     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0002:00008c60       __imp_fflush               000000018002bc60     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0002:00008c68       __imp_freopen              000000018002bc68     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0002:00008c70       __imp_putchar              000000018002bc70     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0002:00008c78       __imp_puts                 000000018002bc78     ucrt:api-ms-win-crt-stdio-l1-1-0.dll
+ 0002:00008c88       __imp__getch               000000018002bc88     ucrt:api-ms-win-crt-conio-l1-1-0.dll
+ 0002:00008c98       __imp__cexit               000000018002bc98     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008ca0       __imp__configure_narrow_argv 000000018002bca0     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008ca8       __imp__execute_onexit_table 000000018002bca8     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008cb0       __imp__initialize_narrow_environment 000000018002bcb0     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008cb8       __imp__initialize_onexit_table 000000018002bcb8     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008cc0       __imp__initterm            000000018002bcc0     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008cc8       __imp__initterm_e          000000018002bcc8     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008cd0       __imp__seh_filter_dll      000000018002bcd0     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00008cd8       __imp_system               000000018002bcd8     ucrt:api-ms-win-crt-runtime-l1-1-0.dll
+ 0002:00009250       __rtc_iaa                  000000018002c250     msvcrt:initsect.obj
+ 0002:00009258       __rtc_izz                  000000018002c258     msvcrt:initsect.obj
+ 0002:00009260       __rtc_taa                  000000018002c260     msvcrt:initsect.obj
+ 0002:00009268       __rtc_tzz                  000000018002c268     msvcrt:initsect.obj
+ 0003:00005990       __scrt_native_dllmain_reason 0000000180032990     msvcrt:utility.obj
+ 0003:000059c0       __security_cookie          00000001800329c0     msvcrt:gs_cookie.obj
+ 0003:00005a00       __security_cookie_complement 0000000180032a00     msvcrt:gs_cookie.obj
+ 0003:00005a08       __isa_inverted             0000000180032a08     msvcrt:cpu_disp.obj
+ 0003:00005a10       __isa_available            0000000180032a10     msvcrt:cpu_disp.obj
+ 0003:00005a14       __isa_enabled              0000000180032a14     msvcrt:cpu_disp.obj
+ 0003:00005a18       __memset_fast_string_threshold 0000000180032a18     msvcrt:cpu_disp.obj
+ 0003:00005a20       __memset_nt_threshold      0000000180032a20     msvcrt:cpu_disp.obj
+ 0003:00005a30       __scrt_ucrt_dll_is_in_use  0000000180032a30     msvcrt:ucrt_stubs.obj
+ 0003:00005f10       ?_OptionsStorage@?1??__local_stdio_printf_options@@9@4_KA 0000000180032f10     SpooferCleanerMain.obj
+ 0003:0000a280       ?__type_info_root_node@@3U__type_info_node@@A 0000000180037280     msvcrt:tncleanup.obj
+ 0003:0000a290       ?_OptionsStorage@?1??__local_stdio_scanf_options@@9@4_KA 0000000180037290     msvcrt:default_local_stdio_options.obj
+ 0003:0000a298       __scrt_current_native_startup_state 0000000180037298     msvcrt:utility.obj
+ 0003:0000a2a0       __scrt_native_startup_lock 00000001800372a0     msvcrt:utility.obj
+ 0000:00000000       __dyn_tls_init_callback    00000001800372e0     <common>
+ 0003:0000a2e8       __scrt_debugger_hook_flag  00000001800372e8     msvcrt:utility_desktop.obj
+ 0003:0000a2ec       __avx10_version            00000001800372ec     msvcrt:cpu_disp.obj
+ 0003:0000a2f0       __favor                    00000001800372f0     msvcrt:cpu_disp.obj
+
+ entry point at         0001:00020944
+
+ Static symbols
+
+ 0000:00000000       __guard_fids_?dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 0000000180000000     msvcrt:dll_dllmain.obj
+ 0000:00000000       __guard_ehcont_?dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 0000000180000000     msvcrt:dll_dllmain.obj
+ 0000:00000000       __guard_ehcont___scrt_is_nonwritable_in_current_image 0000000180000000     msvcrt:utility.obj
+ 0000:00000000       __guard_fids__             0000000180000000     odbccp32:guard_support.obj
+ 0000:00000000       __guard_fids__             0000000180000000     odbccp32:guard_support.obj
+ 0000:00000000       __guard_fids__             0000000180000000     vcruntime:softmemtag.obj
+ 0001:00000080       ?WorkerThread@@YAKPEAX@Z   0000000180001080 f   SpooferCleanerMain.obj
+ 0001:00000cd0       goron_decrypt_string_0     0000000180001cd0 f   SpooferCleanerMain.obj
+ 0001:00000db0       goron_decrypt_string_1     0000000180001db0 f   SpooferCleanerMain.obj
+ 0001:00000eb0       goron_decrypt_string_2     0000000180001eb0 f   SpooferCleanerMain.obj
+ 0001:00000fa0       goron_decrypt_string_3     0000000180001fa0 f   SpooferCleanerMain.obj
+ 0001:00001080       goron_decrypt_string_4     0000000180002080 f   SpooferCleanerMain.obj
+ 0001:00001170       goron_decrypt_string_5     0000000180002170 f   SpooferCleanerMain.obj
+ 0001:00001260       goron_decrypt_string_6     0000000180002260 f   SpooferCleanerMain.obj
+ 0001:00001350       goron_decrypt_string_7     0000000180002350 f   SpooferCleanerMain.obj
+ 0001:00001440       goron_decrypt_string_8     0000000180002440 f   SpooferCleanerMain.obj
+ 0001:00001530       goron_decrypt_string_9     0000000180002530 f   SpooferCleanerMain.obj
+ 0001:00001610       goron_decrypt_string_a     0000000180002610 f   SpooferCleanerMain.obj
+ 0001:00001710       goron_decrypt_string_b     0000000180002710 f   SpooferCleanerMain.obj
+ 0001:00001800       goron_decrypt_string_c     0000000180002800 f   SpooferCleanerMain.obj
+ 0001:000018e0       goron_decrypt_string_d     00000001800028e0 f   SpooferCleanerMain.obj
+ 0001:000019d0       goron_decrypt_string_e     00000001800029d0 f   SpooferCleanerMain.obj
+ 0001:00001ad0       goron_decrypt_string_f     0000000180002ad0 f   SpooferCleanerMain.obj
+ 0001:00001bd0       goron_decrypt_string_10    0000000180002bd0 f   SpooferCleanerMain.obj
+ 0001:00001cc0       goron_decrypt_string_11    0000000180002cc0 f   SpooferCleanerMain.obj
+ 0001:00001db0       goron_decrypt_string_12    0000000180002db0 f   SpooferCleanerMain.obj
+ 0001:00001e90       goron_decrypt_string_13    0000000180002e90 f   SpooferCleanerMain.obj
+ 0001:00001f90       goron_decrypt_string_14    0000000180002f90 f   SpooferCleanerMain.obj
+ 0001:00002080       goron_decrypt_string_15    0000000180003080 f   SpooferCleanerMain.obj
+ 0001:00002170       goron_decrypt_string_16    0000000180003170 f   SpooferCleanerMain.obj
+ 0001:00002270       goron_decrypt_string_17    0000000180003270 f   SpooferCleanerMain.obj
+ 0001:00002360       goron_decrypt_string_18    0000000180003360 f   SpooferCleanerMain.obj
+ 0001:00002470       goron_decrypt_string_19    0000000180003470 f   SpooferCleanerMain.obj
+ 0001:00002550       goron_decrypt_string_1a    0000000180003550 f   SpooferCleanerMain.obj
+ 0001:00002640       goron_decrypt_string_1b    0000000180003640 f   SpooferCleanerMain.obj
+ 0001:00002740       goron_decrypt_string_1c    0000000180003740 f   SpooferCleanerMain.obj
+ 0001:00002830       goron_decrypt_string_1d    0000000180003830 f   SpooferCleanerMain.obj
+ 0001:00002910       goron_decrypt_string_1e    0000000180003910 f   SpooferCleanerMain.obj
+ 0001:000029f0       goron_decrypt_string_1f    00000001800039f0 f   SpooferCleanerMain.obj
+ 0001:00002af0       goron_decrypt_string_20    0000000180003af0 f   SpooferCleanerMain.obj
+ 0001:00002bf0       goron_decrypt_string_21    0000000180003bf0 f   SpooferCleanerMain.obj
+ 0001:00002cd0       goron_decrypt_string_22    0000000180003cd0 f   SpooferCleanerMain.obj
+ 0001:00002dc0       goron_decrypt_string_23    0000000180003dc0 f   SpooferCleanerMain.obj
+ 0001:00006740       goron_decrypt_string_0     0000000180007740 f   spoofer.obj
+ 0001:00006820       goron_decrypt_string_1     0000000180007820 f   spoofer.obj
+ 0001:00006900       goron_decrypt_string_2     0000000180007900 f   spoofer.obj
+ 0001:00006a00       goron_decrypt_string_3     0000000180007a00 f   spoofer.obj
+ 0001:00006ae0       goron_decrypt_string_4     0000000180007ae0 f   spoofer.obj
+ 0001:00006bd0       goron_decrypt_string_5     0000000180007bd0 f   spoofer.obj
+ 0001:00006cb0       goron_decrypt_string_6     0000000180007cb0 f   spoofer.obj
+ 0001:00006d90       goron_decrypt_string_7     0000000180007d90 f   spoofer.obj
+ 0001:00006e90       goron_decrypt_string_8     0000000180007e90 f   spoofer.obj
+ 0001:00006f80       goron_decrypt_string_9     0000000180007f80 f   spoofer.obj
+ 0001:00007080       goron_decrypt_string_a     0000000180008080 f   spoofer.obj
+ 0001:00007170       goron_decrypt_string_b     0000000180008170 f   spoofer.obj
+ 0001:00007260       goron_decrypt_string_c     0000000180008260 f   spoofer.obj
+ 0001:00007350       goron_decrypt_string_d     0000000180008350 f   spoofer.obj
+ 0001:00007460       goron_decrypt_string_e     0000000180008460 f   spoofer.obj
+ 0001:00007550       goron_decrypt_string_f     0000000180008550 f   spoofer.obj
+ 0001:00007640       goron_decrypt_string_10    0000000180008640 f   spoofer.obj
+ 0001:00007730       goron_decrypt_string_11    0000000180008730 f   spoofer.obj
+ 0001:00007820       goron_decrypt_string_12    0000000180008820 f   spoofer.obj
+ 0001:00007910       goron_decrypt_string_13    0000000180008910 f   spoofer.obj
+ 0001:000079f0       goron_decrypt_string_14    00000001800089f0 f   spoofer.obj
+ 0001:00007af0       goron_decrypt_string_15    0000000180008af0 f   spoofer.obj
+ 0001:00007be0       goron_decrypt_string_16    0000000180008be0 f   spoofer.obj
+ 0001:00007cd0       goron_decrypt_string_17    0000000180008cd0 f   spoofer.obj
+ 0001:00007db0       goron_decrypt_string_18    0000000180008db0 f   spoofer.obj
+ 0001:00007ea0       goron_decrypt_string_19    0000000180008ea0 f   spoofer.obj
+ 0001:00007f90       goron_decrypt_string_1a    0000000180008f90 f   spoofer.obj
+ 0001:00008090       goron_decrypt_string_1b    0000000180009090 f   spoofer.obj
+ 0001:00008190       goron_decrypt_string_1c    0000000180009190 f   spoofer.obj
+ 0001:00008270       goron_decrypt_string_1d    0000000180009270 f   spoofer.obj
+ 0001:00008360       goron_decrypt_string_1e    0000000180009360 f   spoofer.obj
+ 0001:00008450       goron_decrypt_string_1f    0000000180009450 f   spoofer.obj
+ 0001:00008530       goron_decrypt_string_20    0000000180009530 f   spoofer.obj
+ 0001:00008620       goron_decrypt_string_21    0000000180009620 f   spoofer.obj
+ 0001:00008710       goron_decrypt_string_22    0000000180009710 f   spoofer.obj
+ 0001:00008800       goron_decrypt_string_23    0000000180009800 f   spoofer.obj
+ 0001:000088f0       goron_decrypt_string_24    00000001800098f0 f   spoofer.obj
+ 0001:000089e0       goron_decrypt_string_25    00000001800099e0 f   spoofer.obj
+ 0001:00008ac0       goron_decrypt_string_26    0000000180009ac0 f   spoofer.obj
+ 0001:00008bc0       goron_decrypt_string_27    0000000180009bc0 f   spoofer.obj
+ 0001:00008cb0       goron_decrypt_string_28    0000000180009cb0 f   spoofer.obj
+ 0001:00008da0       goron_decrypt_string_29    0000000180009da0 f   spoofer.obj
+ 0001:00008e80       goron_decrypt_string_2a    0000000180009e80 f   spoofer.obj
+ 0001:00008f70       goron_decrypt_string_2b    0000000180009f70 f   spoofer.obj
+ 0001:00009070       goron_decrypt_string_2c    000000018000a070 f   spoofer.obj
+ 0001:00009150       goron_decrypt_string_2d    000000018000a150 f   spoofer.obj
+ 0001:00009250       goron_decrypt_string_2e    000000018000a250 f   spoofer.obj
+ 0001:00009330       goron_decrypt_string_2f    000000018000a330 f   spoofer.obj
+ 0001:00009420       goron_decrypt_string_30    000000018000a420 f   spoofer.obj
+ 0001:00009510       goron_decrypt_string_31    000000018000a510 f   spoofer.obj
+ 0001:00009610       goron_decrypt_string_32    000000018000a610 f   spoofer.obj
+ 0001:00009700       goron_decrypt_string_33    000000018000a700 f   spoofer.obj
+ 0001:00009800       goron_decrypt_string_34    000000018000a800 f   spoofer.obj
+ 0001:000098e0       goron_decrypt_string_35    000000018000a8e0 f   spoofer.obj
+ 0001:000099d0       goron_decrypt_string_36    000000018000a9d0 f   spoofer.obj
+ 0001:00009ad0       goron_decrypt_string_37    000000018000aad0 f   spoofer.obj
+ 0001:00009bd0       goron_decrypt_string_38    000000018000abd0 f   spoofer.obj
+ 0001:00009cc0       goron_decrypt_string_39    000000018000acc0 f   spoofer.obj
+ 0001:00009db0       goron_decrypt_string_3a    000000018000adb0 f   spoofer.obj
+ 0001:00009ea0       goron_decrypt_string_3b    000000018000aea0 f   spoofer.obj
+ 0001:00009fa0       goron_decrypt_string_3c    000000018000afa0 f   spoofer.obj
+ 0001:0000a080       goron_decrypt_string_3d    000000018000b080 f   spoofer.obj
+ 0001:0000a180       goron_decrypt_string_3e    000000018000b180 f   spoofer.obj
+ 0001:0000a270       goron_decrypt_string_3f    000000018000b270 f   spoofer.obj
+ 0001:0000a370       goron_decrypt_string_40    000000018000b370 f   spoofer.obj
+ 0001:0000a460       goron_decrypt_string_41    000000018000b460 f   spoofer.obj
+ 0001:0000a560       goron_decrypt_string_42    000000018000b560 f   spoofer.obj
+ 0001:0000a660       goron_decrypt_string_43    000000018000b660 f   spoofer.obj
+ 0001:0000a760       goron_decrypt_string_44    000000018000b760 f   spoofer.obj
+ 0001:0000a850       goron_decrypt_string_45    000000018000b850 f   spoofer.obj
+ 0001:0000a940       goron_decrypt_string_46    000000018000b940 f   spoofer.obj
+ 0001:0000aa30       __global_variable_initializer___const.?RunSpoofer@@YA_NXZ.cmds 000000018000ba30 f   spoofer.obj
+ 0001:0000ad20       __global_variable_initializer___const.?spoof_tpm_cleanup@@YAXXZ.vals 000000018000bd20 f   spoofer.obj
+ 0001:0000b2a0       ?CommonCleanup@@YAXXZ      000000018000c2a0 f   cleaner.obj
+ 0001:0000b800       ?RemoveBattlEye@@YAXXZ     000000018000c800 f   cleaner.obj
+ 0001:0000bb40       ?RemoveEAC@@YAXXZ          000000018000cb40 f   cleaner.obj
+ 0001:0000c150       ?RegistryDeepClean@@YAXXZ  000000018000d150 f   cleaner.obj
+ 0001:0000cd90       ?WindowsTraceCleanup@@YAXXZ 000000018000dd90 f   cleaner.obj
+ 0001:0000d760       ?NetworkReset@@YAXXZ       000000018000e760 f   cleaner.obj
+ 0001:0000de40       ?MACSpoof@@YAXXZ           000000018000ee40 f   cleaner.obj
+ 0001:0000e0a0       ?PrintDone@@YAXXZ          000000018000f0a0 f   cleaner.obj
+ 0001:0000fc50       ?SafeCLS@@YAXXZ            0000000180010c50 f   cleaner.obj
+ 0001:0000fe10       goron_decrypt_string_0     0000000180010e10 f   cleaner.obj
+ 0001:0000ff10       goron_decrypt_string_1     0000000180010f10 f   cleaner.obj
+ 0001:0000fff0       goron_decrypt_string_2     0000000180010ff0 f   cleaner.obj
+ 0001:000100d0       goron_decrypt_string_3     00000001800110d0 f   cleaner.obj
+ 0001:000101c0       goron_decrypt_string_4     00000001800111c0 f   cleaner.obj
+ 0001:000102b0       goron_decrypt_string_5     00000001800112b0 f   cleaner.obj
+ 0001:000103b0       goron_decrypt_string_6     00000001800113b0 f   cleaner.obj
+ 0001:000104a0       goron_decrypt_string_7     00000001800114a0 f   cleaner.obj
+ 0001:00010580       goron_decrypt_string_8     0000000180011580 f   cleaner.obj
+ 0001:00010670       goron_decrypt_string_9     0000000180011670 f   cleaner.obj
+ 0001:00010760       goron_decrypt_string_a     0000000180011760 f   cleaner.obj
+ 0001:00010860       goron_decrypt_string_b     0000000180011860 f   cleaner.obj
+ 0001:00010970       goron_decrypt_string_c     0000000180011970 f   cleaner.obj
+ 0001:00010a70       goron_decrypt_string_d     0000000180011a70 f   cleaner.obj
+ 0001:00010b70       goron_decrypt_string_e     0000000180011b70 f   cleaner.obj
+ 0001:00010c60       goron_decrypt_string_f     0000000180011c60 f   cleaner.obj
+ 0001:00010d60       goron_decrypt_string_10    0000000180011d60 f   cleaner.obj
+ 0001:00010e60       goron_decrypt_string_11    0000000180011e60 f   cleaner.obj
+ 0001:00010f60       goron_decrypt_string_12    0000000180011f60 f   cleaner.obj
+ 0001:00011050       goron_decrypt_string_13    0000000180012050 f   cleaner.obj
+ 0001:00011130       goron_decrypt_string_14    0000000180012130 f   cleaner.obj
+ 0001:00011220       goron_decrypt_string_15    0000000180012220 f   cleaner.obj
+ 0001:00011310       goron_decrypt_string_16    0000000180012310 f   cleaner.obj
+ 0001:00011400       goron_decrypt_string_17    0000000180012400 f   cleaner.obj
+ 0001:000114f0       goron_decrypt_string_18    00000001800124f0 f   cleaner.obj
+ 0001:000115e0       goron_decrypt_string_19    00000001800125e0 f   cleaner.obj
+ 0001:000116e0       goron_decrypt_string_1a    00000001800126e0 f   cleaner.obj
+ 0001:000117d0       goron_decrypt_string_1b    00000001800127d0 f   cleaner.obj
+ 0001:000118c0       goron_decrypt_string_1c    00000001800128c0 f   cleaner.obj
+ 0001:000119c0       goron_decrypt_string_1d    00000001800129c0 f   cleaner.obj
+ 0001:00011aa0       goron_decrypt_string_1e    0000000180012aa0 f   cleaner.obj
+ 0001:00011ba0       goron_decrypt_string_1f    0000000180012ba0 f   cleaner.obj
+ 0001:00011c90       goron_decrypt_string_20    0000000180012c90 f   cleaner.obj
+ 0001:00011d80       goron_decrypt_string_21    0000000180012d80 f   cleaner.obj
+ 0001:00011e70       goron_decrypt_string_22    0000000180012e70 f   cleaner.obj
+ 0001:00011f60       goron_decrypt_string_23    0000000180012f60 f   cleaner.obj
+ 0001:00012060       goron_decrypt_string_24    0000000180013060 f   cleaner.obj
+ 0001:00012160       goron_decrypt_string_25    0000000180013160 f   cleaner.obj
+ 0001:00012260       goron_decrypt_string_26    0000000180013260 f   cleaner.obj
+ 0001:00012360       goron_decrypt_string_27    0000000180013360 f   cleaner.obj
+ 0001:00012460       goron_decrypt_string_28    0000000180013460 f   cleaner.obj
+ 0001:00012560       goron_decrypt_string_29    0000000180013560 f   cleaner.obj
+ 0001:00012640       goron_decrypt_string_2a    0000000180013640 f   cleaner.obj
+ 0001:00012730       goron_decrypt_string_2b    0000000180013730 f   cleaner.obj
+ 0001:00012810       goron_decrypt_string_2c    0000000180013810 f   cleaner.obj
+ 0001:00012900       goron_decrypt_string_2d    0000000180013900 f   cleaner.obj
+ 0001:00012a10       goron_decrypt_string_2e    0000000180013a10 f   cleaner.obj
+ 0001:00012b00       goron_decrypt_string_2f    0000000180013b00 f   cleaner.obj
+ 0001:00012be0       goron_decrypt_string_30    0000000180013be0 f   cleaner.obj
+ 0001:00012cd0       goron_decrypt_string_31    0000000180013cd0 f   cleaner.obj
+ 0001:00012db0       goron_decrypt_string_32    0000000180013db0 f   cleaner.obj
+ 0001:00012e90       goron_decrypt_string_33    0000000180013e90 f   cleaner.obj
+ 0001:00012f90       goron_decrypt_string_34    0000000180013f90 f   cleaner.obj
+ 0001:00013090       goron_decrypt_string_35    0000000180014090 f   cleaner.obj
+ 0001:00013170       goron_decrypt_string_36    0000000180014170 f   cleaner.obj
+ 0001:00013250       goron_decrypt_string_37    0000000180014250 f   cleaner.obj
+ 0001:00013350       goron_decrypt_string_38    0000000180014350 f   cleaner.obj
+ 0001:00013440       goron_decrypt_string_39    0000000180014440 f   cleaner.obj
+ 0001:00013540       goron_decrypt_string_3a    0000000180014540 f   cleaner.obj
+ 0001:00013630       goron_decrypt_string_3b    0000000180014630 f   cleaner.obj
+ 0001:00013730       goron_decrypt_string_3c    0000000180014730 f   cleaner.obj
+ 0001:00013810       goron_decrypt_string_3d    0000000180014810 f   cleaner.obj
+ 0001:00013910       goron_decrypt_string_3e    0000000180014910 f   cleaner.obj
+ 0001:00013a10       goron_decrypt_string_3f    0000000180014a10 f   cleaner.obj
+ 0001:00013b00       goron_decrypt_string_40    0000000180014b00 f   cleaner.obj
+ 0001:00013bf0       goron_decrypt_string_41    0000000180014bf0 f   cleaner.obj
+ 0001:00013ce0       goron_decrypt_string_42    0000000180014ce0 f   cleaner.obj
+ 0001:00013dd0       goron_decrypt_string_43    0000000180014dd0 f   cleaner.obj
+ 0001:00013eb0       goron_decrypt_string_44    0000000180014eb0 f   cleaner.obj
+ 0001:00013fb0       goron_decrypt_string_45    0000000180014fb0 f   cleaner.obj
+ 0001:000140a0       goron_decrypt_string_46    00000001800150a0 f   cleaner.obj
+ 0001:000141a0       goron_decrypt_string_47    00000001800151a0 f   cleaner.obj
+ 0001:000142a0       goron_decrypt_string_48    00000001800152a0 f   cleaner.obj
+ 0001:00014390       goron_decrypt_string_49    0000000180015390 f   cleaner.obj
+ 0001:00014480       goron_decrypt_string_4a    0000000180015480 f   cleaner.obj
+ 0001:00014560       goron_decrypt_string_4b    0000000180015560 f   cleaner.obj
+ 0001:00014650       goron_decrypt_string_4c    0000000180015650 f   cleaner.obj
+ 0001:00014730       goron_decrypt_string_4d    0000000180015730 f   cleaner.obj
+ 0001:00014820       goron_decrypt_string_4e    0000000180015820 f   cleaner.obj
+ 0001:00014910       goron_decrypt_string_4f    0000000180015910 f   cleaner.obj
+ 0001:00014a00       goron_decrypt_string_50    0000000180015a00 f   cleaner.obj
+ 0001:00014af0       goron_decrypt_string_51    0000000180015af0 f   cleaner.obj
+ 0001:00014bf0       goron_decrypt_string_52    0000000180015bf0 f   cleaner.obj
+ 0001:00014cd0       goron_decrypt_string_53    0000000180015cd0 f   cleaner.obj
+ 0001:00014db0       goron_decrypt_string_54    0000000180015db0 f   cleaner.obj
+ 0001:00014ea0       goron_decrypt_string_55    0000000180015ea0 f   cleaner.obj
+ 0001:00014f80       goron_decrypt_string_56    0000000180015f80 f   cleaner.obj
+ 0001:00015080       goron_decrypt_string_57    0000000180016080 f   cleaner.obj
+ 0001:00015170       goron_decrypt_string_58    0000000180016170 f   cleaner.obj
+ 0001:00015260       goron_decrypt_string_59    0000000180016260 f   cleaner.obj
+ 0001:00015350       goron_decrypt_string_5a    0000000180016350 f   cleaner.obj
+ 0001:00015450       goron_decrypt_string_5b    0000000180016450 f   cleaner.obj
+ 0001:00015550       goron_decrypt_string_5c    0000000180016550 f   cleaner.obj
+ 0001:00015640       goron_decrypt_string_5d    0000000180016640 f   cleaner.obj
+ 0001:00015730       goron_decrypt_string_5e    0000000180016730 f   cleaner.obj
+ 0001:00015830       goron_decrypt_string_5f    0000000180016830 f   cleaner.obj
+ 0001:00015930       goron_decrypt_string_60    0000000180016930 f   cleaner.obj
+ 0001:00015a30       goron_decrypt_string_61    0000000180016a30 f   cleaner.obj
+ 0001:00015b10       goron_decrypt_string_62    0000000180016b10 f   cleaner.obj
+ 0001:00015bf0       goron_decrypt_string_63    0000000180016bf0 f   cleaner.obj
+ 0001:00015ce0       goron_decrypt_string_64    0000000180016ce0 f   cleaner.obj
+ 0001:00015dc0       goron_decrypt_string_65    0000000180016dc0 f   cleaner.obj
+ 0001:00015ec0       goron_decrypt_string_66    0000000180016ec0 f   cleaner.obj
+ 0001:00015fb0       goron_decrypt_string_67    0000000180016fb0 f   cleaner.obj
+ 0001:000160b0       goron_decrypt_string_68    00000001800170b0 f   cleaner.obj
+ 0001:000161a0       goron_decrypt_string_69    00000001800171a0 f   cleaner.obj
+ 0001:00016290       goron_decrypt_string_6a    0000000180017290 f   cleaner.obj
+ 0001:00016370       goron_decrypt_string_6b    0000000180017370 f   cleaner.obj
+ 0001:00016470       goron_decrypt_string_6c    0000000180017470 f   cleaner.obj
+ 0001:00016550       goron_decrypt_string_6d    0000000180017550 f   cleaner.obj
+ 0001:00016640       goron_decrypt_string_6e    0000000180017640 f   cleaner.obj
+ 0001:00016730       goron_decrypt_string_6f    0000000180017730 f   cleaner.obj
+ 0001:00016820       goron_decrypt_string_70    0000000180017820 f   cleaner.obj
+ 0001:00016910       goron_decrypt_string_71    0000000180017910 f   cleaner.obj
+ 0001:00016a00       goron_decrypt_string_72    0000000180017a00 f   cleaner.obj
+ 0001:00016b00       goron_decrypt_string_73    0000000180017b00 f   cleaner.obj
+ 0001:00016bf0       goron_decrypt_string_74    0000000180017bf0 f   cleaner.obj
+ 0001:00016ce0       goron_decrypt_string_75    0000000180017ce0 f   cleaner.obj
+ 0001:00016dc0       goron_decrypt_string_76    0000000180017dc0 f   cleaner.obj
+ 0001:00016ec0       goron_decrypt_string_77    0000000180017ec0 f   cleaner.obj
+ 0001:00016fb0       goron_decrypt_string_78    0000000180017fb0 f   cleaner.obj
+ 0001:000170b0       goron_decrypt_string_79    00000001800180b0 f   cleaner.obj
+ 0001:000171b0       goron_decrypt_string_7a    00000001800181b0 f   cleaner.obj
+ 0001:000172a0       goron_decrypt_string_7b    00000001800182a0 f   cleaner.obj
+ 0001:00017390       goron_decrypt_string_7c    0000000180018390 f   cleaner.obj
+ 0001:00017480       goron_decrypt_string_7d    0000000180018480 f   cleaner.obj
+ 0001:00017580       goron_decrypt_string_7e    0000000180018580 f   cleaner.obj
+ 0001:00017680       goron_decrypt_string_7f    0000000180018680 f   cleaner.obj
+ 0001:00017780       goron_decrypt_string_80    0000000180018780 f   cleaner.obj
+ 0001:00017880       goron_decrypt_string_81    0000000180018880 f   cleaner.obj
+ 0001:00017970       goron_decrypt_string_82    0000000180018970 f   cleaner.obj
+ 0001:00017a70       goron_decrypt_string_83    0000000180018a70 f   cleaner.obj
+ 0001:00017b60       goron_decrypt_string_84    0000000180018b60 f   cleaner.obj
+ 0001:00017c50       goron_decrypt_string_85    0000000180018c50 f   cleaner.obj
+ 0001:00017d40       goron_decrypt_string_86    0000000180018d40 f   cleaner.obj
+ 0001:00017e30       goron_decrypt_string_87    0000000180018e30 f   cleaner.obj
+ 0001:00017f20       goron_decrypt_string_88    0000000180018f20 f   cleaner.obj
+ 0001:00018010       goron_decrypt_string_89    0000000180019010 f   cleaner.obj
+ 0001:00018100       goron_decrypt_string_8a    0000000180019100 f   cleaner.obj
+ 0001:000181f0       goron_decrypt_string_8b    00000001800191f0 f   cleaner.obj
+ 0001:000182d0       goron_decrypt_string_8c    00000001800192d0 f   cleaner.obj
+ 0001:000183b0       goron_decrypt_string_8d    00000001800193b0 f   cleaner.obj
+ 0001:000184b0       goron_decrypt_string_8e    00000001800194b0 f   cleaner.obj
+ 0001:000185a0       goron_decrypt_string_8f    00000001800195a0 f   cleaner.obj
+ 0001:000186a0       goron_decrypt_string_90    00000001800196a0 f   cleaner.obj
+ 0001:00018780       goron_decrypt_string_91    0000000180019780 f   cleaner.obj
+ 0001:00018870       goron_decrypt_string_92    0000000180019870 f   cleaner.obj
+ 0001:00018960       goron_decrypt_string_93    0000000180019960 f   cleaner.obj
+ 0001:00018a50       goron_decrypt_string_94    0000000180019a50 f   cleaner.obj
+ 0001:00018b30       goron_decrypt_string_95    0000000180019b30 f   cleaner.obj
+ 0001:00018c30       goron_decrypt_string_96    0000000180019c30 f   cleaner.obj
+ 0001:00018d20       goron_decrypt_string_97    0000000180019d20 f   cleaner.obj
+ 0001:00018e10       goron_decrypt_string_98    0000000180019e10 f   cleaner.obj
+ 0001:00018f00       goron_decrypt_string_99    0000000180019f00 f   cleaner.obj
+ 0001:00018fe0       goron_decrypt_string_9a    0000000180019fe0 f   cleaner.obj
+ 0001:000190e0       goron_decrypt_string_9b    000000018001a0e0 f   cleaner.obj
+ 0001:000191e0       goron_decrypt_string_9c    000000018001a1e0 f   cleaner.obj
+ 0001:000192d0       goron_decrypt_string_9d    000000018001a2d0 f   cleaner.obj
+ 0001:000193d0       goron_decrypt_string_9e    000000018001a3d0 f   cleaner.obj
+ 0001:000194b0       goron_decrypt_string_9f    000000018001a4b0 f   cleaner.obj
+ 0001:000195b0       goron_decrypt_string_a0    000000018001a5b0 f   cleaner.obj
+ 0001:000196a0       goron_decrypt_string_a1    000000018001a6a0 f   cleaner.obj
+ 0001:000197a0       goron_decrypt_string_a2    000000018001a7a0 f   cleaner.obj
+ 0001:000198a0       goron_decrypt_string_a3    000000018001a8a0 f   cleaner.obj
+ 0001:00019990       goron_decrypt_string_a4    000000018001a990 f   cleaner.obj
+ 0001:00019a70       goron_decrypt_string_a5    000000018001aa70 f   cleaner.obj
+ 0001:00019b60       goron_decrypt_string_a6    000000018001ab60 f   cleaner.obj
+ 0001:00019c70       goron_decrypt_string_a7    000000018001ac70 f   cleaner.obj
+ 0001:00019d50       goron_decrypt_string_a8    000000018001ad50 f   cleaner.obj
+ 0001:00019e30       goron_decrypt_string_a9    000000018001ae30 f   cleaner.obj
+ 0001:00019f30       goron_decrypt_string_aa    000000018001af30 f   cleaner.obj
+ 0001:0001a010       goron_decrypt_string_ab    000000018001b010 f   cleaner.obj
+ 0001:0001a100       goron_decrypt_string_ac    000000018001b100 f   cleaner.obj
+ 0001:0001a1e0       goron_decrypt_string_ad    000000018001b1e0 f   cleaner.obj
+ 0001:0001a2f0       goron_decrypt_string_ae    000000018001b2f0 f   cleaner.obj
+ 0001:0001a3f0       goron_decrypt_string_af    000000018001b3f0 f   cleaner.obj
+ 0001:0001a4d0       goron_decrypt_string_b0    000000018001b4d0 f   cleaner.obj
+ 0001:0001a5b0       goron_decrypt_string_b1    000000018001b5b0 f   cleaner.obj
+ 0001:0001a6a0       goron_decrypt_string_b2    000000018001b6a0 f   cleaner.obj
+ 0001:0001a7a0       goron_decrypt_string_b3    000000018001b7a0 f   cleaner.obj
+ 0001:0001a880       goron_decrypt_string_b4    000000018001b880 f   cleaner.obj
+ 0001:0001a960       goron_decrypt_string_b5    000000018001b960 f   cleaner.obj
+ 0001:0001aa40       goron_decrypt_string_b6    000000018001ba40 f   cleaner.obj
+ 0001:0001ab20       goron_decrypt_string_b7    000000018001bb20 f   cleaner.obj
+ 0001:0001ac10       goron_decrypt_string_b8    000000018001bc10 f   cleaner.obj
+ 0001:0001ad00       goron_decrypt_string_b9    000000018001bd00 f   cleaner.obj
+ 0001:0001ae00       goron_decrypt_string_ba    000000018001be00 f   cleaner.obj
+ 0001:0001af00       goron_decrypt_string_bb    000000018001bf00 f   cleaner.obj
+ 0001:0001aff0       goron_decrypt_string_bc    000000018001bff0 f   cleaner.obj
+ 0001:0001b0e0       goron_decrypt_string_bd    000000018001c0e0 f   cleaner.obj
+ 0001:0001b1e0       goron_decrypt_string_be    000000018001c1e0 f   cleaner.obj
+ 0001:0001b2e0       goron_decrypt_string_bf    000000018001c2e0 f   cleaner.obj
+ 0001:0001b3d0       goron_decrypt_string_c0    000000018001c3d0 f   cleaner.obj
+ 0001:0001b4e0       goron_decrypt_string_c1    000000018001c4e0 f   cleaner.obj
+ 0001:0001b5e0       goron_decrypt_string_c2    000000018001c5e0 f   cleaner.obj
+ 0001:0001b6d0       goron_decrypt_string_c3    000000018001c6d0 f   cleaner.obj
+ 0001:0001b7d0       goron_decrypt_string_c4    000000018001c7d0 f   cleaner.obj
+ 0001:0001b8b0       goron_decrypt_string_c5    000000018001c8b0 f   cleaner.obj
+ 0001:0001b9a0       goron_decrypt_string_c6    000000018001c9a0 f   cleaner.obj
+ 0001:0001ba90       goron_decrypt_string_c7    000000018001ca90 f   cleaner.obj
+ 0001:0001bb70       goron_decrypt_string_c8    000000018001cb70 f   cleaner.obj
+ 0001:0001bc70       goron_decrypt_string_c9    000000018001cc70 f   cleaner.obj
+ 0001:0001bd60       goron_decrypt_string_ca    000000018001cd60 f   cleaner.obj
+ 0001:0001be50       goron_decrypt_string_cb    000000018001ce50 f   cleaner.obj
+ 0001:0001bf40       goron_decrypt_string_cc    000000018001cf40 f   cleaner.obj
+ 0001:0001c020       goron_decrypt_string_cd    000000018001d020 f   cleaner.obj
+ 0001:0001c100       goron_decrypt_string_ce    000000018001d100 f   cleaner.obj
+ 0001:0001c1f0       goron_decrypt_string_cf    000000018001d1f0 f   cleaner.obj
+ 0001:0001c2d0       goron_decrypt_string_d0    000000018001d2d0 f   cleaner.obj
+ 0001:0001c3c0       goron_decrypt_string_d1    000000018001d3c0 f   cleaner.obj
+ 0001:0001c4c0       goron_decrypt_string_d2    000000018001d4c0 f   cleaner.obj
+ 0001:0001c5c0       goron_decrypt_string_d3    000000018001d5c0 f   cleaner.obj
+ 0001:0001c6c0       goron_decrypt_string_d4    000000018001d6c0 f   cleaner.obj
+ 0001:0001c7a0       goron_decrypt_string_d5    000000018001d7a0 f   cleaner.obj
+ 0001:0001c890       goron_decrypt_string_d6    000000018001d890 f   cleaner.obj
+ 0001:0001c990       goron_decrypt_string_d7    000000018001d990 f   cleaner.obj
+ 0001:0001ca90       goron_decrypt_string_d8    000000018001da90 f   cleaner.obj
+ 0001:0001cb80       goron_decrypt_string_d9    000000018001db80 f   cleaner.obj
+ 0001:0001cc60       goron_decrypt_string_da    000000018001dc60 f   cleaner.obj
+ 0001:0001cd50       goron_decrypt_string_db    000000018001dd50 f   cleaner.obj
+ 0001:0001ce50       goron_decrypt_string_dc    000000018001de50 f   cleaner.obj
+ 0001:0001cf40       goron_decrypt_string_dd    000000018001df40 f   cleaner.obj
+ 0001:0001d020       goron_decrypt_string_de    000000018001e020 f   cleaner.obj
+ 0001:0001d100       goron_decrypt_string_df    000000018001e100 f   cleaner.obj
+ 0001:0001d200       goron_decrypt_string_e0    000000018001e200 f   cleaner.obj
+ 0001:0001d2f0       goron_decrypt_string_e1    000000018001e2f0 f   cleaner.obj
+ 0001:0001d3e0       goron_decrypt_string_e2    000000018001e3e0 f   cleaner.obj
+ 0001:0001d4d0       goron_decrypt_string_e3    000000018001e4d0 f   cleaner.obj
+ 0001:0001d5c0       goron_decrypt_string_e4    000000018001e5c0 f   cleaner.obj
+ 0001:0001d6b0       goron_decrypt_string_e5    000000018001e6b0 f   cleaner.obj
+ 0001:0001d7a0       goron_decrypt_string_e6    000000018001e7a0 f   cleaner.obj
+ 0001:0001d890       goron_decrypt_string_e7    000000018001e890 f   cleaner.obj
+ 0001:0001d980       goron_decrypt_string_e8    000000018001e980 f   cleaner.obj
+ 0001:0001da60       goron_decrypt_string_e9    000000018001ea60 f   cleaner.obj
+ 0001:0001db60       goron_decrypt_string_ea    000000018001eb60 f   cleaner.obj
+ 0001:0001dc50       goron_decrypt_string_eb    000000018001ec50 f   cleaner.obj
+ 0001:0001dd40       goron_decrypt_string_ec    000000018001ed40 f   cleaner.obj
+ 0001:0001de50       goron_decrypt_string_ed    000000018001ee50 f   cleaner.obj
+ 0001:0001df40       goron_decrypt_string_ee    000000018001ef40 f   cleaner.obj
+ 0001:0001e030       goron_decrypt_string_ef    000000018001f030 f   cleaner.obj
+ 0001:0001e120       goron_decrypt_string_f0    000000018001f120 f   cleaner.obj
+ 0001:0001e210       goron_decrypt_string_f1    000000018001f210 f   cleaner.obj
+ 0001:0001e300       goron_decrypt_string_f2    000000018001f300 f   cleaner.obj
+ 0001:0001e3f0       goron_decrypt_string_f3    000000018001f3f0 f   cleaner.obj
+ 0001:0001e4d0       goron_decrypt_string_f4    000000018001f4d0 f   cleaner.obj
+ 0001:0001e5c0       goron_decrypt_string_f5    000000018001f5c0 f   cleaner.obj
+ 0001:0001e6c0       goron_decrypt_string_f6    000000018001f6c0 f   cleaner.obj
+ 0001:0001e7b0       goron_decrypt_string_f7    000000018001f7b0 f   cleaner.obj
+ 0001:0001e890       goron_decrypt_string_f8    000000018001f890 f   cleaner.obj
+ 0001:0001e990       goron_decrypt_string_f9    000000018001f990 f   cleaner.obj
+ 0001:0001ea80       goron_decrypt_string_fa    000000018001fa80 f   cleaner.obj
+ 0001:0001eb70       goron_decrypt_string_fb    000000018001fb70 f   cleaner.obj
+ 0001:0001ec60       goron_decrypt_string_fc    000000018001fc60 f   cleaner.obj
+ 0001:0001ed50       goron_decrypt_string_fd    000000018001fd50 f   cleaner.obj
+ 0001:0001ee50       goron_decrypt_string_fe    000000018001fe50 f   cleaner.obj
+ 0001:0001ef30       goron_decrypt_string_ff    000000018001ff30 f   cleaner.obj
+ 0001:0001f020       goron_decrypt_string_100   0000000180020020 f   cleaner.obj
+ 0001:0001f100       goron_decrypt_string_101   0000000180020100 f   cleaner.obj
+ 0001:0001f1f0       goron_decrypt_string_102   00000001800201f0 f   cleaner.obj
+ 0001:0001f2e0       goron_decrypt_string_103   00000001800202e0 f   cleaner.obj
+ 0001:0001f3e0       goron_decrypt_string_104   00000001800203e0 f   cleaner.obj
+ 0001:0001f4e0       goron_decrypt_string_105   00000001800204e0 f   cleaner.obj
+ 0001:0001f5e0       goron_decrypt_string_106   00000001800205e0 f   cleaner.obj
+ 0001:0001f6d0       goron_decrypt_string_107   00000001800206d0 f   cleaner.obj
+ 0001:0001f7c0       goron_decrypt_string_108   00000001800207c0 f   cleaner.obj
+ 0001:0001f8a0       goron_decrypt_string_109   00000001800208a0 f   cleaner.obj
+ 0001:0001f980       goron_decrypt_string_10a   0000000180020980 f   cleaner.obj
+ 0001:0001fa80       goron_decrypt_string_10b   0000000180020a80 f   cleaner.obj
+ 0001:0001fb70       goron_decrypt_string_10c   0000000180020b70 f   cleaner.obj
+ 0001:0001fc60       goron_decrypt_string_10d   0000000180020c60 f   cleaner.obj
+ 0001:0001fd50       goron_decrypt_string_10e   0000000180020d50 f   cleaner.obj
+ 0001:0001fe40       goron_decrypt_string_10f   0000000180020e40 f   cleaner.obj
+ 0001:0001ff30       goron_decrypt_string_110   0000000180020f30 f   cleaner.obj
+ 0001:00020020       goron_decrypt_string_111   0000000180021020 f   cleaner.obj
+ 0001:00020130       goron_decrypt_string_112   0000000180021130 f   cleaner.obj
+ 0001:00020220       goron_decrypt_string_113   0000000180021220 f   cleaner.obj
+ 0001:00020300       goron_decrypt_string_114   0000000180021300 f   cleaner.obj
+ 0001:000203e0       goron_decrypt_string_115   00000001800213e0 f   cleaner.obj
+ 0001:000204d0       goron_decrypt_string_116   00000001800214d0 f   cleaner.obj
+ 0001:000205d0       $$000000                   00000001800215d0     msvcrt:chkstk.obj
+ 0001:00020630       ?dllmain_crt_process_attach@@YAHQEAUHINSTANCE__@@QEAX@Z 0000000180021630 f   msvcrt:dll_dllmain.obj
+ 0001:00020748       ?dllmain_crt_process_detach@@YAH_N@Z 0000000180021748 f   msvcrt:dll_dllmain.obj
+ 0001:000207cc       ?dllmain_crt_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 00000001800217cc f   msvcrt:dll_dllmain.obj
+ 0001:0002081c       ?dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 000000018002181c f   msvcrt:dll_dllmain.obj
+ 0001:00021250       $$000000                   0000000180022250     odbccp32:guard_dispatch.obj
+ 0001:00021270       $$000000                   0000000180022270     odbccp32:guard_xfg_dispatch.obj
+ 0001:00021276       ?fin$0@?0??dllmain_crt_process_attach@@YAHQEAUHINSTANCE__@@QEAX@Z@4HA 0000000180022276 f   msvcrt:dll_dllmain.obj
+ 0001:0002128d       ?fin$0@?0??dllmain_crt_process_detach@@YAH_N@Z@4HA 000000018002228d f   msvcrt:dll_dllmain.obj
+ 0001:000212a6       ?fin$1@?0??dllmain_crt_process_detach@@YAH_N@Z@4HA 00000001800222a6 f   msvcrt:dll_dllmain.obj
+ 0001:000212ba       ?filt$0@?0??dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z@4HA 00000001800222ba f   msvcrt:dll_dllmain.obj
+ 0001:000212f0       __scrt_is_nonwritable_in_current_image$filt$0 00000001800222f0 f   msvcrt:utility.obj
+ 0002:00009330       $xdatasym                  000000018002c330     msvcrt:chkstk.obj
+ 0002:00009338       $unwind$?dllmain_crt_process_attach@@YAHQEAUHINSTANCE__@@QEAX@Z 000000018002c338     msvcrt:dll_dllmain.obj
+ 0002:00009374       $unwind$?dllmain_crt_process_detach@@YAH_N@Z 000000018002c374     msvcrt:dll_dllmain.obj
+ 0002:000093c8       $unwind$?fin$0@?0??dllmain_crt_process_attach@@YAHQEAUHINSTANCE__@@QEAX@Z@4HA 000000018002c3c8     msvcrt:dll_dllmain.obj
+ 0002:000093c8       $unwind$?fin$0@?0??dllmain_crt_process_detach@@YAH_N@Z@4HA 000000018002c3c8     msvcrt:dll_dllmain.obj
+ 0002:000093c8       $unwind$?fin$1@?0??dllmain_crt_process_detach@@YAH_N@Z@4HA 000000018002c3c8     msvcrt:dll_dllmain.obj
+ 0002:000093d0       $unwind$?dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 000000018002c3d0     msvcrt:dll_dllmain.obj
+ 0002:000093f8       $unwind$?filt$0@?0??dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z@4HA 000000018002c3f8     msvcrt:dll_dllmain.obj
+ 0002:00009400       $unwind$_DllMainCRTStartup 000000018002c400     msvcrt:dll_dllmain.obj
+ 0002:00009410       $unwind$__security_init_cookie 000000018002c410     msvcrt:gs_support.obj
+ 0002:0000941c       $unwind$?dllmain_crt_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 000000018002c41c     msvcrt:dll_dllmain.obj
+ 0002:0000941c       $unwind$__scrt_initialize_default_local_stdio_options 000000018002c41c     msvcrt:default_local_stdio_options.obj
+ 0002:0000941c       $unwind$__scrt_acquire_startup_lock 000000018002c41c     msvcrt:utility.obj
+ 0002:0000941c       $unwind$__scrt_initialize_crt 000000018002c41c     msvcrt:utility.obj
+ 0002:0000941c       $unwind$__scrt_dllmain_before_initialize_c 000000018002c41c     msvcrt:utility.obj
+ 0002:0000941c       $unwind$__scrt_dllmain_after_initialize_c 000000018002c41c     msvcrt:utility.obj
+ 0002:0000941c       $unwind$__scrt_dllmain_uninitialize_c 000000018002c41c     msvcrt:utility.obj
+ 0002:0000941c       $unwind$__scrt_dllmain_uninitialize_critical 000000018002c41c     msvcrt:utility.obj
+ 0002:0000941c       $unwind$__scrt_dllmain_crt_thread_attach 000000018002c41c     msvcrt:utility.obj
+ 0002:0000941c       $unwind$__scrt_dllmain_crt_thread_detach 000000018002c41c     msvcrt:utility.obj
+ 0002:00009424       $unwind$__scrt_is_nonwritable_in_current_image 000000018002c424     msvcrt:utility.obj
+ 0002:00009444       $unwind$__scrt_is_nonwritable_in_current_image$filt$0 000000018002c444     msvcrt:utility.obj
+ 0002:0000944c       $unwind$__scrt_release_startup_lock 000000018002c44c     msvcrt:utility.obj
+ 0002:0000944c       $unwind$__scrt_uninitialize_crt 000000018002c44c     msvcrt:utility.obj
+ 0002:0000944c       $unwind$__scrt_initialize_onexit_tables 000000018002c44c     msvcrt:utility.obj
+ 0002:00009454       $unwind$__scrt_dllmain_exception_filter 000000018002c454     msvcrt:utility.obj
+ 0002:00009468       $unwind$__scrt_fastfail    000000018002c468     msvcrt:utility_desktop.obj
+ 0002:00009478       $unwind$_RTC_Initialize    000000018002c478     msvcrt:initsect.obj
+ 0002:00009478       $unwind$_RTC_Terminate     000000018002c478     msvcrt:initsect.obj
+ 0002:00009484       $unwind$__isa_available_init 000000018002c484     msvcrt:cpu_disp.obj
+ 0002:00009498       $xdatasym$_guard_dispatch_icall_nop 000000018002c498     odbccp32:guard_dispatch.obj
+ 0002:00009498       $xdatasym                  000000018002c498     odbccp32:guard_dispatch.obj
+ 0002:00009498       $xdatasym$_guard_xfg_dispatch_icall_nop 000000018002c498     odbccp32:guard_xfg_dispatch.obj
+ 0002:00009498       $xdatasym                  000000018002c498     odbccp32:guard_xfg_dispatch.obj
+ 0003:000007f8       s_log                      000000018002d7f8     spoofer.obj
+ 0003:00005f20       s_status                   0000000180032f20     spoofer.obj
+ 0003:0000a278       ?__proc_attached@@3HA      0000000180037278     msvcrt:dll_dllmain.obj
+ 0003:0000a2a8       ?is_initialized_as_dll@@3_NA 00000001800372a8     msvcrt:utility.obj
+ 0003:0000a2a9       ?module_local_atexit_table_initialized@@3_NA 00000001800372a9     msvcrt:utility.obj
+ 0003:0000a2b0       ?module_local_atexit_table@@3U_onexit_table_t@@A 00000001800372b0     msvcrt:utility.obj
+ 0003:0000a2c8       ?module_local_at_quick_exit_table@@3U_onexit_table_t@@A 00000001800372c8     msvcrt:utility.obj
+ 0004:0000132c       $pdata$?dllmain_crt_process_attach@@YAHQEAUHINSTANCE__@@QEAX@Z 000000018003932c     msvcrt:dll_dllmain.obj
+ 0004:00001338       $pdata$?fin$0@?0??dllmain_crt_process_attach@@YAHQEAUHINSTANCE__@@QEAX@Z@4HA 0000000180039338     msvcrt:dll_dllmain.obj
+ 0004:00001344       $pdata$?dllmain_crt_process_detach@@YAH_N@Z 0000000180039344     msvcrt:dll_dllmain.obj
+ 0004:00001350       $pdata$?fin$0@?0??dllmain_crt_process_detach@@YAH_N@Z@4HA 0000000180039350     msvcrt:dll_dllmain.obj
+ 0004:0000135c       $pdata$?fin$1@?0??dllmain_crt_process_detach@@YAH_N@Z@4HA 000000018003935c     msvcrt:dll_dllmain.obj
+ 0004:00001368       $pdata$?dllmain_crt_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 0000000180039368     msvcrt:dll_dllmain.obj
+ 0004:00001374       $pdata$?dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z 0000000180039374     msvcrt:dll_dllmain.obj
+ 0004:00001380       $pdata$?filt$0@?0??dllmain_dispatch@@YAHQEAUHINSTANCE__@@KQEAX@Z@4HA 0000000180039380     msvcrt:dll_dllmain.obj
+ 0004:0000138c       $pdata$_DllMainCRTStartup  000000018003938c     msvcrt:dll_dllmain.obj
+ 0004:00001398       $pdata$__security_init_cookie 0000000180039398     msvcrt:gs_support.obj
+ 0004:000013a4       $pdata$__scrt_initialize_default_local_stdio_options 00000001800393a4     msvcrt:default_local_stdio_options.obj
+ 0004:000013b0       $pdata$__scrt_is_nonwritable_in_current_image 00000001800393b0     msvcrt:utility.obj
+ 0004:000013bc       $pdata$__scrt_is_nonwritable_in_current_image$filt$0 00000001800393bc     msvcrt:utility.obj
+ 0004:000013c8       $pdata$__scrt_acquire_startup_lock 00000001800393c8     msvcrt:utility.obj
+ 0004:000013d4       $pdata$__scrt_release_startup_lock 00000001800393d4     msvcrt:utility.obj
+ 0004:000013e0       $pdata$__scrt_initialize_crt 00000001800393e0     msvcrt:utility.obj
+ 0004:000013ec       $pdata$__scrt_uninitialize_crt 00000001800393ec     msvcrt:utility.obj
+ 0004:000013f8       $pdata$__scrt_initialize_onexit_tables 00000001800393f8     msvcrt:utility.obj
+ 0004:00001404       $pdata$__scrt_dllmain_exception_filter 0000000180039404     msvcrt:utility.obj
+ 0004:00001410       $pdata$__scrt_dllmain_before_initialize_c 0000000180039410     msvcrt:utility.obj
+ 0004:0000141c       $pdata$__scrt_dllmain_after_initialize_c 000000018003941c     msvcrt:utility.obj
+ 0004:00001428       $pdata$__scrt_dllmain_uninitialize_c 0000000180039428     msvcrt:utility.obj
+ 0004:00001434       $pdata$__scrt_dllmain_uninitialize_critical 0000000180039434     msvcrt:utility.obj
+ 0004:00001440       $pdata$__scrt_dllmain_crt_thread_attach 0000000180039440     msvcrt:utility.obj
+ 0004:0000144c       $pdata$__scrt_dllmain_crt_thread_detach 000000018003944c     msvcrt:utility.obj
+ 0004:00001458       $pdata$__scrt_fastfail     0000000180039458     msvcrt:utility_desktop.obj
+ 0004:00001464       $pdata$_RTC_Initialize     0000000180039464     msvcrt:initsect.obj
+ 0004:00001470       $pdata$_RTC_Terminate      0000000180039470     msvcrt:initsect.obj
+ 0004:0000147c       $pdata$__isa_available_init 000000018003947c     msvcrt:cpu_disp.obj
+ 0005:00000060       $R000000                   000000018003a060     internal .obj file created from .res files

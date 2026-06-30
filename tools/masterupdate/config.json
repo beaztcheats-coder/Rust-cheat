@@ -1,0 +1,364 @@
+{
+  "project_root": "E:\\github\\rust",
+  "vcxproj": "Rust Prv Ext.vcxproj",
+  "target_name": "Rust Prv Ext",
+  "offsets_hpp": "E:\\github\\rust\\offsets.hpp",
+  "sdk_hpp": "E:\\github\\rust\\sdk.hpp",
+  "materials_hpp": "E:\\github\\rust\\materials.hpp",
+  "decrypts_dat": "C:\\rust_decrypts.dat",
+  "morphine_offsets_url": "https://offsets.getmorphine.fun/offsets.hpp",
+  "morphine_offsets_json_url": "https://offsets.getmorphine.fun/offsets.json",
+  "morphine_materials_url": "https://offsets.getmorphine.fun/materials.hpp",
+  "msbuild_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe",
+  "gameassembly_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rust\\GameAssembly.dll",
+  "game_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rust",
+  "game_exe_name": "RustClient",
+  "auto_apply": false,
+  "apply_materials": false,
+  "sha_dumper_vcxproj": "E:\\github\\rust\\tools\\sha-dumper\\sha-dumper.vcxproj",
+  "sha_dumper_dll": "E:\\github\\rust\\tools\\build\\Release\\sha-dumper.dll",
+  "sha_dumper_inject_ps1": "E:\\github\\rust\\tools\\build\\Release\\inject.ps1",
+  "sha_dumper_output": "E:\\github\\rust\\tools\\masterupdate\\output\\sha-dumper-output.txt",
+  "mesh_tri_output": "E:\\github\\rust\\tools\\masterupdate\\output\\rust_mesh.tri",
+  "mesh_log_output": "E:\\github\\rust\\tools\\masterupdate\\output\\rust_mesh_dump.log",
+  "mesh_min_triangles": 5,
+  "mesh_min_bbox": 0.5,
+  "mesh_tri_runtime_path": "C:\\rust_mesh.tri",
+  "mesh_bvh_cache_path": "C:\\rust_mesh.bvh",
+  "dump_cs_path": "E:\\github\\rust\\tools\\masterupdate\\output\\frida_dump.txt",
+  "frida_validation_path": "E:\\github\\rust\\tools\\masterupdate\\output\\frida_validation.json",
+  "frida_bridge_path": "C:\\frida-il2cpp\\dist\\index.js",
+  "frida_script_path": "E:\\github\\rust\\tools\\masterupdate\\run_frida_validation.py",
+  "enable_update_logs": true,
+  "name_mappings": {
+    "il2cpphandle": "Il2cppGetHandle",
+    "BaseNetworkable": "basenetworkable_pointer",
+    "MainCamera": "camera_pointer",
+    "TOD_Sky": "TOD_Sky_TypeInfo",
+    "effect_network": "EffectNetwork_Pointer",
+    "convar_admin": "convar_admin",
+    "SingletonComponent_UI_LoadingScreen": "Class_SingletonComponent_UI_LoadingScreen",
+    "SingletonComponent_MixerSnapshotManager__c": "Class_SingletonComponent_MixerSnapshotManager__c",
+    "convar_graphics": "ConVar_Graphics"
+  },
+  "namespace_field_mappings": {
+    "base_networkable": {
+      "namespace": "BaseNetworkable",
+      "fields": {
+        "static_fields": "static_fields",
+        "wrapper_class_ptr": "wrapper_class",
+        "parent_static_fields": "parent_static_fields",
+        "entities": "entity",
+        "hv_offset": "encrypted_handle",
+        "parentEntity": "parent_entity",
+        "prefabID": "prefab_id",
+        "children": "children"
+      }
+    },
+    "base_player": {
+      "namespace": "BasePlayer",
+      "fields": {
+        "cl_active_item": "ClActiveItem",
+        "player_eyes": "PlayerEyes",
+        "eyes": "PlayerEyes",
+        "player_inventory": "PlayerInventory",
+        "inventory": "PlayerInventory",
+        "current_team": "CurrentTeam",
+        "currentTeam": "CurrentTeam",
+        "base_movement": "BaseMovement",
+        "movement": "BaseMovement",
+        "player_model": "PlayerModel",
+        "playerModel": "PlayerModel",
+        "player_flags": "PlayerFlags",
+        "playerFlags": "PlayerFlags",
+        "display_name": "DisplayName",
+        "_displayName": "DisplayName",
+        "player_input": "PlayerInput",
+        "frozen": "Frozen",
+        "currentGesture": "CurrentGesture",
+        "current_gesture": "CurrentGesture",
+        "playerRigidbody": "PlayerRigidbody",
+        "player_rigidbody": "PlayerRigidbody",
+        "mounted": "Mounted",
+        "weaponMoveSpeedScale": "WeaponMoveSpeedScale",
+        "clothingBlocksAiming": "ClothingBlocksAiming",
+        "player_steam_id": "SteamID"
+      }
+    },
+    "base_combat_entity": {
+      "namespace": "BaseCombatEntity",
+      "fields": {
+        "lifestate": "Lifestate",
+        "model": "model",
+        "_health": "Health",
+        "_maxHealth": "MaxHealth"
+      }
+    },
+    "base_entity": {
+      "namespace": "BaseEntity",
+      "fields": {
+        "model": "model",
+        "flags": "flags",
+        "bounds": "bounds"
+      }
+    },
+    "player_eyes": {
+      "namespace": "PlayerEyes",
+      "fields": {
+        "viewOffset": "viewOffset",
+        "bodyRotation": "bodyRotation",
+        "world_position": "headPosition",
+        "worldPosition": "headPosition"
+      }
+    },
+    "player_input": {
+      "namespace": "PlayerInput",
+      "fields": {
+        "bodyAngles": "bodyAngles",
+        "yaw": "yaw"
+      }
+    },
+    "player_model": {
+      "namespace": "PlayerModel",
+      "fields": {
+        "rootBone": "rootBone",
+        "headBone": "headBone",
+        "eyeBone": "eyeBone",
+        "boneTransforms": "boneTransforms",
+        "skinned_mesh": "SkinnedMultiMesh",
+        "skinnedMultiMesh": "SkinnedMultiMesh",
+        "isNpc": "is_npc",
+        "position": "position",
+        "velocity": "velocity",
+        "visible": "visible"
+      }
+    },
+    "player_inventory": {
+      "namespace": "PlayerInventory",
+      "fields": {
+        "loot": "loot",
+        "containerMain": "Main",
+        "containerBelt": "Belt",
+        "containerWear": "Wear"
+      }
+    },
+    "item_container": {
+      "namespace": "ItemContainer",
+      "fields": {
+        "item_list": "ItemList"
+      }
+    },
+    "item": {
+      "namespace": "Item",
+      "fields": {
+        "info": "ItemDefinition",
+        "itemdefinition": "ItemDefinition",
+        "uid": "ItemId",
+        "amount": "Amount",
+        "held_entity": "HeldEntity_1"
+      }
+    },
+    "item_definition": {
+      "namespace": "ItemDefinition",
+      "fields": {
+        "itemid": "itemid",
+        "shortname": "shortname",
+        "displayName": "displayName",
+        "display_name": "displayName",
+        "category": "category",
+        "stackable": "stackable"
+      }
+    },
+    "base_projectile": {
+      "namespace": "BaseProjectile",
+      "fields": {
+        "aimCone": "AimCone",
+        "hipAimCone": "HipAimCone",
+        "aimSway": "aimSway",
+        "aimSwaySpeed": "aimSwaySpeed",
+        "recoil": "recoil",
+        "projectileVelocityScale": "velocity_scale",
+        "automatic": "automatic",
+        "reloadTime": "reload_time",
+        "primaryMagazine": "primaryMagazine",
+        "sightAimConeScale": "sight_aim_cone_scale",
+        "hipAimConeScale": "hip_aim_cone_scale",
+        "string_hold_duration_max": "string_hold_duration_max"
+      }
+    },
+    "RecoilProperties": {
+      "namespace": "RecoilProperties",
+      "fields": {
+        "recoilYawMin": "RecoilYawMin",
+        "recoilYawMax": "RecoilYawMax",
+        "recoilPitchMin": "RecoilPitchMin",
+        "recoilPitchMax": "RecoilPitchMax"
+      }
+    },
+    "base_movement": {
+      "namespace": "BaseMovement2",
+      "fields": {
+        "adminCheat": "admin_cheat"
+      }
+    },
+    "model": {
+      "namespace": "Model",
+      "fields": {
+        "boneTransforms": "boneTransforms"
+      }
+    },
+    "camera": {
+      "namespace": "BaseCamera",
+      "fields": {
+        "camera_object": "wrapper_class",
+        "instance": "wrapper_class",
+        "static_fields": "static_fields",
+        "entity": "entity"
+      }
+    },
+    "base_camera": {
+      "namespace": "BaseCamera",
+      "fields": {
+        "view_matrix": "viewMatrix",
+        "projection_matrix": "projectionMatrix",
+        "field_of_view": "field_of_view",
+        "world_position": "world_position",
+        "culling_mask": "culling_mask"
+      }
+    },
+    "held_entity": {
+      "namespace": "HeldEntity",
+      "fields": {
+        "ownerItemUID": "ownerItemUID",
+        "viewModel": "viewModel"
+      }
+    },
+    "tod_sky": {
+      "namespace": "TOD_Sky",
+      "fields": {
+        "Cycle": "CycleParameters",
+        "Atmosphere": "AtmosphereParameters",
+        "Day": "DayParameters",
+        "Night": "NightParameters",
+        "Stars": "StarParameters",
+        "Clouds": "Clouds",
+        "Ambient": "AmbientParameters",
+        "timeSinceAmbientUpdate": "timeSinceAmbientUpdate",
+        "timeSinceReflectionUpdate": "timeSinceReflectionUpdate"
+      }
+    },
+    "fov": {
+      "namespace": "FOV",
+      "fields": {
+        "convar_graphics": "ConVar_Graphics",
+        "fov_write": "fovWrite"
+      }
+    },
+    "skinned_multi_mesh": {
+      "namespace": "SkinnedMultiMesh",
+      "fields": {
+        "rendererList": "RendererList"
+      }
+    },
+    "effect_network": {
+      "namespace": "EffectNetwork",
+      "fields": {
+        "static_fields": "static_fields",
+        "instance": "instance",
+        "hitPosition": "hitPosition"
+      }
+    },
+    "convar_admin": {
+      "namespace": "convar_admin",
+      "fields": {
+        "convar_admin": "convar_admin",
+        "playerIds": "playerIds"
+      }
+    },
+    "tod_sky_static": {
+      "namespace": "TOD_Sky_Static",
+      "fields": {
+        "instances": "instances"
+      }
+    },
+    "player_walk_movement": {
+      "namespace": "PlayerWalkMovement",
+      "fields": {
+        "groundAngle": "GroundAngle",
+        "groundAngleNew": "GroundAngleNew",
+        "groundTime": "GroundTime",
+        "jumpTime": "JumpTime",
+        "landTime": "LandTime",
+        "gravityMultiplier": "GravityMultiplier",
+        "targetMovement": "TargetMovement"
+      }
+    },
+    "tod_ambient_parameters": {
+      "namespace": "TOD_AmbientParameters",
+      "fields": {
+        "saturation": "Saturation",
+        "updateInterval": "UpdateInterval"
+      }
+    },
+    "tod_night_parameters": {
+      "namespace": "TOD_NightParameters",
+      "fields": {
+        "ambientMultiplier": "AmbientMultiplier"
+      }
+    },
+    "base_player_flags": {
+      "namespace": "base_player_flags",
+      "fields": {
+        "IsAdmin": "IsAdmin",
+        "ReceivingSnapshot": "ReceivingSnapshot",
+        "Sleeping": "Sleeping",
+        "Spectating": "Spectating",
+        "Wounded": "Wounded",
+        "IsDeveloper": "IsDeveloper",
+        "Connected": "Connected",
+        "ThirdPersonViewmode": "ThirdPersonViewmode"
+      }
+    },
+    "model_state": {
+      "namespace": "ModelState",
+      "fields": {
+        "Flying": "Flying",
+        "OnGround": "OnGround",
+        "Sleeping": "Sleeping",
+        "Mounted": "Mounted"
+      }
+    },
+    "unity_string": {
+      "namespace": "unity_string",
+      "fields": {
+        "m_stringLength": "m_stringLength",
+        "first_char": "first_char"
+      }
+    },
+    "base_networkable2": {
+      "namespace": "BaseNetworkable2",
+      "fields": {
+        "parentEntity": "parent_entity",
+        "prefabID": "prefab_id"
+      }
+    }
+  },
+  "decrypt_mappings": {
+    "client_entities": "networkable_key",
+    "entity_list": "networkable_key2",
+    "base_networkable_0": "networkable_key",
+    "base_networkable_1": "networkable_key2",
+    "cl_active_item": "decrypt_ClActiveItem",
+    "player_inventory": "decrypt_inventory_pointer",
+    "player_eyes": "decrypt_eyes",
+    "decrypt_fov": "decrypt_fov"
+  },
+  "decrypt_dat_key_map": {
+    "networkable_key": "nk",
+    "networkable_key2": "nk2",
+    "decrypt_ClActiveItem": "cla",
+    "decrypt_inventory_pointer": "inv",
+    "decrypt_eyes": "ey",
+    "decrypt_fov": "fov"
+  }
+}

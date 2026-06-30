@@ -1,0 +1,8 @@
+if (!players.local_player) return;
+
+    if (fly_active) return;
+
+    auto* base_movement = players.local_player->GetBaseMovement();
+    if (!base_movement) return;
+
+    base_movement->SetGroundAngle(cfg.movement.highjump_angle);
