@@ -462,10 +462,12 @@ void aimbot::do_aimbot()
             if (is_valid(input) && is_valid(input + offsets::PlayerInput::bodyAngles)) {
                 int passes = AIMBOT::SpinWrites ? 3 : 1;
                 for (int p = 0; p < passes; p++) {
-                    if (!is_valid(input) || !is_valid(input + offsets::PlayerInput::bodyAngles)) break;
+                    // Re-read input each pass — PlayerInput can be freed between spin writes
                     if (p > 0) {
                         if (!lpStillStable()) break;
                         Sleep(0);
+                        input = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
+                        if (!is_valid(input) || !is_valid(input + offsets::PlayerInput::bodyAngles)) break;
                         Vector3 cur = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
                         float dx = fabsf(angle.x - cur.x);
                         float dy = fabsf(angle.y - cur.y);

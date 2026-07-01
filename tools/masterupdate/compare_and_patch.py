@@ -13,14 +13,14 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 # Fallback operation sequences for decrypt functions.
 # Used when sha-dumper can't find a function (name obfuscation) or confidence is low.
 # These are the LAST KNOWN GOOD values from the working cheat build.
-# Updated: 2026-06-26 (sha-dumper build, ESP confirmed working)
+# Updated: 2026-06-30 (Morphine build 23824285, ESP confirmed working)
 FALLBACK_DECRYPT_OPS = {
     "base_networkable_0": [("rol", 2), ("xor", 0x111B9118), ("add", 0x79300E2E)],
     "base_networkable_1": [("rol", 6), ("xor", 0xC5D748E1), ("add", 0x48498B34)],
     "cl_active_item": [("add", 0x9420FF13), ("rol", 16), ("add", 0xEDC489FD), ("rol", 6)],
     "decrypt_fov": [("rol", 31), ("sub", 0x270C775), ("xor", 0x93DAED4D)],
-    "player_inventory": [("rol", 30), ("sub", 0x2D9831F6), ("xor", 0xDBFF84AD)],
-    "player_eyes": [("sub", 0x21A1F11F), ("xor", 0x749EF0FA), ("rol", 14), ("add", 0x3CA56202)],
+    "player_inventory": [("rol", 25), ("sub", 0x249D878C), ("xor", 0x58D82066), ("add", 0x7CD2A7CE)],
+    "player_eyes": [("sub", 0x0C26F5B3), ("xor", 0x6EC84F5D), ("rol", 13)],
 }
 
 
@@ -163,15 +163,22 @@ def extract_namespace_block(content: str, namespace: str) -> str:
 
 
 def find_existing_offset(content: str, name: str, namespace: str = None) -> tuple:
-    """Find an existing inline/constexpr uint64_t Name = value; line. Returns (old_value, line)."""
-    search_content = content
+    """Find an existing inline/constexpr uint64_t Name = value; line. Returns (old_value, line).
+
+    Searches the specified namespace first. If not found, falls back to searching
+    ALL namespaces — handles cases where Morphine puts a field in a different
+    namespace than the cheat (e.g. BaseProjectile vs BaseProjectileExt)."""
+    pattern = re.compile(rf"((?:inline|constexpr)\s+uint64_t\s+{re.escape(name)}\s*=\s*)(0x[0-9A-Fa-f]+|\d+)(;)")
+
     if namespace:
         block = extract_namespace_block(content, namespace)
         if block:
-            search_content = block
+            m = pattern.search(block)
+            if m:
+                return int(m.group(2), 0), m.group(0)
 
-    pattern = re.compile(rf"((?:inline|constexpr)\s+uint64_t\s+{re.escape(name)}\s*=\s*)(0x[0-9A-Fa-f]+|\d+)(;)")
-    m = pattern.search(search_content)
+    # Fallback: search entire file (all namespaces)
+    m = pattern.search(content)
     if m:
         return int(m.group(2), 0), m.group(0)
     return None, None

@@ -180,11 +180,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\github\\rust\\tools\\masterupdate\\il2cpp_dumper\\DumpOffsets.csproj",
+      "projectUniqueName": "E:\\github\\Rust-cheat\\tools\\masterupdate\\il2cpp_dumper\\DumpOffsets.csproj",
       "projectName": "DumpOffsets",
-      "projectPath": "E:\\github\\rust\\tools\\masterupdate\\il2cpp_dumper\\DumpOffsets.csproj",
+      "projectPath": "E:\\github\\Rust-cheat\\tools\\masterupdate\\il2cpp_dumper\\DumpOffsets.csproj",
       "packagesPath": "C:\\Users\\ludwi\\.nuget\\packages\\",
-      "outputPath": "E:\\github\\rust\\tools\\masterupdate\\il2cpp_dumper\\obj\\",
+      "outputPath": "E:\\github\\Rust-cheat\\tools\\masterupdate\\il2cpp_dumper\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\ludwi\\AppData\\Roaming\\NuGet\\NuGet.Config"

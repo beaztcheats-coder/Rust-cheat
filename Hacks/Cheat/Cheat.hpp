@@ -243,7 +243,6 @@ namespace Xheat {
             static int npcTotal = 0, npcValid = 0, npcDead = 0, npcCacheMiss = 0, npcPosEmpty = 0, npcDistExceeded = 0, npcRendered = 0;
             npcTotal += (int)npclist.size();
             for (const auto& NPC : npclist) {
-                if (npcCount >= 10) break;
                 if (!NPC || !is_valid((uintptr_t)NPC)) { npcValid++; continue; }
                 auto cit = cacheCopy.find((uintptr_t)NPC);
                 if (cit == cacheCopy.end()) { npcCacheMiss++; continue; }

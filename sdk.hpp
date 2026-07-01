@@ -74,6 +74,24 @@ struct dynamic_array { uint64_t base; uint64_t mem_id; uint64_t sz; uint64_t cap
 // Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
 // ============================================================
 
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: 23824285
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: 23824285
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: 23824285
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
 namespace decrypt {
 
     // ============================================================
@@ -196,10 +214,6 @@ namespace decrypt {
         return value;
     }
 
-    // WARNING: client_entities not found in any data source
-
-    // WARNING: entity_list not found in any data source
-
     inline uintptr_t networkable_key(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -220,7 +234,6 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
-    // PRESERVED: base_networkable_1 — Using last known good values (not found in sha-dumper)
     inline uintptr_t networkable_key2(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -271,7 +284,8 @@ namespace decrypt {
             uint32_t v1 = (x << OffsetManager::DecryptCfg.inv_rol) | (x >> (32 - OffsetManager::DecryptCfg.inv_rol)); // ROL
             uint32_t v2 = v1 - OffsetManager::DecryptCfg.inv_sub; // SUB
             uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.inv_xor; // XOR
-            *data = v3;
+            uint32_t v4 = v3 + OffsetManager::DecryptCfg.inv_add; // ADD
+            *data = v4;
             data++;
             --count;
         } while (count);
@@ -289,15 +303,13 @@ namespace decrypt {
             uint32_t v1 = x - OffsetManager::DecryptCfg.ey_sub; // SUB
             uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.ey_xor; // XOR
             uint32_t v3 = (v2 << OffsetManager::DecryptCfg.ey_rol) | (v2 >> (32 - OffsetManager::DecryptCfg.ey_rol)); // ROL
-            uint32_t v4 = v3 + OffsetManager::DecryptCfg.ey_add; // ADD
-            *data = v4;
+            *data = v3;
             data++;
             --count;
         } while (count);
         return value;
     }
 
-    // PRESERVED: decrypt_fov — Using last known good values (not found in sha-dumper)
     inline uint32_t decrypt_fov(uint32_t val) {
         val = (val << OffsetManager::DecryptCfg.fov_rol) | (val >> (32 - OffsetManager::DecryptCfg.fov_rol));
         val -= OffsetManager::DecryptCfg.fov_sub;
@@ -314,6 +326,9 @@ namespace decrypt {
     }
 
 } // namespace decrypt
+ // namespace decrypt
+ // namespace decrypt
+ // namespace decrypt
  // namespace decrypt
 
 
@@ -519,7 +534,8 @@ public:
 
         bool IsDead() {
             if (!(uintptr_t)this) return true;
-            return read<bool>((uintptr_t)(uintptr_t)this + offsets::BaseCombatEntity::Lifestate);
+            int lifestate = read<int>((uintptr_t)(uintptr_t)this + offsets::BaseCombatEntity::Lifestate);
+            return lifestate == 1;
         }
 
         bool IsSleeping() {

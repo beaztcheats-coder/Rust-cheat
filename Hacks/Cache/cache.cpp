@@ -76,16 +76,12 @@ void cache::do_Cache() {
         }
 
         // === Process-death detection: if BN chain keeps failing, check if Rust is still alive ===
-        if (failCount > 0 && (failCount % 80) == 0) {
-            static int bnProcMiss = 0;
-            if (Drv && !Drv->find_process(L"RustClient.exe")) {
-                if (++bnProcMiss >= 3) {
-                    LOG("CACHE: RustClient.exe no longer running (failCount=%d) — shutting down cheat to prevent BSOD", failCount);
-                    MISC::ShutdownRequested = true;
-                    return;
-                }
-            } else {
-                bnProcMiss = 0;
+        if (failCount > 0 && (failCount % 20) == 0) {
+            if (Drv && !Drv->IsProcessAlive()) {
+                LOG("CACHE: RustClient.exe no longer running (failCount=%d) — shutting down cheat to prevent BSOD", failCount);
+                if (Drv) Drv->ioctl_blocked.store(true, std::memory_order_relaxed);
+                MISC::ShutdownRequested = true;
+                return;
             }
         }
 
@@ -119,25 +115,25 @@ void cache::do_Cache() {
         };
 
         uint64_t basenetworkable = read<uint64_t>(GameAssembly + offsets::basenetworkable_pointer);
-        if (!basenetworkable) {
+        if (!basenetworkable || !is_valid(basenetworkable)) {
             markUnavailable();
-            if (++failCount == 1) LOG("BN chain FAIL: basenetworkable=0 (GA+0x%I64X)", offsets::basenetworkable_pointer);
+            if (++failCount == 1) LOG("BN chain FAIL: basenetworkable=0 or invalid (GA+0x%I64X)", offsets::basenetworkable_pointer);
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
 
         uint64_t bn_static_fields = read<uint64_t>(basenetworkable + offsets::BaseNetworkable::static_fields);
-        if (!bn_static_fields) {
+        if (!bn_static_fields || !is_valid(bn_static_fields)) {
             markUnavailable();
-            if (++failCount == 1) LOG("BN chain FAIL: static_fields=0 (bn=0x%I64X +0x%I64X)", basenetworkable, offsets::BaseNetworkable::static_fields);
+            if (++failCount == 1) LOG("BN chain FAIL: static_fields=0 or invalid (bn=0x%I64X +0x%I64X)", basenetworkable, offsets::BaseNetworkable::static_fields);
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
 
         uint64_t wrapper_class_ptr = read<uint64_t>(bn_static_fields + offsets::BaseNetworkable::wrapper_class);
-        if (!wrapper_class_ptr) {
+        if (!wrapper_class_ptr || !is_valid(wrapper_class_ptr)) {
             markUnavailable();
-            if (++failCount == 1) LOG("BN chain FAIL: wrapper_class_ptr=0 (sf=0x%I64X +0x%I64X)", bn_static_fields, offsets::BaseNetworkable::wrapper_class);
+            if (++failCount == 1) LOG("BN chain FAIL: wrapper_class_ptr=0 or invalid (sf=0x%I64X +0x%I64X)", bn_static_fields, offsets::BaseNetworkable::wrapper_class);
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
@@ -154,9 +150,9 @@ void cache::do_Cache() {
         }
 
         uint64_t parent_sf = read<uint64_t>(wrapper_class + offsets::BaseNetworkable::parent_static_fields);
-        if (!parent_sf) {
+        if (!parent_sf || !is_valid(parent_sf)) {
             markUnavailable();
-            if (++failCount == 1) LOG("BN chain FAIL: parent_static_fields=0 (wc=0x%I64X +0x%I64X)", wrapper_class, offsets::BaseNetworkable::parent_static_fields);
+            if (++failCount == 1) LOG("BN chain FAIL: parent_static_fields=0 or invalid (wc=0x%I64X +0x%I64X)", wrapper_class, offsets::BaseNetworkable::parent_static_fields);
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
@@ -173,9 +169,9 @@ void cache::do_Cache() {
         }
 
         uint64_t entity = read<uint64_t>(parent_class + offsets::BaseNetworkable::entity);
-        if (!entity) {
+        if (!entity || !is_valid(entity)) {
             markUnavailable();
-            if (++failCount == 1) LOG("BN chain FAIL: entity(BufferList)=0 (pc=0x%I64X +0x%I64X)", parent_class, offsets::BaseNetworkable::entity);
+            if (++failCount == 1) LOG("BN chain FAIL: entity(BufferList)=0 or invalid (pc=0x%I64X +0x%I64X)", parent_class, offsets::BaseNetworkable::entity);
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
@@ -183,11 +179,13 @@ void cache::do_Cache() {
         auto entity_size = read<uint32_t>(entity + 0x18);
         if (!entity_size) {
             markUnavailable();
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
         if (entity_size > 50000) {
             markUnavailable();
             if (++failCount == 1) LOG("BN chain FAIL: entity_size unreasonable (%u)", entity_size);
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
 
@@ -207,17 +205,17 @@ void cache::do_Cache() {
         lastStableSize = entity_size;
 
         auto entity_array = read<uint64_t>(entity + 0x10);
-        if (!entity_array) {
-            // Transient — no sleep needed
+        if (!entity_array || !is_valid(entity_array)) {
             markUnavailable();
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
 
         Rust::BaseEntity* localPlayer = read<Rust::BaseEntity*>((uint64_t)entity_array + 0x20);
 
         if (!localPlayer) {
-            // Transient — no sleep needed
             markUnavailable();
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
 
@@ -234,20 +232,18 @@ void cache::do_Cache() {
             failCount = 0;
         }
 
-        // Periodic CR3 re-validation: every ~3s, re-check the process is still alive
+        // Periodic CR3 re-validation: every ~3 cycles, refresh CR3 and verify process is alive
         if ((cacheCycleCount % 3) == 0 && Drv) {
+            if (!Drv->IsProcessAlive()) {
+                LOG("CACHE: RustClient.exe died during normal operation — shutting down to prevent BSOD");
+                Drv->ioctl_blocked.store(true, std::memory_order_relaxed);
+                MISC::ShutdownRequested = true;
+                return;
+            }
             uint64_t current_cr3 = 0;
-            if (!Drv->GetCR3_1(Drv->processid, false, current_cr3) || current_cr3 != Drv->process_cr3) {
-                static int cr3ProcMiss = 0;
-                if (!Drv->find_process(L"RustClient.exe")) {
-                    if (++cr3ProcMiss >= 3) {
-                        LOG("CACHE: RustClient.exe died during normal operation — shutting down to prevent BSOD");
-                        MISC::ShutdownRequested = true;
-                        return;
-                    }
-                } else {
-                    cr3ProcMiss = 0;
-                }
+            if (Drv->GetCR3_1(Drv->processid, false, current_cr3) && current_cr3 != Drv->process_cr3) {
+                LOG("CACHE: CR3 changed (old=0x%I64X new=0x%I64X) — updating", Drv->process_cr3, current_cr3);
+                Drv->process_cr3 = current_cr3;
             }
         }
         int stable = g_BnStableCycles.load(std::memory_order_relaxed);
@@ -585,14 +581,13 @@ void cache::do_Cache() {
                 // Position is set here; velocity is updated by the position-only thread
                 ec.headPos = pos;
 
-                // BVH raycast is PRIMARY visibility check when VisCheck enabled
+                // BVH raycast overrides isVisible (but NOT isVisibleRaw, which stays as the game's flag for VisibleStrict)
                 if (ESP::VisCheck && vischeck::g_VisCheckLoaded && Distance <= 400.f) {
                     Vector3 camPos;
                     { std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex); camPos = g_CameraWorldPos; }
                     if (!camPos.Empty()) {
                         bool rayVisible = vischeck::g_VisCheck.IsVisible(camPos, ec.headPos);
                         ec.isVisible = rayVisible;
-                        ec.isVisibleRaw = rayVisible;
                     }
                 }
 
@@ -670,6 +665,14 @@ void cache::do_Cache() {
                 if (Distance > NPC_ESP::draw_distance) continue;
                 EspCacheData ec;
                 ec.headPos = pos;
+                ec.feetPos = pos;
+                ec.cacheTick = GetTickCount64();
+                // Read velocity for prediction
+                if (Distance <= 300.f) {
+                    uintptr_t pm = read<uintptr_t>((uintptr_t)NPC + offsets::BasePlayer::PlayerModel);
+                    if (pm && is_valid(pm))
+                        ec.velocity = read<Vector3>(pm + offsets::PlayerModel::velocity);
+                }
                 // Populate skeleton bones for NPC if feature enabled and within range
                 if (NPC_ESP::Skeleton && Distance <= NPC_ESP::NPCSkeletonDist) {
                     uintptr_t btf = NPC->Get_BoneTransforms();
@@ -691,6 +694,7 @@ void cache::do_Cache() {
                             validBones++;
                         }
                         ec.skeletonValid = (validBones >= 4);
+                        if (ec.skeletonValid) ec.skeletonTick = GetTickCount64();
                     }
                 }
                 if (NPC_ESP::HeldItem) {
@@ -714,6 +718,8 @@ void cache::do_Cache() {
                 if (Distance > ANIMAL_ESP::draw_distance) continue;
                 EspCacheData& aec = tempEspCache[(uintptr_t)entity];
                 aec.headPos = pos;
+                aec.feetPos = pos;
+                aec.cacheTick = GetTickCount64();
                 aec.animalType = animalType;
                 aec.isDead = animalDead;
                 aec.health = read<float>((uintptr_t)Animal + offsets::BaseCombatEntity::Health);
@@ -1099,7 +1105,18 @@ void cache::do_Cache() {
                     for (int i = 0; i < 5; i++) if (!v.wear[i].empty()) it->second.wear[i] = v.wear[i];
                     it->second.ammo = v.ammo;
                     it->second.invTick = v.invTick;
-                    it->second.headPos = v.headPos;
+                    // Update bones for NPCs/animals (slow cache reads fresh bones for them).
+                    // Players set skeletonValid=false in slow cache, so this won't clobber player bones
+                    // (which are owned by the fast skeleton thread).
+                    if (v.skeletonValid) {
+                        for (int b = 0; b < 15; b++) it->second.bones[b] = v.bones[b];
+                        it->second.skeletonValid = true;
+                        it->second.skeletonTick = v.skeletonTick ? v.skeletonTick : GetTickCount64();
+                    }
+                    // Only update headPos from slow cache if the fast position thread hasn't set one yet
+                    if (it->second.cacheTick == 0 || v.headPos.Empty()) {
+                        it->second.headPos = v.headPos;
+                    }
                 } else {
                     // New entity — insert with slow data
                     g_EspCache[k] = v;

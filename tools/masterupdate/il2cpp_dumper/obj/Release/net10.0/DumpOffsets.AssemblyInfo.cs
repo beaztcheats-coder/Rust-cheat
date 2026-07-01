@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DumpOffsets")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8e7202f35e3575cea5b39d87e92b021033340e3f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7dd158c7efb0c02d903e6887c344cc43a44dbca9")]
 [assembly: System.Reflection.AssemblyProductAttribute("DumpOffsets")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DumpOffsets")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

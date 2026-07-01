@@ -9,12 +9,12 @@
 namespace OffsetManager {
 
     struct DecryptConfig {
-        // networkable_key (client_entities): rol-xor-add
+// networkable_key (client_entities): rol-xor-add
         uint32_t nk_rol = 2;
         uint32_t nk_xor = 0x111B9118;
         uint32_t nk_add = 0x79300E2E;
 
-        // networkable_key2 (base_networkable_1): rol-xor-add
+        // networkable_key2 (entity_list): rol-xor-add
         uint32_t nk2_rol = 6;
         uint32_t nk2_xor = 0xC5D748E1;
         uint32_t nk2_add = 0x48498B34;
@@ -25,21 +25,21 @@ namespace OffsetManager {
         uint32_t cla_add_2 = 0xEDC489FD;
         uint32_t cla_rol_2 = 6;
 
-        // decrypt_inventory_pointer (player_inventory): rol-sub-xor
-        uint32_t inv_rol = 30;
-        uint32_t inv_sub = 0x2D9831F6;
-        uint32_t inv_xor = 0xDBFF84AD;
+        // decrypt_inventory_pointer (player_inventory): rol-sub-xor-add
+        uint32_t inv_rol = 25;
+        uint32_t inv_sub = 0x249D878C;
+        uint32_t inv_xor = 0x58D82066;
+        uint32_t inv_add = 0x7CD2A7CE;
 
-        // decrypt_eyes (player_eyes): sub-xor-rol-add
-        uint32_t ey_sub = 0x21A1F11F;
-        uint32_t ey_xor = 0x749EF0FA;
-        uint32_t ey_rol = 14;
-        uint32_t ey_add = 0x3CA56202;
+        // decrypt_eyes (player_eyes): sub-xor-rol
+        uint32_t ey_sub = 0x0C26F5B3;
+        uint32_t ey_xor = 0x6EC84F5D;
+        uint32_t ey_rol = 13;
 
         // decrypt_fov (decrypt_fov): rol-sub-xor
         uint32_t fov_rol = 31;
-        uint32_t fov_sub = 0x0270C779;
-        uint32_t fov_xor = 0x93DAED41;
+        uint32_t fov_sub = 0x0270C775;
+        uint32_t fov_xor = 0x93DAED4D;
     };
 
     inline DecryptConfig DecryptCfg;
@@ -88,10 +88,10 @@ namespace OffsetManager {
 
                         #define LOAD_DEC(k, v) if (lstrcmpA(key, k) == 0) { v = iv; }
 
- LOAD_DEC("nk_rol", DecryptCfg.nk_rol);
+LOAD_DEC("nk_rol", DecryptCfg.nk_rol);
                         LOAD_DEC("nk_xor", DecryptCfg.nk_xor);
                         LOAD_DEC("nk_add", DecryptCfg.nk_add);
-                        // networkable_key2
+                        // networkable_key
                         LOAD_DEC("nk2_rol", DecryptCfg.nk2_rol);
                         LOAD_DEC("nk2_xor", DecryptCfg.nk2_xor);
                         LOAD_DEC("nk2_add", DecryptCfg.nk2_add);
@@ -104,11 +104,11 @@ namespace OffsetManager {
                         LOAD_DEC("inv_rol", DecryptCfg.inv_rol);
                         LOAD_DEC("inv_sub", DecryptCfg.inv_sub);
                         LOAD_DEC("inv_xor", DecryptCfg.inv_xor);
+                        LOAD_DEC("inv_add", DecryptCfg.inv_add);
                         // decrypt_inventory_pointer
                         LOAD_DEC("ey_sub", DecryptCfg.ey_sub);
                         LOAD_DEC("ey_xor", DecryptCfg.ey_xor);
                         LOAD_DEC("ey_rol", DecryptCfg.ey_rol);
-                        LOAD_DEC("ey_add", DecryptCfg.ey_add);
                         // decrypt_eyes
                         LOAD_DEC("fov_rol", DecryptCfg.fov_rol);
                         LOAD_DEC("fov_sub", DecryptCfg.fov_sub);

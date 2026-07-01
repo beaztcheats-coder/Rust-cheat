@@ -50,11 +50,11 @@ goto start_steps
 
 :patches_missing
 call :log "[ERROR] %MISSING_FILES% patch file(s) missing in output."
-call :log "[ERROR] You MUST run auto_update.bat FIRST to generate all patches."
+call :log "[ERROR] You MUST run getnewoffsets.bat FIRST to generate all patches."
 echo.
 echo ================================================================
 echo   PATCH FILES MISSING (%MISSING_FILES% of 6).
-echo   Run auto_update.bat FIRST to generate all patches.
+echo   Run getnewoffsets.bat FIRST to generate all patches.
 echo   Full log: %CD%\%LOG%
 echo ================================================================
 pause
@@ -102,7 +102,7 @@ if exist "output\rust_mesh.tri" (
     copy /Y "output\rust_mesh.tri" "%~dp0..\..\rust_mesh.tri" >nul 2>&1
     for %%A in ("output\rust_mesh.tri") do call :log "[OK] Mesh data copied for distribution (%%~zA bytes)"
 ) else (
-    call :log "[WARN] No mesh data — VisCheck will use PlayerModel._visible fallback"
+    call :log "[INFO] No mesh data generated (VisCheck is currently disabled)"
 )
 
 call :log "================================================================"
@@ -119,7 +119,7 @@ if exist "output\rust_mesh.tri" (
     echo   Mesh data:
 echo     rust_mesh.tri ^(copy alongside DLL for VisCheck^)
 ) else (
-    echo   Mesh data: NOT GENERATED ^(VisCheck uses fallback^)
+    echo   Mesh data: NOT GENERATED ^(VisCheck is disabled^)
 )
 echo   Full log:  %CD%\%LOG%
 echo ================================================================
@@ -128,7 +128,6 @@ echo Test checklist:
 echo   [ ] Inject and verify ESP renders
 echo   [ ] Verify aimbot works
 echo   [ ] Verify recoil works
-echo   [ ] Test VisCheck (if mesh data available)
 echo   [ ] No crashes
 echo   [ ] When done debugging: delete C:\rust_debug_enabled.txt for stealth mode
 echo.

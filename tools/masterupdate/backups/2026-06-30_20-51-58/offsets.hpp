@@ -286,6 +286,9 @@ namespace unity_string {
       constexpr uint64_t model = 0x1A8;         // BaseEntity.model (Model)
       constexpr uint64_t positionLerp = 0xA0;   // pastebin build 23824285
       constexpr uint64_t bounds = 0x17C;         // Unity Bounds {center(12) + extents(12)} — 24 bytes
+      constexpr uint64_t isVisible = 0x158;      // BaseEntity.isVisible (Unity occlusion culling flag)
+      constexpr uint64_t isAnimatorVisible = 0x159; // BaseEntity.isAnimatorVisible
+      constexpr uint64_t isShadowVisible = 0x15A;    // BaseEntity.isShadowVisible
       // Position chain offsets used by Get_ObjectPosition() — object → transform hierarchy
       constexpr uint64_t objRef = 0x10;          // entity → UnityEngine.Object
       constexpr uint64_t posChain0 = 0x20;       // Object → GameObject/Transform

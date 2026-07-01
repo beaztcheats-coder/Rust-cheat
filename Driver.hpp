@@ -167,6 +167,17 @@ public:
         return hDriver != INVALID_HANDLE_VALUE;
     }
 
+    bool IsProcessAlive()
+    {
+        if (!processid) return false;
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processid);
+        if (!h || h == INVALID_HANDLE_VALUE) return false;
+        DWORD exitCode = 0;
+        bool alive = GetExitCodeProcess(h, &exitCode) && exitCode == STILL_ACTIVE;
+        CloseHandle(h);
+        return alive;
+    }
+
     bool SendIoctl(PREQUEST_DATA request)
     {
         DWORD bytesReturned = 0;
@@ -334,7 +345,7 @@ public:
     // Cached process check — avoids CreateToolhelp32Snapshot storm (20-60ms each)
     std::atomic<uint64_t> findproc_last_check_ms{ 0 };
     std::atomic<INT32> findproc_cached_pid{ 0 };
-    static constexpr uint64_t FINDPROC_CACHE_MS = 5000;
+    static constexpr uint64_t FINDPROC_CACHE_MS = 500;
 
     INT32 find_process(LPCTSTR process_name) {
         // Return cached PID if checked recently
@@ -576,8 +587,10 @@ inline T read_chain(std::uint64_t address, std::vector<std::uint64_t> chain) {
     if (chain.empty()) return T{};
     uint64_t cur_read = address;
 
-    for (size_t r = 0; r < chain.size() - 1; ++r)
+    for (size_t r = 0; r < chain.size() - 1; ++r) {
         cur_read = read<std::uint64_t>(cur_read + chain[r]);
+        if (!is_valid(cur_read)) return T{};
+    }
 
     return read<T>(cur_read + chain[chain.size() - 1]);
 }

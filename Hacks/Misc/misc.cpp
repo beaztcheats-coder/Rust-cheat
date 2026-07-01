@@ -200,6 +200,27 @@ auto FovChanger(float fov) -> void
 
 void misc::do_misc() {
 
+    // Generation stability check + 10s quarantine — defined early so all phases can use it
+    const uint64_t miscLpGeneration = g_LocalPlayerGeneration.load(std::memory_order_acquire);
+    auto miscLpStable = [&]() -> bool {
+        return src->LocalPlayer
+            && is_valid((uintptr_t)src->LocalPlayer)
+            && g_LocalPlayerGeneration.load(std::memory_order_acquire) == miscLpGeneration;
+    };
+
+    // 10-second startup quarantine after LocalPlayer change (prevents writes to uninitialized player)
+    {
+        static ULONGLONG miscQuarantineStart = 0;
+        static uintptr_t miscQuarantineLp = 0;
+        const ULONGLONG now = GetTickCount64();
+        const uintptr_t lp = (uintptr_t)src->LocalPlayer;
+        if (miscQuarantineStart == 0 || lp != miscQuarantineLp) {
+            miscQuarantineStart = now;
+            miscQuarantineLp = lp;
+        }
+        if ((now - miscQuarantineStart) < 10000ULL) return;
+    }
+
     {
         static uint64_t lastLpGeneration = 0;
         const uint64_t lpGeneration = g_LocalPlayerGeneration.load(std::memory_order_acquire);
@@ -308,10 +329,11 @@ void misc::do_misc() {
             MISC::AdminFlags = !MISC::AdminFlags;
             LOG("AdminFlags: %s", MISC::AdminFlags ? "ON" : "OFF");
         }
-        if (MISC::AdminFlags && src->LocalPlayer) {
+        if (MISC::AdminFlags && src->LocalPlayer && miscLpStable()) {
             uintptr_t lp = (uintptr_t)src->LocalPlayer;
             int pf = read<int>(lp + offsets::BasePlayer::PlayerFlags);
-            write<int>(lp + offsets::BasePlayer::PlayerFlags, pf | (int)offsets::base_player_flags::IsAdmin);
+            if (miscLpStable())
+                write<int>(lp + offsets::BasePlayer::PlayerFlags, pf | (int)offsets::base_player_flags::IsAdmin);
         }
     }
 
@@ -332,7 +354,7 @@ void misc::do_misc() {
         }
 
         static bool wasDebugBypass = false;
-        if (MISC::DebugCamera && MISC::DebugCameraTimer <= 50.0f && src->LocalPlayer) {
+        if (MISC::DebugCamera && MISC::DebugCameraTimer <= 50.0f && src->LocalPlayer && miscLpStable()) {
             uintptr_t lp = (uintptr_t)src->LocalPlayer;
             int pf = read<int>(lp + offsets::BasePlayer::PlayerFlags);
             write<int>(lp + offsets::BasePlayer::PlayerFlags, pf | (int)offsets::base_player_flags::IsAdmin);
@@ -394,14 +416,16 @@ void misc::do_misc() {
             } while (false);
 
             // ModelState.Flying + body freeze — every frame so server can't override
-            uintptr_t ms = read<uintptr_t>(lp + offsets::BasePlayer::ModelState);
-            if (ms && is_valid(ms)) {
-                int mf = read<int>(ms + offsets::ModelState::flags);
-                write<int>(ms + offsets::ModelState::flags, mf | offsets::ModelState::Flying);
-            }
-            uintptr_t mov = read<uintptr_t>(lp + offsets::BasePlayer::BaseMovement);
-            if (mov && is_valid(mov)) {
-                write<Vector3>(mov + offsets::BaseMovement2::target_movement, Vector3{}); // freeze body via targetMovement
+            if (miscLpStable()) {
+                uintptr_t ms = read<uintptr_t>(lp + offsets::BasePlayer::ModelState);
+                if (ms && is_valid(ms)) {
+                    int mf = read<int>(ms + offsets::ModelState::flags);
+                    write<int>(ms + offsets::ModelState::flags, mf | offsets::ModelState::Flying);
+                }
+                uintptr_t mov = read<uintptr_t>(lp + offsets::BasePlayer::BaseMovement);
+                if (mov && is_valid(mov)) {
+                    write<Vector3>(mov + offsets::BaseMovement2::target_movement, Vector3{});
+                }
             }
         }
     }
@@ -414,7 +438,7 @@ void misc::do_misc() {
     // Enter block when recoil/burst is active OR when we need to restore originals after toggling off
     static bool wasRecoilEnabled = false;
     bool needRecoilRestore = wasRecoilEnabled && !MISC::RecoilEnabled;
-    wasRecoilEnabled = MISC::RecoilEnabled;    if (MISC::RecoilEnabled || MISC::ChangeBurst || needRecoilRestore)
+    wasRecoilEnabled = MISC::RecoilEnabled;    if ((MISC::RecoilEnabled || MISC::ChangeBurst || needRecoilRestore) && miscLpStable())
     {
         // Get all children
         uintptr_t childrenList = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BaseNetworkable::children);
@@ -478,18 +502,33 @@ void misc::do_misc() {
         }
 
         // Remove stale entries (weapon left children list) - restore recoil
+        // Re-read rp from the weapon to verify it's still alive before writing
         for (int c = 0; c < 16; c++) {
             if (!wc[c].active) continue;
             bool found = false;
             for (int ci = 0; ci < nkids; ci++) if (kids[ci] == wc[c].weapon) { found = true; break; }
             if (!found) {
-                if (wc[c].rp && is_valid(wc[c].rp)) {
+                // Weapon left children list — verify it's still readable before restoring
+                uintptr_t rp_check = read<uintptr_t>(wc[c].weapon + offsets::BaseProjectile::recoil);
+                if (rp_check && is_valid(rp_check) && rp_check == wc[c].rp) {
+                    // Weapon still alive and recoil pointer matches — safe to restore
                     write<float>(wc[c].rp + offsets::RecoilProperties::RecoilYawMin, wc[c].oRP[0]);
                     write<float>(wc[c].rp + offsets::RecoilProperties::RecoilYawMax, wc[c].oRP[1]);
                     write<float>(wc[c].rp + offsets::RecoilProperties::RecoilPitchMin, wc[c].oRP[2]);
                     write<float>(wc[c].rp + offsets::RecoilProperties::RecoilPitchMax, wc[c].oRP[3]);
+                    if (wc[c].nro && is_valid(wc[c].nro)) {
+                        write<float>(wc[c].nro + offsets::RecoilProperties::RecoilYawMin, wc[c].oNRO[0]);
+                        write<float>(wc[c].nro + offsets::RecoilProperties::RecoilYawMax, wc[c].oNRO[1]);
+                        write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMin, wc[c].oNRO[2]);
+                        write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMax, wc[c].oNRO[3]);
+                    }
+                    LOG("RECOIL_RESTORE: weapon=0x%I64X restored (left children)", wc[c].weapon);
                 }
+                // Clear slot regardless — weapon is no longer in children list
                 wc[c].active = false;
+                wc[c].weapon = 0;
+                wc[c].rp = 0;
+                wc[c].nro = 0;
             }
         }
 
@@ -508,7 +547,8 @@ void misc::do_misc() {
         if (needRecoilRestore) {
             for (int c = 0; c < 16; c++) {
                 if (!wc[c].active) continue;
-                uintptr_t rp = wc[c].rp;
+                // Re-read rp from weapon to verify it's still alive
+                uintptr_t rp = read<uintptr_t>(wc[c].weapon + offsets::BaseProjectile::recoil);
                 if (rp && is_valid(rp)) {
                     write<float>(rp + offsets::RecoilProperties::RecoilYawMin, wc[c].oRP[0]);
                     write<float>(rp + offsets::RecoilProperties::RecoilYawMax, wc[c].oRP[1]);
@@ -520,9 +560,12 @@ void misc::do_misc() {
                         write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMin, wc[c].oNRO[2]);
                         write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMax, wc[c].oNRO[3]);
                     }
-                    LOG("RECOIL_RESTORE: weapon=0x%I64X restored originals", wc[c].weapon);
+                    LOG("RECOIL_RESTORE: weapon=0x%I64X restored (toggle off)", wc[c].weapon);
                 }
                 wc[c].active = false;
+                wc[c].weapon = 0;
+                wc[c].rp = 0;
+                wc[c].nro = 0;
             }
         }
         else if (MISC::RecoilEnabled && doWrite) {
@@ -570,8 +613,13 @@ void misc::do_misc() {
                     break;
                 }
             }
-        } else if (wasBurst && !MISC::ChangeBurst && lastBurst && is_valid(lastBurst) && is_valid(lastBurst + offsets::BaseProjectile::internalBurstFireRateScale)) {
-            write<bool>(lastBurst + offsets::BaseProjectile::isBurstWeapon, false);
+        } else if (wasBurst && !MISC::ChangeBurst && lastBurst && is_valid(lastBurst)) {
+            // Verify lastBurst is still in current children list before restoring
+            bool burstStillAlive = false;
+            for (int ci = 0; ci < nkids; ci++) if (kids[ci] == lastBurst) { burstStillAlive = true; break; }
+            if (burstStillAlive && is_valid(lastBurst + offsets::BaseProjectile::internalBurstFireRateScale)) {
+                write<bool>(lastBurst + offsets::BaseProjectile::isBurstWeapon, false);
+            }
             lastBurst = 0;
         }
         wasBurst = MISC::ChangeBurst;

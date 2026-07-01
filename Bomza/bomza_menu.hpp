@@ -454,7 +454,8 @@ inline void Pawn()
         ImGui::Checkbox("Team ID", &ESP::TeamID);
         ImGui::Checkbox("Hotbar Text", &ESP::hotbar_text);
         ImGui::Checkbox("Bullet Tracers", &ESP::BulletTracers);
-        ImGui::Checkbox("VisCheck", &ESP::VisCheck);
+        // VisCheck disabled — toggle removed from menu
+        // ImGui::Checkbox("VisCheck", &ESP::VisCheck);
         ImGui::Columns(1);
         EndCard();
 

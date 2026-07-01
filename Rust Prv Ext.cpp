@@ -13,6 +13,11 @@
 #include "OffsetManager.hpp"
 #include "RuntimePaths.hpp"
 
+#ifndef BOMZA
+#include "Hacks/Misc/spoofer.hpp"
+#include "Hacks/Misc/cleaner.hpp"
+#endif
+
 extern std::atomic<uint64_t> g_CacheHeartbeatMs;
 extern std::atomic<uint32_t> g_CacheThreadEpoch;
 extern std::atomic<int> g_BnStableCycles;
@@ -24,6 +29,7 @@ extern std::atomic<uint32_t> g_SkeletonEpoch;
 #pragma comment(lib, "ntdll.lib")
 
 HANDLE driver_handle = nullptr;
+HMODULE g_hSelfModule = nullptr;
 
 void ConsolePrint(const char* msg) {
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -230,7 +236,7 @@ void MainThreadImpl()
 
     CreateConsole();
 
-    // === STARTUP MENU ===
+    // === STARTUP BANNER ===
     {
         SafeCLS();
         printf("\n");
@@ -243,16 +249,11 @@ void MainThreadImpl()
         printf("    Rust Private  -  External Cheat\n");
 #endif
         printf("  ============================================\n\n");
-
-        printf("  ============================================\n\n");
-        printf("  Launching cheat...\n\n");
-        printf("  ============================================\n\n");
         fflush(stdout);
     }
 
-        // Enable logging if marker file exists (created by auto_update.bat or user)
-        if (GetFileAttributesA(RuntimePaths::DiagnosticMarkerPath()) != INVALID_FILE_ATTRIBUTES ||
-            GetFileAttributesA("C:\\rust_debug_enabled.txt") != INVALID_FILE_ATTRIBUTES) {
+        // Enable logging if user-created marker exists (NOT the auto-created diagnostic marker)
+        if (GetFileAttributesA("C:\\rust_debug_enabled.txt") != INVALID_FILE_ATTRIBUTES) {
             g_UpdateLoggingEnabled = true;
         }
         // Auto-enable logging if DLL name contains "_debug"
@@ -275,6 +276,52 @@ void MainThreadImpl()
         LOG("DLL injected, MainThread started");
         LOG("Build: %s %s", __DATE__, __TIME__);
         LOG("Logging: %s", g_UpdateLoggingEnabled ? "ENABLED" : "disabled");
+
+#ifndef BOMZA
+        // === BEAZT STARTUP PROMPT: Spoof / Clean / Play ===
+        {
+            SafeCLS();
+            printf("\n");
+            printf("  ============================================\n");
+            printf("       T H E   B E A Z T   V 3\n");
+            printf("  ============================================\n\n");
+            printf("  [1] Spoof and Play     (spoof HWID, then launch)\n");
+            printf("  [2] Clean after detection (run deep cleaner)\n");
+            printf("  [3] Just play           (skip, launch directly)\n\n");
+            printf("  Choice: ");
+            fflush(stdout);
+
+            int choice = _getch();
+            printf("%c\n\n", choice);
+
+            if (choice == '1') {
+                LOG("Startup: user chose Spoof and Play");
+                RunEmbeddedSpoofer();
+            }
+            else if (choice == '2') {
+                LOG("Startup: user chose Clean after detection");
+                printf("\n  Launching deep cleaner...\n\n");
+                fflush(stdout);
+                Sleep(500);
+                CleanerMenu();
+                // After cleaner exits, unload DLL — user restarts and re-injects
+                SafeCLS();
+                printf("\n  ============================================\n");
+                printf("  Cleaning complete.\n");
+                printf("  Restart your PC, then re-inject to play.\n");
+                printf("  ============================================\n\n");
+                fflush(stdout);
+                Sleep(3000);
+                if (g_hSelfModule)
+                    FreeLibraryAndExitThread(g_hSelfModule, 0);
+                return;
+            }
+            else {
+                LOG("Startup: user chose Just play (skip)");
+            }
+            SafeCLS();
+        }
+#endif
 
         ConsolePrint("Initializing...\n");
 
@@ -512,7 +559,13 @@ void MainThreadImpl()
         // === FULL CLEANUP SHUTDOWN — restore game, delete traces, unload DLL ===
         LOG("Cheat shutting down — restoring game memory + cleaning traces");
 
-        // 1. Force ALL memory-writing features off so do_misc() restores originals
+        // 0. Immediately block ALL IOCTLs — stops worker threads from sending driver requests
+        if (Drv) Drv->ioctl_blocked.store(true, std::memory_order_relaxed);
+
+        // 1. Signal all worker threads to stop BEFORE final do_misc (prevents concurrent do_misc race)
+        MISC::ShutdownRequested = true;
+
+        // 2. Force ALL memory-writing features off so do_misc() restores originals
         MISC::RecoilEnabled = false;
         MISC::FovChanger = false;
         MISC::Zoom = false;
@@ -521,19 +574,16 @@ void MainThreadImpl()
         MISC::CombatMode = false;
         MISC::DebugCamera = false;
         SETTINGS::BattleMode = false;
-        // Call do_misc one final time to restore recoil/FOV/zoom to game defaults
+        // Call do_misc one final time to flush restoration writes
         if (hx && src && src->LocalPlayer && is_valid((uintptr_t)src->LocalPlayer)) {
             __try { hx->do_misc(); } __except(EXCEPTION_EXECUTE_HANDLER) {}
             Sleep(100); // give restoration writes time to flush
         }
 
-        // 2. Signal all worker threads to stop
-        MISC::ShutdownRequested = true;
-
         // 3. Wait for ALL workers to stop (check all heartbeats)
         {
             ULONGLONG startWait = GetTickCount64();
-            while (GetTickCount64() - startWait < 2000) {
+            while (GetTickCount64() - startWait < 3000) {
                 ULONGLONG now = GetTickCount64();
                 ULONGLONG hb = g_CacheHeartbeatMs.load(std::memory_order_acquire);
                 ULONGLONG fhb = g_FastRefreshHeartbeatMs.load(std::memory_order_acquire);
@@ -545,10 +595,11 @@ void MainThreadImpl()
                 Sleep(100);
             }
         }
-        Sleep(100); // extra safety margin for detached threads to fully exit
+        Sleep(200); // extra safety margin for detached threads to fully exit
 
-        // 4. Close driver handle — no more IOCTLs
-        if (Drv) { delete Drv; Drv = nullptr; }
+        // 4. Close driver handle — null pointer FIRST so workers stop referencing it
+        DriverInterface* oldDrv = (DriverInterface*)InterlockedExchangePointer((volatile PVOID*)&Drv, nullptr);
+        if (oldDrv) { delete oldDrv; }
 
         // 5. Delete ALL trace files (production: full cleanup; debug: keep logs for analysis)
         std::string dllDir = RuntimePaths::DllDirectory();
@@ -607,32 +658,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
     if (ul_reason_for_call == DLL_PROCESS_ATTACH)
     {
+        g_hSelfModule = hModule;
         DisableThreadLibraryCalls(hModule);
         CreateThread(nullptr, 0, MainThread, hModule, 0, nullptr);
-    }
-    else if (ul_reason_for_call == DLL_PROCESS_DETACH)
-    {
-        MISC::ShutdownRequested = true;
-        Sleep(2000); // wait for worker threads to exit
-        if (Drv) { delete Drv; Drv = nullptr; }
-        // Delete trace files (production: full cleanup; debug: keep logs)
-        std::string dllDir2 = RuntimePaths::DllDirectory();
-        auto delFile2 = [&](const char* filename) {
-            std::string p = dllDir2 + filename;
-            DeleteFileA(p.c_str());
-        };
-        delFile2("rust_decrypts.dat");
-        delFile2("cheat_dll_loaded.txt");
-        delFile2("rust_debug_enabled.txt");
-        delFile2("spoofer_debug.log");
-        delFile2("spoof_seed.dat");
-        delFile2("rustcfg.dat");
-        delFile2("rustcfg_bomza.dat");
-        delFile2("rust_mesh.tri");
-        if (!g_UpdateLoggingEnabled) {
-            delFile2("cheat_debug.log");
-            delFile2("cheat_debug_bomza.log");
-        }
     }
     return TRUE;
 }

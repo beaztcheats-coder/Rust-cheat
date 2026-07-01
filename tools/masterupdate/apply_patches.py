@@ -46,10 +46,10 @@ def apply_offset_patches(cfg: dict) -> int:
 
     if not offsets_path.exists():
         print(f"[!] {offsets_path} not found")
-        return 0
+        return 0, 0
     if not patch_path.exists():
         print("[!] output/offsets_patch.txt not found")
-        return 0
+        return 0, 0
 
     content = offsets_path.read_text(encoding="utf-8", errors="ignore")
     patch_text = patch_path.read_text(encoding="utf-8", errors="ignore")
@@ -176,7 +176,7 @@ def apply_offsetmanager_patch(cfg: dict) -> bool:
     # 1. Replace DecryptConfig struct body
     struct_match = re.search(r'(struct\s+DecryptConfig\s*\{)(.*?)(\};)', content, re.DOTALL)
     if struct_match:
-        new_struct_body = re.search(r'// === DECRYPTCONFIG_STRUCT ===\n// Replace struct DecryptConfig body.*?\n\n(.*?)(?=\n// === LOAD_DEC_BLOCK)', patch, re.DOTALL)
+        new_struct_body = re.search(r'// === DECRYPTCONFIG_STRUCT ===\n// Replace struct DecryptConfig body[^\n]*\n(.*?)(?=\n// === LOAD_DEC_BLOCK)', patch, re.DOTALL)
         if new_struct_body:
             new_struct = new_struct_body.group(1).strip()
             content = content[:struct_match.start(2)] + "\n" + new_struct + "\n    " + content[struct_match.start(3):]
@@ -255,17 +255,17 @@ def apply_frida_patches(cfg: dict) -> int:
 
     if not offsets_path.exists():
         print(f"[!] {offsets_path} not found")
-        return 0
+        return 0, 0
     if not patch_path.exists():
         print("[INFO] output/frida_patches.txt not found — skipping Frida patches")
-        return 0
+        return 0, 0
 
     content = offsets_path.read_text(encoding="utf-8", errors="ignore")
     patch_text = patch_path.read_text(encoding="utf-8", errors="ignore")
 
     if "No Frida-validated offset changes" in patch_text:
         print("[OK] No Frida patches to apply (all offsets match)")
-        return 0
+        return 0, 0
 
     applied = 0
     skipped = 0

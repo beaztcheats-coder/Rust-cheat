@@ -152,6 +152,8 @@
     <ClCompile Include="Hacks\Aimbot\aimbot.cpp" />
     <ClCompile Include="Hacks\Cache\cache.cpp" />
     <ClCompile Include="Hacks\Misc\misc.cpp" />
+    <ClCompile Include="Hacks\Misc\spoofer.cpp" />
+    <ClCompile Include="Hacks\Misc\cleaner.cpp" />
     <ClCompile Include="Hacks\Visuals\visuals.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\ImGuiRender.cpp" />
@@ -179,6 +181,8 @@
     <ClInclude Include="Hacks\Cache\cache.hpp" />
     <ClInclude Include="Hacks\Cheat\Cheat.hpp" />
     <ClInclude Include="Hacks\Misc\misc.hpp" />
+    <ClInclude Include="Hacks\Misc\spoofer.hpp" />
+    <ClInclude Include="Hacks\Misc\cleaner.hpp" />
     <ClInclude Include="Hacks\VisCheck\VisCheck.hpp" />
     <ClInclude Include="Hacks\Visuals\visuals.hpp" />
     <ClInclude Include="ida.h" />

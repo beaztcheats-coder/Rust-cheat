@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "LFlNPzYJqq0=",
+  "dgSpecHash": "QoU9OxGx6zA=",
   "success": true,
-  "projectFilePath": "E:\\github\\rust\\tools\\masterupdate\\il2cpp_dumper\\DumpOffsets.csproj",
+  "projectFilePath": "E:\\github\\Rust-cheat\\tools\\masterupdate\\il2cpp_dumper\\DumpOffsets.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\ludwi\\.nuget\\packages\\dnlib\\4.4.0\\dnlib.4.4.0.nupkg.sha512",
     "C:\\Users\\ludwi\\.nuget\\packages\\k4os.compression.lz4\\1.3.8\\k4os.compression.lz4.1.3.8.nupkg.sha512",

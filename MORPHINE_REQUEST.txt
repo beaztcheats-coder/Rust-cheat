@@ -1,0 +1,117 @@
+MORPHINE OFFSET REQUEST — Build 23824285
+
+=== CORRECT (match your dump, no action needed) ===
+
+basenetworkable_pointer = 0xE334210
+camera_pointer = 0xE37ACA0
+TOD_Sky_TypeInfo = 0xE3593D0
+UI_LoadingScreen singleton = 0xE361B58
+ConVar_Graphics = 0xE334790
+
+viewMatrix = 0x2FC
+world_position = 0x444
+static_fields = 0xB8
+wrapper_class = 0x90
+entity = 0x10
+field_of_view = 0x170
+culling_mask = 0x74
+
+static_fields = 0xB8 | wrapper_class = 0x20 | parent_static_fields = 0x10
+entity = 0x18 | children = 0x28 | encrypted_handle = 0x18 | prefabID = 0x54 | parentEntity = 0x38
+
+lifestate = 0x290 | _health = 0x29C | _maxHealth = 0x2A0 | model = 0x1A8
+
+player_eyes = 0x2E0 | player_inventory = 0x2B8 | player_input = 0x560
+player_model = 0x678 | player_flags = 0x670 | cl_active_item = 0x520
+base_movement = 0x388 | display_name = 0x488 | mounted = 0x570
+current_team = 0x4F0 | weaponMoveSpeedScale = 0x750 | clothingBlocksAiming = 0x754
+player_rigidbody = 0x378 | frozen = 0x380 | current_gesture = 0x6D8
+
+player_flags: IsAdmin=0x4 ReceivingSnapshot=0x8 Sleeping=0x10 Spectating=0x20
+Wounded=0x40 IsDeveloper=0x80 Connected=0x100 ThirdPersonViewmode=0x400
+
+model_state bits: Flying=0x40 Sleeping=0x08 Mounted=0x200 OnGround=0x04
+
+Belt=0x60 | Wear=0x30 | Main=0x58 | loot=0x48
+item_list=0x20
+info=0x38 | uid=0x98 | held_entity=0x40 | amount=0x64
+itemid=0x20 | shortname=0x28 | displayName=0x40 | category=0x58 | stackable=0x78
+ownerItemUID=0x2B0 | viewModel=0x2A8
+boneTransforms=0x90 | rootBone=0x90 | headBone=0xF0 | eyeBone=0x118
+skinnedMultiMesh=0x2E8 | isNpc=0x2E0 | position=0x2F0 | velocity=0x2FC | visible=0xBC
+RendererList=0x40
+recoilYawMin=0x18 | recoilYawMax=0x1C | recoilPitchMin=0x20 | recoilPitchMax=0x24
+aimconeCurveScale=0x60 | newRecoilOverride=0x80
+bodyAngles=0x44 | yaw=0x60
+viewOffset=0x40 | bodyRotation=0x50 | worldPosition=0x60
+bounds=0x17C | model=0x1A8 | flags=0x1B0
+adminCheat=0x20
+m_stringLength=0x10 | first_char=0x14
+Cycle=0x40 | Atmosphere=0x50 | Day=0x58 | Night=0x60 | Stars=0x78
+Clouds=0x80 | Ambient=0x98 | timeSinceAmbientUpdate=0x23C | timeSinceReflectionUpdate=0x240
+instance=0x98 | AmbientMultiplier=0x5C | Saturation=0x14
+GroundAngle=0x70 | GroundAngleNew=0x78 | GroundTime=0x80 | JumpTime=0x88
+LandTime=0x90 | GravityMultiplier=0x98 | TargetMovement=0x128
+
+networkable_key: ROL(2) XOR(0x111B9118) ADD(0x79300E2E)
+networkable_key2: ROL(6) XOR(0xC5D748E1) ADD(0x48498B34)
+cl_active_item: ADD(0x9420FF13) ROL(16) ADD(0xEDC489FD) ROL(6)
+
+bones: head=53 neck=52 spine1=20 r_hip=14 r_knee=16 r_foot=17
+l_hip=1 l_knee=3 l_foot=4 l_upperarm=25 l_forearm=26 l_hand=29
+r_upperarm=61 r_forearm=62 r_hand=65
+
+
+=== INCORRECT (we disagree, please verify) ===
+
+1. projectionMatrix
+   ours: 0x18C | yours: 0xB0
+
+2. player_inventory decrypt
+   ours: ROL(30) SUB(0x2D9831F6) XOR(0xDBFF84AD)
+   yours: ROL(25) SUB(0x249D878C) XOR(0x58D82066) ADD(0x7CD2A7CE)
+
+3. player_eyes decrypt
+   ours: SUB(0x21A1F11F) XOR(0x749EF0FA) ROL(14) ADD(0x3CA56202)
+   yours: SUB(0x0C26F5B3) XOR(0x6EC84F5D) ROL(13)
+
+4. decrypt_fov / encrypt_fov
+   ours: sub=0x0270C779 xor=0x93DAED41
+   yours: sub=0x0270C775 xor=0x93DAED4D
+
+5. spine1 bone index
+   ours: 20 | yours: spine2=21
+
+
+=== NEEDED (missing from your dump, please add) ===
+
+1. EffectNetwork TypeInfo RVA = 0xE3790F8
+2. SingletonComponent<MixerSnapshotManager>__c RVA = 0xE2C1A70
+3. BasePlayer.modelState = 0x398
+4. ModelState.flags = 0x1C (field offset, not the bits)
+5. ModelState.Ducked = 0x10 (bit 4)
+6. ItemMagazine.contents = 0x30
+7. EffectNetwork.hitPosition = 0x78
+8. BaseEntity.positionLerp = 0xA0
+9. BaseEntity.isVisible = 0x158
+10. BaseEntity.isAnimatorVisible = 0x159
+11. BaseEntity.isShadowVisible = 0x15A
+12. FOV.fovField = 0x560
+13. FOV.fovWrite = 0x48C
+14. TOD_Sky.SunParameters = 0x68
+15. TOD_Sky.MoonParameters = 0x70
+16. TOD_AmbientParameters.UpdateInterval = 0x18
+17. SingletonComponent.Instance = 0x18
+18. MixerSnapshotManager.defaultSnapshot = 0x20
+19. MixerSnapshotManager.loadingSnapshot = 0x30
+20. UI_LoadingScreen.enabledFlag = 0x20
+21. BaseMovement.target_movement = 0x3C
+22. BaseProjectileExt.camera_punches = 0x2A8
+23. BaseProjectileExt.viewmodel_instance = 0x1E8
+
+=== NICE TO HAVE ===
+
+24. Real BasePlayer.SteamID (separate from CurrentTeam)
+25. Confirm convar_admin=0xE2F1370 + playerIds=0x20
+26. Client-side player health field (if one exists)
+27. PhysX PxPhysics pointer in UnityPlayer.dll (we use 0x1C3B3D0, likely stale)

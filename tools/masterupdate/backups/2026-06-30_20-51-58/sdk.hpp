@@ -260,6 +260,7 @@ namespace decrypt {
         return value;
     }
 
+    // PRESERVED: player_inventory — Using last known good values (not found in sha-dumper)
     inline uint64_t decrypt_inventory_pointer(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -271,7 +272,8 @@ namespace decrypt {
             uint32_t v1 = (x << OffsetManager::DecryptCfg.inv_rol) | (x >> (32 - OffsetManager::DecryptCfg.inv_rol)); // ROL
             uint32_t v2 = v1 - OffsetManager::DecryptCfg.inv_sub; // SUB
             uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.inv_xor; // XOR
-            *data = v3;
+            uint32_t v4 = v3 + OffsetManager::DecryptCfg.inv_add; // ADD
+            *data = v4;
             data++;
             --count;
         } while (count);
@@ -289,8 +291,7 @@ namespace decrypt {
             uint32_t v1 = x - OffsetManager::DecryptCfg.ey_sub; // SUB
             uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.ey_xor; // XOR
             uint32_t v3 = (v2 << OffsetManager::DecryptCfg.ey_rol) | (v2 >> (32 - OffsetManager::DecryptCfg.ey_rol)); // ROL
-            uint32_t v4 = v3 + OffsetManager::DecryptCfg.ey_add; // ADD
-            *data = v4;
+            *data = v3;
             data++;
             --count;
         } while (count);
@@ -533,7 +534,7 @@ public:
             uintptr_t PlayerModel = read<uintptr_t>((uintptr_t)this + offsets::BasePlayer::PlayerModel);
             if (!PlayerModel || !is_valid(PlayerModel)) return false;
             uint64_t visAddr = (uint64_t)PlayerModel + offsets::PlayerModel::visible;
-            if (!is_valid(visAddr)) return true;
+            if (!is_valid(visAddr)) return false;
             struct { bool hasValue; bool value; } nb;
             if (!(g_UseInternalReads && ReadMemory_Internal((PVOID)visAddr, &nb, 2)))
                 if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE((PVOID)visAddr, &nb, 2);
@@ -703,7 +704,7 @@ public:
 
             uintptr_t candidates[2] = { 0 };
             int methods[2] = { 0, 1 };
-            static bool logged = false;
+            static int invLogCount = 0;
 
             if (inv_raw && is_valid(inv_raw)) {
                 uint64_t enc = read<uint64_t>(inv_raw + 0x18);
@@ -713,11 +714,13 @@ public:
                     if (resolved && is_valid(resolved)) {
                         candidates[0] = resolved;
                     }
-                    if (!logged) {
+                    if (invLogCount < 3) {
+                        invLogCount++;
                         LOG("INV_RESOLVE: inv_raw=0x%I64X enc=0x%I64X dec=0x%I64X resolved=0x%I64X",
                             inv_raw, enc, dec, (uint64_t)resolved);
                     }
-                } else if (!logged) {
+                } else if (invLogCount < 3) {
+                    invLogCount++;
                     LOG("INV_RESOLVE: inv_raw=0x%I64X enc=0 (no handle at +0x18)", inv_raw);
                 }
             }
@@ -733,11 +736,10 @@ public:
                 int sz = read<int>(list + 0x18);
                 if (sz >= 0 && sz <= 7) {
                     invMethod = methods[i];
-                    if (!logged) {
+                    if (invLogCount < 10) {
                         const char* names[] = { "decrypt+gchandle", "component_walker" };
                         LOG("INV_METHOD: %s works (inv=0x%I64X belt=0x%I64X sz=%d)",
                             names[i], candidates[i], belt, sz);
-                        logged = true;
                     }
                     return candidates[i];
                 }

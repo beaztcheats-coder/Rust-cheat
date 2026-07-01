@@ -7,7 +7,7 @@
 ```
 
 - VS2022 vcxproj, C++20, x64 Release DLL
-- Build can also be run via `tools\masterupdate\auto_update.bat` + `update_now.bat`
+- Build can also be run via `tools\masterupdate\getnewoffsets.bat` (renamed from `auto_update.bat`) + `update_now.bat`
 - Requires DirectX SDK (included in repo under `Microsoft DirectX SDK/`)
 
 ### Build flavors (3)
@@ -60,6 +60,17 @@
 - **Stealth mode**: Production builds delete ALL trace files on shutdown (logs, configs, markers, decrypts). Debug builds keep logs but delete everything else.
 - **`Logger.hpp`**: `g_UpdateLoggingEnabled` defaults to `false`. Set to `true` only by: (1) `_debug` DLL name check, or (2) `C:\rust_debug_enabled.txt` marker file. Both checks are in `MainThreadImpl()` at `Rust Prv Ext.cpp` lines ~254-272.
 
+### Spoofer/Cleaner startup prompt (BeaZt only)
+
+On injection, BeaZt debug and production DLLs show a console prompt before cheat init:
+1. **[1] Spoof and Play** — calls `RunEmbeddedSpoofer()` → MessageBox "Spoof now? Yes/No" → 11 IOCTL spoofs via kernel driver → cheat continues
+2. **[2] Clean after detection** — calls `CleanerMenu()` → interactive 8-phase deep cleaner → DLL exits via `FreeLibraryAndExitThread` (user restarts + re-injects)
+3. **[3] Just play** — skip, cheat continues
+
+**Bomza production**: No prompt — straight to cheat (`#ifndef BOMZA` guard). Spoofer/cleaner code compiled but dead-stripped by `/OPT:REF`.
+
+**Files**: `Hacks/Misc/spoofer.cpp` (spoof logic), `Hacks/Misc/cleaner.cpp` (cleaner menu), `Rust Prv Ext.cpp` lines ~280-324 (prompt).
+
 ## What this is
 
 External Rust cheat DLL injected via loader into host process. Reads/writes game memory through a kernel driver (`Bfo64` at `\\.\Bfo64` IOCTL). ImGui D3D11 overlay for menu. Target: **Rust (Steam) Unity 6 Il2Cpp** — not Mono, not older Unity.
@@ -73,14 +84,16 @@ External Rust cheat DLL injected via loader into host process. Reads/writes game
 | `Driver.hpp` | `DriverInterface`, `read<T>`/`write<T>` templates (→ kernel IOCTL), `find_process`, `is_valid` |
 | `Hacks/Cache/cache.cpp` | BN entity chain walk, entity classification, world prefab ESP, entity list population |
 | `Hacks/Misc/misc.cpp` | Debug cam, NoRecoil, weapon features, FOV changer, BrightNight |
+| `Hacks/Misc/spoofer.cpp` | Embedded HWID spoofer — 11 IOCTL spoofs via kernel driver, MessageBox prompt |
+| `Hacks/Misc/cleaner.cpp` | Deep cleaner — 8-phase Rust HWID reset, interactive console menu |
 | `Hacks/Aimbot/aimbot.cpp` | Memory aimbot (writes `bodyAngles` to `PlayerInput+0x44`) |
 | `Hacks/Visuals/visuals.cpp` | Box/Skeleton/Name/Distance/Health/Head ESP rendering |
 | `Hacks/Cheat/Cheat.hpp` | `Do_Cheat()` main loop — iterates entity lists, dispatches to visuals/aimbot/misc |
 | `Render/render.hpp` | ImGui D3D11 overlay: `Hijack()`, `Draw()`, `Menu()` (10-page UI, BeaZt/Vsharp branded) |
-| `Config.hpp` | Save/Load config (`C:\rustcfg_vsharp.dat` / `C:\rustcfg_lite.dat` / `C:\rustcfg_private.dat`) — key=value format |
+| `Config.hpp` | Save/Load config (`C:\rustcfg.dat` / `C:\rustcfg_bomza.dat`) — key=value format |
 | `OffsetManager.hpp` | Decrypt config struct, `LoadDecryptConfig`/`SaveDecryptConfig`, embedded defaults |
-| `Logger.hpp` | File logging (`C:\cheat_debug_vsharp.log` / `C:\cheat_debug_lite.log` / `C:\cheat_debug_private.log`) |
-| `RuntimePaths.hpp` | Detects Vsharp/Lite/Private variant by DLL filename, returns config/log paths |
+| `Logger.hpp` | File logging (`C:\cheat_debug.log` BeaZt / `C:\cheat_debug_bomza.log` Bomza) |
+| `RuntimePaths.hpp` | Detects BeaZt/Bomza variant by DLL filename, returns config/log/spoofer paths |
 | `Rust Prv Ext.cpp` | `DllMain`, `MainThread`, init sequence, export functions (Main/Init/Run/etc.) |
 | `tools/masterupdate/` | Auto-updater: fetches Morphine/sha-dumper offsets, generates patches + super prompt |
 
@@ -88,8 +101,8 @@ External Rust cheat DLL injected via loader into host process. Reads/writes game
 
 | Path | Purpose | Notes |
 |------|---------|-------|
-| `C:\cheat_debug_vsharp.log` / `C:\cheat_debug_lite.log` / `C:\cheat_debug_private.log` | Diagnostic log | Flavor-specific per DLL name |
-| `C:\rustcfg_vsharp.dat` / `C:\rustcfg_lite.dat` / `C:\rustcfg_private.dat` | User settings | Saved/loaded via menu or `Config::Save()`/`Config::Load()` |
+| `C:\cheat_debug.log` / `C:\cheat_debug_bomza.log` | Diagnostic log | BeaZt / Bomza flavor-specific |
+| `C:\rustcfg.dat` / `C:\rustcfg_bomza.dat` | User settings | Saved/loaded via menu or `Config::Save()`/`Config::Load()` |
 | `C:\rust_decrypts.dat` | Decrypt constants | Edit and reinject — **no recompile needed**. Auto-generated from embedded defaults if missing |
 
 ## Decrypt constant system
@@ -174,65 +187,28 @@ This is the SAME pattern as `networkable_key` / `networkable_key2` in the BN cha
 
 **Never** wrap `ImGui::Checkbox` in style push/pop lambdas. The old `Danger()`/`Warning()`/`Normal()` pattern pushed `ImGuiCol_Text` before the checkbox and popped after — this corrupted the style stack in nested child windows, causing clicks to not register. Use a post-render badged label instead.
 
-## PhysX Visibility Check (VisCheck)
+## VisCheck (DISABLED — Deferred)
 
-External ray-based line-of-sight check using PhysX collision mesh data. Replaces unreliable `PlayerModel + 0xBC` flag.
+**Status**: VisCheck is currently **disabled and removed from the menu**. The toggle, BVH status, and VisCheck color rows (Visible/Invisible/SkelVisible/SkelInvisible) are commented out in both `Beazt/beazt_menu.hpp` and `Bomza/bomza_menu.hpp`. `ESP::VisCheck` defaults to `false` and is forced off on startup in `render.hpp`.
 
-**Approach**: Read `PxPhysics*` from `UnityPlayer.dll + PX_SDK_OFFSET` → navigate to scenes → actors → shapes → triangle meshes → build BVH client-side → Möller-Trumbore ray-triangle intersection (zero IOCTLs per frame after caching).
+**Code retained** (not deleted, for future re-enablement):
+- `Hacks/VisCheck/VisCheck.hpp` — BVH + Möller-Trumbore raycast engine, multi-path `.tri` loader, BVH cache
+- `Hacks/PhysX/PhysX.hpp` — PhysX raycaster (alternative approach, also unused)
+- `tools/sha-dumper/src/mesh/` — mesh extraction code
+- Config save/load for `ESP::VisCheck` and VisCheck colors still exists in `Config.hpp`
 
-**Files**: `Hacks/PhysX/PhysX.hpp` — structs (np_physics_t, np_scene_t, np_rigid_static_t, etc.), BVH builder, PhysXRaycaster class with `CacheActors()`, `Raycast()`, `Linecast()`, `IsVisible()`.
+**To re-enable later**:
+1. Uncomment the VisCheck card in `Beazt/beazt_menu.hpp` (search for `// VisCheck disabled`)
+2. Uncomment the `ImGui::Checkbox("VisCheck", ...)` line in `Bomza/bomza_menu.hpp`
+3. Generate `rust_mesh.tri` via `getnewoffsets.bat` (requires Rust in-game on a server)
+4. Verify `PX_SDK_OFFSET` in `VisCheck.hpp` matches current Rust build
+5. Run `update_now.bat` to build + distribute mesh with DLL
 
-**Caching**: `CacheActors()` called every 5 seconds from cache thread (when `ESP::VisCheck` enabled). Reads all PhysX actors, extracts triangle geometry (triangle meshes + boxes), builds BVH per actor. Ray tests are pure math.
-
-**Runtime flow**:
-1. Cache thread: `g_PhysX.CacheActors()` every 5s → reads PhysX scene/actor/shape data, builds BVHs
-2. Position thread: stores `g_CameraWorldPos` from `BaseCamera::world_position`
-3. Render thread (Do_Cheat): if `ESP::VisCheck && g_PhysX.IsReady()`, calls `g_PhysX.IsVisible(camPos, playerHeadPos)` per player → overrides `cached.isVisible` in both `cacheCopy` and `g_EspCache` (for aimbot)
-4. Visuals: use `ESP::color::Visible` / `ESP::color::Invisible` based on `cached.isVisible`
-5. Aimbot: `AIMBOT::VisibleOnly` filter uses `pcache.isVisible` (now PhysX-driven when VisCheck on)
-
-**Known issues**:
-- `PX_SDK_OFFSET = 0x1C3B3D0` is from July 2025 UC release — may need updating for current Rust build (23824285). If PhysX shows "not ready" in menu, this offset needs pattern scanning.
-- PhysX struct layouts (np_rigid_static_t, m_shape_manager, shape_t) are from UC release — may need verification against current PhysX version.
-- Windows `min`/`max` macros conflict with struct member names and `<algorithm>` — `#undef min`/`#undef max` in PhysX.hpp before STL includes.
-- `Vector3` operators (`+`, `-`, `*`) are not `const`-qualified — use `pxmath::add`/`sub`/`mul` free functions for const refs.
-
-## VisCheck (BVH Raycast)
-
-External ray-based line-of-sight check using extracted MeshCollider geometry. Replaces the PhysX VisCheck and the unreliable `PlayerModel + 0xBC` flag.
-
-**Approach**: Sha-dumper (injected into RustClient.exe) extracts all MeshCollider triangles via `Resources.FindObjectsOfTypeAll<MeshCollider>()`, transforms them to world space, and writes raw `Tri` structs (36 bytes each) to a `.tri` file. The cheat loads this file, builds a BVH (median-split, leaf size 8), and uses Möller-Trumbore ray-triangle intersection for visibility checks.
-
-**Files**: 
-- `Hacks/VisCheck/VisCheck.hpp` — BVH + Möller-Trumbore raycast engine, multi-path loader, BVH cache
-- `tools/sha-dumper/src/mesh/mesh.cpp` — mesh extraction (MeshCollider + BoxCollider), writes `.tri` file to Desktop
-- `tools/sha-dumper/src/mesh/mesh.hpp` — header
-
-**Mesh filtering**: Meshes with <5 triangles or bounding box <0.5m³ are skipped (small debris). Reduces ~8M triangles to ~5M.
-
-**Multi-path loader** (search order):
-1. `C:\rust_mesh.tri` (loader copies here — admin process)
-2. DLL's own directory via `GetModuleFileNameA` (ships next to DLL)
-3. `%LOCALAPPDATA%\rust_mesh.tri` (last resort fallback)
-
-**BVH cache**: After first BVH build (~20-30s for 5M triangles), the built BVH is serialized to `C:\rust_mesh.bvh` (or same dir as `.tri`). On subsequent loads, if the cache exists and the `.tri` file size matches, the BVH is loaded directly (~2s). Cache format: magic `BVH1` + version + counts + triFileSize + indices + nodes.
-
-**Runtime flow**:
-1. Cache thread: `vischeck::InitVisCheck()` on first cycle → loads `.tri`, builds BVH (or loads from `.bvh` cache)
-2. Render thread (Do_Cheat): if `ESP::VisCheck && vischeck::g_VisCheckLoaded && Distance <= 400.f`, calls `g_VisCheck.IsVisible(camPos, playerHeadPos)` → overrides `cached.isVisible`
-3. Visuals: use `ESP::color::Visible` / `ESP::color::Invisible` based on `cached.isVisible`
-4. Aimbot: `AIMBOT::VisibleOnly` filter uses `pcache.isVisible`
-
-**Fallback**: When no `.tri` file is loaded, VisCheck falls back to `PlayerModel._visible` Nullable<bool> flag at offset 0xBC (read as `{hasValue, value}` struct, ~60% accuracy).
-
-**Production pipeline**:
-1. Seller runs `auto_update.bat` (with Rust in-game) → sha-dumper dumps mesh → `output/rust_mesh.tri`
-2. Seller runs `update_now.bat` → builds DLL + copies mesh to distribution
-3. Package: `Rust Prv Ext.dll` + `rust_mesh.tri` + `rust_decrypts.dat` + `inject_private.bat`
-4. Customer runs `inject_private.bat` (as admin) → copies `rust_mesh.tri` to `C:\` → injects DLL
-5. Cheat loads mesh → builds BVH on first run → caches to `C:\rust_mesh.bvh` → instant on subsequent runs
-
-**Mesh regeneration**: Required when the Rust map changes (game update). Run `auto_update.bat` with Rust in-game on a server. The world must be loaded (not main menu).
+**Known issues** (to address when re-enabling):
+- `PX_SDK_OFFSET = 0x1C3B3D0` is from July 2025 UC release — may need updating
+- PhysX struct layouts may need verification against current PhysX version
+- `Vector3` operators not `const`-qualified — use `pxmath::` free functions
+- Mesh dump timeout in `sha_dumper_inject.py` is now 300s (was 180s)
 
 ## Constraints
 

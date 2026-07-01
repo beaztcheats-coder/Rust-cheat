@@ -487,6 +487,16 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
     }
     if (rootPos.Empty()) return;
 
+    // Apply velocity prediction to NPC position (same as Do_Cheat does for players)
+    if (!cached.velocity.Empty() && cached.velocity.x == cached.velocity.x && cached.cacheTick > 0) {
+        float predDt = (float)(GetTickCount64() - cached.cacheTick) * 0.001f;
+        if (predDt > 0.0f && predDt < 0.5f) {
+            rootPos.x += cached.velocity.x * predDt;
+            rootPos.y += cached.velocity.y * predDt;
+            rootPos.z += cached.velocity.z * predDt;
+        }
+    }
+
     // rootPos from Get_ObjectPosition() is at feet/root level
     Vector3 feetPos3D = rootPos;
     Vector3 headPos3D = rootPos;
@@ -539,6 +549,24 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
         Vector3 bones[15] = {};
         if (skelValid) {
             for (int bi = 0; bi < 15; ++bi) bones[bi] = cached.bones[bi];
+        }
+        // Apply velocity prediction to NPC bones (same as player path)
+        if (skelValid) {
+            const Vector3& velocity = cached.velocity;
+            uint64_t skelTick = cached.skeletonTick;
+            if (!velocity.Empty() && velocity.x == velocity.x && skelTick > 0) {
+                float dt = (float)(GetTickCount64() - skelTick) / 1000.0f;
+                if (dt > 0.0f && dt < 0.5f) {
+                    float g = 0.5f * 9.81f * dt * dt;
+                    for (int i = 0; i < 15; i++) {
+                        if (bones[i].Empty()) continue;
+                        bones[i].x += velocity.x * dt;
+                        bones[i].y += velocity.y * dt;
+                        bones[i].z += velocity.z * dt;
+                        bones[i].y -= g;
+                    }
+                }
+            }
         }
         if (skelValid) {
             Vector2 scr[15]; bool ok[15] = {}; int cnt = 0;
@@ -601,6 +629,17 @@ void Visuals::do_Animal_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const E
     if (!screenWidth) { screenWidth = GetSystemMetrics(SM_CXSCREEN); screenHeight = GetSystemMetrics(SM_CYSCREEN); }
     Vector3 pos = cached.headPos;
     if (pos.Empty()) return;
+
+    // Apply velocity prediction to animal position
+    if (!cached.velocity.Empty() && cached.velocity.x == cached.velocity.x && cached.cacheTick > 0) {
+        float predDt = (float)(GetTickCount64() - cached.cacheTick) * 0.001f;
+        if (predDt > 0.0f && predDt < 0.5f) {
+            pos.x += cached.velocity.x * predDt;
+            pos.y += cached.velocity.y * predDt;
+            pos.z += cached.velocity.z * predDt;
+        }
+    }
+
     float Distance = lpPos.DistTo(pos);
 
     // Project head (top) and feet (ground) to get a properly-sized box over the animal

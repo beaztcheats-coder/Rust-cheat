@@ -122,7 +122,9 @@ def parse_typeinfo_pointers(current_offsets):
         name = match.group(2)
 
         for target, cheat_name in TYPEINFO_MAP.items():
-            if name == target or name.startswith(target + "_"):
+            # Only match exact class names — skip obfuscated nested types
+            # (names like BaseNetworkable_b302520422a54b5aec31203d0475d8b6506fedf3)
+            if name == target:
                 all_matches.setdefault(cheat_name, []).append((addr, name))
 
     # For each target, prefer the entry whose RVA matches current offsets.hpp

@@ -5,7 +5,7 @@ using Inspector = Il2CppInspector.Il2CppInspector;
 
 string binaryPath = args.Length > 0 ? args[0] : @"C:\Program Files (x86)\Steam\steamapps\common\Rust\GameAssembly.dll";
 string metadataPath = args.Length > 1 ? args[1] : @"C:\Program Files (x86)\Steam\steamapps\common\Rust\RustClient_Data\il2cpp_data\Metadata\global-metadata.dat";
-string outputPath = args.Length > 2 ? args[2] : @"E:\github\rust\tools\masterupdate\output\il2cppinspector\offsets.json";
+string outputPath = args.Length > 2 ? args[2] : @"E:\github\Rust-cheat\tools\masterupdate\output\il2cppinspector\offsets.json";
 
 string[] targetClasses = {
     "BasePlayer", "BaseCombatEntity", "BaseNetworkable", "BaseEntity",

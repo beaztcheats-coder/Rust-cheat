@@ -211,7 +211,7 @@ public:
 	inline double Length() {
 		return sqrt(x * x + y * y + z * z);
 	}
-	inline bool Empty()
+	inline bool Empty() const
 	{
 		if (!x && !y && !z)
 			return true;
@@ -307,7 +307,7 @@ public:
 	{
 
 	}
-	bool Empty()
+	bool Empty() const
 	{
 		if (x < 0.1f || y < 0.1f)
 			return true;
@@ -493,12 +493,18 @@ inline Vector2 WorldToScreen(const Vector3& entity_position, Matrix4x4 view_matr
 
 	float w = trans_vec.Dot(entity_position) + view_matrix._44;
 
-	if (w < 0.1f) return Vector2();
+	if (w < 0.1f) return Vector2(-1, -1);
 
 	float y = up_vec.Dot(entity_position) + view_matrix._42;
 	float x = right_vec.Dot(entity_position) + view_matrix._41;
 
-	Vector2 Screen_position = Vector2((GetSystemMetrics(SM_CXSCREEN) / 2) * (1.f + x / w), (GetSystemMetrics(SM_CYSCREEN) / 2) * (1.f - y / w));
+	RECT rc = {0};
+	HWND hw = FindWindowA("onGuiClass", nullptr);
+	if (hw) GetClientRect(hw, &rc);
+	int screenW = (rc.right > 0) ? rc.right : GetSystemMetrics(SM_CXSCREEN);
+	int screenH = (rc.bottom > 0) ? rc.bottom : GetSystemMetrics(SM_CYSCREEN);
+
+	Vector2 Screen_position = Vector2((screenW / 2.f) * (1.f + x / w), (screenH / 2.f) * (1.f - y / w));
 	return Screen_position;
 }
 

@@ -1152,34 +1152,11 @@ inline void PageESP() {
         ImGui::EndChild();
         ImGui::SameLine(0, cols.gap);
         ImGui::BeginChild("##pesR", ImVec2(cols.rightW, 0), false);
-        Card("Visibility", [&]() {
-            {
-                ImVec2 pos = ImGui::GetCursorScreenPos();
-                float availW = ImGui::GetContentRegionAvail().x - CARD_PAD_R;
-                auto* dl = ImGui::GetWindowDrawList();
-                bool hovered = ImGui::IsMouseHoveringRect(pos, ImVec2(pos.x + availW, pos.y + ROW_H));
-                if (hovered) dl->AddRectFilled(pos, ImVec2(pos.x + availW, pos.y + ROW_H), ImGui::ColorConvertFloat4ToU32(C_BG_ROW_HOVER), 4.0f);
-                dl->AddLine(ImVec2(pos.x, pos.y + ROW_H - 1), ImVec2(pos.x + availW, pos.y + ROW_H - 1), ImGui::ColorConvertFloat4ToU32(C_ROW_DIV), 1.0f);
-                ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + (ROW_H - ImGui::GetTextLineHeight()) * 0.5f));
-                ImGui::AlignTextToFramePadding();
-                ImGui::PushStyleColor(ImGuiCol_Text, ESP::VisCheck ? C_TEXT_LABEL : C_TEXT_OFF);
-                ImGui::TextUnformatted("VisCheck");
-                ImGui::PopStyleColor();
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", "Raycasts from camera to player. Requires rust_mesh.tri for full accuracy, falls back to game flag.");
-                ImGui::SetCursorScreenPos(ImVec2(pos.x + COL_CONTROL, pos.y + (ROW_H - 16.0f) * 0.5f));
-                ImGui::PushID("VisCheck_sw");
-                Switch("##sw", &ESP::VisCheck);
-                ImGui::PopID();
-                ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + ROW_H));
-            }
-            if (ESP::VisCheck) {
-                ImGui::TextDisabled("  BVH: %s", vischeck::g_VisCheckStatus.c_str());
-            }
-            SettingRowGrid("Visible Color", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::Visible);
-            SettingRowGrid("Invisible Color", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::Invisible);
-            SettingRowGrid("Skel Visible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::SkeletonVisible);
-            SettingRowGrid("Skel Invisible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::SkeletonInvisible);
-        }, CardHeight(6, true));
+        // VisCheck disabled — toggle and color rows removed from menu.
+        // Code remains in VisCheck.hpp, offsets.hpp, Config.hpp for future re-enablement.
+        // Card("Visibility", [&]() {
+        //     { VisCheck toggle, BVH status, Visible/Invisible/SkelVisible/SkelInvisible colors }
+        // }, CardHeight(6, true));
         Card("Filters", [&]() {
             SettingRowGrid("Hide Wounded", &ESP::RemoveWounded);
             SettingRowGrid("Hide Sleepers", &ESP::RemoveSleepers);

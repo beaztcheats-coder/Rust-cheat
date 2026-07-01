@@ -84,17 +84,21 @@ def wait_for_output(timeout=30):
     print("[sha] Output not found within timeout")
     return None
 
-def wait_for_mesh_output(timeout=120):
+def wait_for_mesh_output(timeout=300):
     mesh_log = Path(os.path.expanduser("~")) / "Desktop" / "rust_mesh_dump.log"
-    print(f"[sha] Waiting for mesh dump log (timeout {timeout}s)...")
+    mesh_tri = Path(os.path.expanduser("~")) / "Desktop" / "rust_mesh.tri"
+    print(f"[sha] Waiting for mesh dump completion (timeout {timeout}s)...")
     for i in range(timeout):
         if mesh_log.exists() and mesh_log.stat().st_size > 10:
             content = mesh_log.read_text(encoding="utf-8", errors="ignore")
-            if "SUCCESS" in content or "ABORT" in content or "done:" in content:
-                print(f"[sha] Mesh dump log found ({mesh_log.stat().st_size} bytes)")
+            if "SUCCESS" in content or "ABORT" in content:
+                print(f"[sha] Mesh dump finished ({mesh_log.stat().st_size} bytes)")
+                return mesh_log
+            if mesh_tri.exists() and mesh_tri.stat().st_size > 1000:
+                print(f"[sha] Mesh .tri file appeared ({mesh_tri.stat().st_size} bytes)")
                 return mesh_log
         time.sleep(1)
-    print("[sha] Mesh dump log not found within timeout")
+    print("[sha] Mesh dump did not complete within timeout")
     return None
 
 def copy_mesh_output(output_dir):
@@ -164,7 +168,7 @@ def main():
         print(f"[sha] Removed stale {stale.name}")
 
     # Step 6: Wait for mesh dump output
-    mesh_log_path = wait_for_mesh_output(180)
+    mesh_log_path = wait_for_mesh_output(300)
     if mesh_log_path:
         copy_mesh_output(OUTPUT_DIR)
         mesh_log_dst = OUTPUT_DIR / "rust_mesh_dump.log"

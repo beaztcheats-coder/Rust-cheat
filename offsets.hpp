@@ -7,7 +7,7 @@
 namespace offsets {
 	inline uint64_t basenetworkable_pointer = 0xE334210; // NeoRed build 23824285 BN chain TypeInfo RVA
 	inline uint64_t camera_pointer = 0xE37ACA0;           // Morphine MainCamera TypeInfo (proven working via CAM_VIEW log)
-	inline uint64_t Il2cppGetHandle = 0x0E7A9F20; // Morphine build 23824285
+	inline uint64_t Il2cppGetHandle = 0x0E7133D0; // Morphine build 23824285
 	inline uint64_t TOD_Sky_TypeInfo = 0xE3593D0;         // NeoRed build 23824285
 	inline uint64_t Class_TOD_Sky_Static = 0xE3593D0;    // NeoRed build 23824285 (same as TypeInfo)
 	inline uint64_t EffectNetwork_Pointer = 0xE3790F8;   // NeoRed build 23824285 effect_network
