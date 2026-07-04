@@ -682,9 +682,9 @@ void g_resolver::write_native_camera(g_report& r)
     // GameAssembly + camera_rva → TypeInfo → +0xB8 → static_fields → +0x90 → instance → +0x10 → native
     uint64_t ga = g_rt::base();
 
-    // Try MainCamera RVA (from Morphine: 0xE37ACA0)
+    // Try MainCamera RVA (sha-dumper build 24037537: 0x0FD0A5C0)
     uint64_t cam_rva = m_cam.rva;
-    if (!cam_rva) cam_rva = 0xE37ACA0; // fallback
+    if (!cam_rva) cam_rva = 0x0FD0A5C0; // fallback
 
     uint64_t typeinfo = *(uint64_t*)(ga + cam_rva);
     if (!typeinfo || IsBadReadPtr((void*)typeinfo, 0x100)) {

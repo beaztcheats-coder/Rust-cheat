@@ -18,7 +18,10 @@
 #ifdef BOMZA
 #include "../Bomza/bomza_menu.hpp"
 #endif
-#if !defined(BOMZA)
+#ifdef BETTERCHEATS
+#include "../BetterCheats/bettercheats_menu.hpp"
+#endif
+#if !defined(BOMZA) && !defined(BETTERCHEATS)
 #include "../BeaZt/beazt_menu.hpp"
 #endif
 #include "niglet.hpp"
@@ -1061,6 +1064,8 @@ namespace render {
 
 #ifdef BOMZA
             BomzaMenu::LoadBomzaLogo(d3d_device);
+#elif defined(BETTERCHEATS)
+            BetterCheatsMenu::LoadBetterLogo(d3d_device);
 #else
             {
 #include "../Beazt/beazt_logo.h"
@@ -1163,7 +1168,8 @@ namespace render {
                 NULL, NULL, wc.hInstance, NULL
             );
 
-            //driver::HideWindow((uintptr_t)window_handle, WDA_EXCLUDEFROMCAPTURE);
+            // Stream Proof disabled — causes black screen + crash on some systems
+            // SetWindowDisplayAffinity(window_handle, WDA_EXCLUDEFROMCAPTURE);
 
             // Extend frame for visual transparency
             MARGINS margins = { -1 };
@@ -1368,7 +1374,7 @@ namespace render {
             names.push_back("default");
 
             const std::string prefix = std::string(RuntimePaths::ConfigPrefix()) + "_";
-            const std::string pattern = "C:\\" + prefix + "*.dat";
+            const std::string pattern = RuntimePaths::DllDirectory() + prefix + "*.dat";
             WIN32_FIND_DATAA fd;
             HANDLE hFind = FindFirstFileA(pattern.c_str(), &fd);
             if (hFind != INVALID_HANDLE_VALUE) {
@@ -1554,6 +1560,32 @@ namespace render {
         auto Draw() -> void {
             ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 0.f);
 
+            // Frame limiter — cap to ~120 FPS BEFORE matrix read (minimizes read-to-Present latency)
+            {
+                static ULONGLONG lastFrame = 0;
+                ULONGLONG now = GetTickCount64();
+                if (lastFrame > 0) {
+                    ULONGLONG elapsed = now - lastFrame;
+                    if (elapsed < 8) Sleep(8 - (DWORD)elapsed);
+                }
+                lastFrame = GetTickCount64();
+            }
+
+            // Cache screen size once per frame (eliminates FindWindowA per WorldToScreen call)
+            {
+                HWND hw = FindWindowA("onGuiClass", nullptr);
+                if (hw) {
+                    RECT rc = {0};
+                    GetClientRect(hw, &rc);
+                    if (rc.right > 0 && rc.bottom > 0) {
+                        g_ScreenW = rc.right;
+                        g_ScreenH = rc.bottom;
+                    }
+                }
+                if (g_ScreenW <= 0) g_ScreenW = GetSystemMetrics(SM_CXSCREEN);
+                if (g_ScreenH <= 0) g_ScreenH = GetSystemMetrics(SM_CYSCREEN);
+            }
+
             ImGui_ImplDX11_NewFrame();
             ImGui_ImplWin32_NewFrame();
 
@@ -1668,6 +1700,8 @@ namespace render {
             if (g_MenuAnim > 0.01f) {
 #ifdef BOMZA
                 BomzaMenu::Render();
+#elif defined(BETTERCHEATS)
+                BetterCheatsMenu::Render();
 #else
                 BeaztMenu::Render();
 #endif
@@ -1951,17 +1985,6 @@ namespace render {
             hotbar_list.clear();
 
             ImGui::Render();
-
-            // Frame limiter â€” cap overlay to ~120 FPS without VSync (no input lag)
-            {
-                static ULONGLONG lastFrame = 0;
-                ULONGLONG now = GetTickCount64();
-                if (lastFrame > 0) {
-                    ULONGLONG elapsed = now - lastFrame;
-                    if (elapsed < 8) Sleep(8 - elapsed); // ~120 FPS cap
-                }
-                lastFrame = now;
-            }
 
             const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
             d3d_device_ctx->OMSetRenderTargets(1, &d3d_render_target, nullptr);

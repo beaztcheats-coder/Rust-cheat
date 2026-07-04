@@ -9,20 +9,17 @@
 #include "../RuntimePaths.hpp"
 #include <string>
 
-#ifdef BOMZA
+#ifdef BETTERCHEATS
 
-namespace BomzaMenu {
+namespace BetterCheatsMenu {
 
-// ============================================================================
-// LOGO
-// ============================================================================
-static ID3D11ShaderResourceView* g_BomzaLogo = nullptr;
-static ImVec2 g_BomzaLogoSize = ImVec2(245.f, 72.f);
+static ID3D11ShaderResourceView* g_BetterLogo = nullptr;
+static ImVec2 g_BetterLogoSize = ImVec2(245.f, 72.f);
 
-inline void LoadBomzaLogo(ID3D11Device* dev) {
-    if (g_BomzaLogo) return;
-#include "bomza_logo.h"
-    if (bomza_logo_size > 0 && dev) {
+inline void LoadBetterLogo(ID3D11Device* dev) {
+    if (g_BetterLogo) return;
+    #include "bettercheats_logo.h"
+    if (bettercheats_logo_png_len > 0 && dev) {
         D3DX11_IMAGE_LOAD_INFO info;
         ZeroMemory(&info, sizeof(info));
         info.Width = D3DX11_DEFAULT;
@@ -35,27 +32,23 @@ inline void LoadBomzaLogo(ID3D11Device* dev) {
         info.MiscFlags = 0;
         ID3DX11ThreadPump* pump = nullptr;
         HRESULT hr = D3DX11CreateShaderResourceViewFromMemory(
-            dev, bomza_logo_data, bomza_logo_size,
-            &info, pump, &g_BomzaLogo, nullptr);
-        if (FAILED(hr)) g_BomzaLogo = nullptr;
+            dev, bettercheats_logo_png, bettercheats_logo_png_len,
+            &info, pump, &g_BetterLogo, nullptr);
+        if (FAILED(hr)) g_BetterLogo = nullptr;
     }
 }
 
 static int main_tab = 0;
 
-// ============================================================================
-// BOMZA UI — exact theme from reference code
-// ============================================================================
-namespace BomzaUI
+namespace BetterUI
 {
-    static const ImVec4 Green  = ImVec4(0.05f, 0.82f, 0.30f, 1.00f);
-    static const ImVec4 Green2 = ImVec4(0.02f, 0.36f, 0.14f, 1.00f);
-    static const ImVec4 Red    = ImVec4(0.86f, 0.05f, 0.08f, 1.00f);
-    static const ImVec4 Red2   = ImVec4(0.42f, 0.03f, 0.05f, 1.00f);
-    static const ImVec4 Blue   = ImVec4(0.05f, 0.24f, 0.86f, 1.00f);
-    static const ImVec4 Gold   = ImVec4(1.00f, 0.72f, 0.05f, 1.00f);
-    static const ImVec4 White  = ImVec4(0.92f, 0.94f, 0.94f, 1.00f);
-    static const ImVec4 Muted  = ImVec4(0.55f, 0.60f, 0.60f, 1.00f);
+    static const ImVec4 Yellow  = ImVec4(0.95f, 0.78f, 0.05f, 1.00f);
+    static const ImVec4 Yellow2 = ImVec4(0.55f, 0.45f, 0.03f, 1.00f);
+    static const ImVec4 Blue    = ImVec4(0.15f, 0.35f, 0.85f, 1.00f);
+    static const ImVec4 Blue2   = ImVec4(0.08f, 0.15f, 0.35f, 1.00f);
+    static const ImVec4 DkBlue  = ImVec4(0.02f, 0.03f, 0.08f, 1.00f);
+    static const ImVec4 White   = ImVec4(0.92f, 0.94f, 0.98f, 1.00f);
+    static const ImVec4 Muted   = ImVec4(0.45f, 0.50f, 0.60f, 1.00f);
 
     static ImU32 U32(const ImVec4& c) { return ImGui::ColorConvertFloat4ToU32(c); }
 
@@ -81,33 +74,33 @@ namespace BomzaUI
         ImVec4* colors = style.Colors;
         colors[ImGuiCol_Text] = White;
         colors[ImGuiCol_TextDisabled] = Muted;
-        colors[ImGuiCol_WindowBg] = ImVec4(0.015f, 0.018f, 0.018f, 1.00f);
-        colors[ImGuiCol_ChildBg] = ImVec4(0.030f, 0.038f, 0.040f, 0.98f);
-        colors[ImGuiCol_PopupBg] = ImVec4(0.035f, 0.040f, 0.042f, 1.00f);
-        colors[ImGuiCol_Border] = ImVec4(0.20f, 0.28f, 0.24f, 0.88f);
+        colors[ImGuiCol_WindowBg] = ImVec4(0.015f, 0.020f, 0.050f, 1.00f);
+        colors[ImGuiCol_ChildBg] = ImVec4(0.025f, 0.030f, 0.065f, 0.98f);
+        colors[ImGuiCol_PopupBg] = ImVec4(0.030f, 0.035f, 0.075f, 1.00f);
+        colors[ImGuiCol_Border] = ImVec4(0.10f, 0.15f, 0.30f, 0.88f);
         colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-        colors[ImGuiCol_FrameBg] = ImVec4(0.055f, 0.065f, 0.067f, 1.00f);
-        colors[ImGuiCol_FrameBgHovered] = ImVec4(0.03f, 0.24f, 0.10f, 1.00f);
-        colors[ImGuiCol_FrameBgActive] = ImVec4(0.35f, 0.03f, 0.05f, 1.00f);
-        colors[ImGuiCol_Button] = ImVec4(0.060f, 0.075f, 0.078f, 1.00f);
-        colors[ImGuiCol_ButtonHovered] = ImVec4(0.03f, 0.34f, 0.15f, 1.00f);
-        colors[ImGuiCol_ButtonActive] = ImVec4(0.65f, 0.03f, 0.06f, 1.00f);
-        colors[ImGuiCol_Header] = ImVec4(0.03f, 0.28f, 0.12f, 0.90f);
-        colors[ImGuiCol_HeaderHovered] = ImVec4(0.05f, 0.45f, 0.18f, 1.00f);
-        colors[ImGuiCol_HeaderActive] = ImVec4(0.70f, 0.04f, 0.07f, 1.00f);
-        colors[ImGuiCol_CheckMark] = Green;
-        colors[ImGuiCol_SliderGrab] = Green;
-        colors[ImGuiCol_SliderGrabActive] = Gold;
-        colors[ImGuiCol_Separator] = ImVec4(0.10f, 0.42f, 0.20f, 0.65f);
-        colors[ImGuiCol_SeparatorHovered] = Green;
-        colors[ImGuiCol_SeparatorActive] = Red;
-        colors[ImGuiCol_ScrollbarBg] = ImVec4(0.020f, 0.025f, 0.025f, 1.00f);
-        colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.09f, 0.22f, 0.13f, 1.00f);
-        colors[ImGuiCol_ScrollbarGrabHovered] = Green2;
-        colors[ImGuiCol_ScrollbarGrabActive] = Green;
-        colors[ImGuiCol_Tab] = ImVec4(0.06f, 0.08f, 0.08f, 1.00f);
-        colors[ImGuiCol_TabHovered] = ImVec4(0.05f, 0.34f, 0.15f, 1.00f);
-        colors[ImGuiCol_TabActive] = ImVec4(0.58f, 0.03f, 0.05f, 1.00f);
+        colors[ImGuiCol_FrameBg] = ImVec4(0.035f, 0.045f, 0.090f, 1.00f);
+        colors[ImGuiCol_FrameBgHovered] = ImVec4(0.06f, 0.10f, 0.25f, 1.00f);
+        colors[ImGuiCol_FrameBgActive] = ImVec4(0.10f, 0.15f, 0.40f, 1.00f);
+        colors[ImGuiCol_Button] = ImVec4(0.040f, 0.050f, 0.100f, 1.00f);
+        colors[ImGuiCol_ButtonHovered] = ImVec4(0.08f, 0.12f, 0.30f, 1.00f);
+        colors[ImGuiCol_ButtonActive] = ImVec4(0.55f, 0.45f, 0.03f, 1.00f);
+        colors[ImGuiCol_Header] = ImVec4(0.06f, 0.10f, 0.25f, 0.90f);
+        colors[ImGuiCol_HeaderHovered] = ImVec4(0.10f, 0.15f, 0.35f, 1.00f);
+        colors[ImGuiCol_HeaderActive] = ImVec4(0.55f, 0.45f, 0.03f, 1.00f);
+        colors[ImGuiCol_CheckMark] = Yellow;
+        colors[ImGuiCol_SliderGrab] = Yellow;
+        colors[ImGuiCol_SliderGrabActive] = Blue;
+        colors[ImGuiCol_Separator] = ImVec4(0.10f, 0.15f, 0.30f, 0.65f);
+        colors[ImGuiCol_SeparatorHovered] = Yellow;
+        colors[ImGuiCol_SeparatorActive] = Blue;
+        colors[ImGuiCol_ScrollbarBg] = ImVec4(0.020f, 0.025f, 0.060f, 1.00f);
+        colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.05f, 0.08f, 0.20f, 1.00f);
+        colors[ImGuiCol_ScrollbarGrabHovered] = Blue2;
+        colors[ImGuiCol_ScrollbarGrabActive] = Blue;
+        colors[ImGuiCol_Tab] = ImVec4(0.030f, 0.040f, 0.080f, 1.00f);
+        colors[ImGuiCol_TabHovered] = ImVec4(0.08f, 0.12f, 0.30f, 1.00f);
+        colors[ImGuiCol_TabActive] = ImVec4(0.55f, 0.45f, 0.03f, 1.00f);
         colors[ImGuiCol_NavHighlight] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
     }
 
@@ -125,7 +118,7 @@ namespace BomzaUI
 
     static void SectionTitle(const char* text)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, Green);
+        ImGui::PushStyleColor(ImGuiCol_Text, Yellow);
         ImGui::TextUnformatted(text);
         ImGui::PopStyleColor();
         ImGui::Separator();
@@ -140,21 +133,18 @@ namespace BomzaUI
 
     static void DrawHeaderLogo()
     {
-        if (g_BomzaLogo)
+        if (g_BetterLogo)
         {
-            ImGui::Image((ImTextureID)g_BomzaLogo, g_BomzaLogoSize);
+            ImGui::Image((ImTextureID)g_BetterLogo, g_BetterLogoSize);
         }
         else
         {
             ImGui::PushStyleColor(ImGuiCol_Text, White);
-            ImGui::TextUnformatted("BOM");
+            ImGui::TextUnformatted("BETTER ");
             ImGui::SameLine(0.f, 0.f);
-            ImGui::PushStyleColor(ImGuiCol_Text, Red);
-            ImGui::TextUnformatted("Z");
-            ImGui::SameLine(0.f, 0.f);
-            ImGui::PushStyleColor(ImGuiCol_Text, Blue);
-            ImGui::TextUnformatted("A");
-            ImGui::PopStyleColor(3);
+            ImGui::PushStyleColor(ImGuiCol_Text, Yellow);
+            ImGui::TextUnformatted("CHEATS");
+            ImGui::PopStyleColor(2);
         }
     }
 
@@ -165,17 +155,10 @@ namespace BomzaUI
         ImVec2 avail = ImGui::GetContentRegionAvail();
         const float h = 92.f;
 
-        draw->AddRectFilled(p, ImVec2(p.x + avail.x, p.y + h), IM_COL32(4, 6, 6, 255));
-        draw->AddRectFilledMultiColor(ImVec2(p.x, p.y + h - 4), ImVec2(p.x + avail.x, p.y + h), U32(Green), U32(Red), U32(Blue), U32(Gold));
+        draw->AddRectFilled(p, ImVec2(p.x + avail.x, p.y + h), IM_COL32(4, 6, 18, 255));
+        draw->AddRectFilledMultiColor(ImVec2(p.x, p.y + h - 4), ImVec2(p.x + avail.x, p.y + h), U32(Blue), U32(Yellow), U32(Blue2), U32(Yellow2));
 
-        ImVec2 rp(p.x + avail.x - 260.f, p.y + 8.f);
-        draw->AddRectFilled(ImVec2(rp.x, rp.y), ImVec2(p.x + avail.x - 10.f, rp.y + 8.f), U32(Gold));
-        draw->AddRectFilled(ImVec2(rp.x + 18.f, rp.y + 12.f), ImVec2(p.x + avail.x - 10.f, rp.y + 20.f), U32(White));
-        draw->AddRectFilled(ImVec2(rp.x + 36.f, rp.y + 24.f), ImVec2(p.x + avail.x - 10.f, rp.y + 32.f), U32(Green));
-        draw->AddRectFilled(ImVec2(rp.x + 54.f, rp.y + 36.f), ImVec2(p.x + avail.x - 10.f, rp.y + 44.f), U32(Blue));
-        draw->AddRectFilled(ImVec2(rp.x + 72.f, rp.y + 48.f), ImVec2(p.x + avail.x - 10.f, rp.y + 56.f), U32(Red));
-
-        ImGui::BeginChild("##BomzaTopHeader", ImVec2(0, h), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::BeginChild("##BetterTopHeader", ImVec2(0, h), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::SetCursorPos(ImVec2(18.f, 10.f));
         DrawHeaderLogo();
         ImGui::EndChild();
@@ -185,8 +168,8 @@ namespace BomzaUI
     {
         ImDrawList* draw = ImGui::GetWindowDrawList();
         ImVec2 p = ImGui::GetCursorScreenPos();
-        ImU32 fill = active ? U32(Red2) : IM_COL32(12, 17, 17, 255);
-        ImU32 line = active ? U32(Red) : U32(Green2);
+        ImU32 fill = active ? U32(Yellow2) : IM_COL32(8, 12, 30, 255);
+        ImU32 line = active ? U32(Yellow) : U32(Blue2);
         DrawAngledRect(draw, p, size, fill, line, 10.f);
         ImGui::InvisibleButton(label, size);
         bool clicked = ImGui::IsItemClicked();
@@ -199,12 +182,12 @@ namespace BomzaUI
     {
         ImDrawList* draw = ImGui::GetWindowDrawList();
         ImVec2 p = ImGui::GetCursorScreenPos();
-        ImU32 fill = active ? IM_COL32(8, 56, 25, 225) : IM_COL32(8, 12, 12, 180);
-        ImU32 line = active ? U32(Green) : IM_COL32(40, 50, 48, 170);
+        ImU32 fill = active ? IM_COL32(8, 25, 60, 225) : IM_COL32(8, 12, 28, 180);
+        ImU32 line = active ? U32(Yellow) : IM_COL32(30, 40, 70, 170);
         draw->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), fill, 0.f);
         draw->AddRect(p, ImVec2(p.x + size.x, p.y + size.y), line, 0.f, 0, 1.f);
         if (active)
-            draw->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + 4.f, p.y + size.y), U32(Green));
+            draw->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + 4.f, p.y + size.y), U32(Yellow));
         ImGui::InvisibleButton(id, size);
         bool clicked = ImGui::IsItemClicked();
         draw->AddText(ImVec2(p.x + 14.f, p.y + 11.f), active ? U32(White) : U32(Muted), icon);
@@ -214,7 +197,7 @@ namespace BomzaUI
 
     static void BeginCard(const char* id, const char* title, ImVec2 size)
     {
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.025f, 0.032f, 0.034f, 0.98f));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.020f, 0.025f, 0.055f, 0.98f));
         ImGui::BeginChild(id, size, true);
         SectionTitle(title);
     }
@@ -227,9 +210,9 @@ namespace BomzaUI
 
     static bool SubTab(const char* label, bool active, ImVec2 size)
     {
-        ImGui::PushStyleColor(ImGuiCol_Button, active ? Red2 : ImVec4(0.04f, 0.05f, 0.05f, 1.f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? Red : Green2);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, Red);
+        ImGui::PushStyleColor(ImGuiCol_Button, active ? Yellow2 : ImVec4(0.03f, 0.04f, 0.08f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? Yellow : Blue2);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, Yellow);
         bool clicked = ImGui::Button(label, size);
         ImGui::PopStyleColor(3);
         return clicked;
@@ -245,7 +228,6 @@ namespace BomzaUI
 
     static void SameLineNext() { ImGui::SameLine(0.f, 10.f); }
 
-    // Hotkey chip using Rust cheat's g_Hotkeys system
     static void Hotkey(const char* label, const char* featureId)
     {
         auto& bind = g_Hotkeys[featureId];
@@ -256,10 +238,10 @@ namespace BomzaUI
         ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80.f);
 
         ImGui::PushID(featureId);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.035f, 0.055f, 0.043f, 1.f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.03f, 0.24f, 0.10f, 1.f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, Green2);
-        ImGui::PushStyleColor(ImGuiCol_Border, isConflict ? ImVec4(1.f, 0.2f, 0.2f, 0.8f) : ImVec4(0.10f, 0.42f, 0.20f, 0.65f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.03f, 0.045f, 0.10f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.06f, 0.10f, 0.25f, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, Blue2);
+        ImGui::PushStyleColor(ImGuiCol_Border, isConflict ? ImVec4(1.f, 0.2f, 0.2f, 0.8f) : ImVec4(0.10f, 0.15f, 0.30f, 0.65f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.f);
 
         char chip[32] = {};
@@ -272,7 +254,7 @@ namespace BomzaUI
             ImGui::Text("Bind: %s", hasKey ? GetKeyName(bind.key) : "None");
             ImGui::Text("Mode: %s", GetModeName(bind.mode));
             ImGui::Separator();
-            ImGui::TextColored(Green, "Press any key or mouse button...");
+            ImGui::TextColored(Yellow, "Press any key or mouse button...");
             ImGuiIO& io = ImGui::GetIO();
             bool captured = false;
             auto tryAssignKey = [&](int key) { std::string b; if (!CanAssignHotkey(featureId, key, &b)) return false; bind.key = key; return true; };
@@ -296,7 +278,7 @@ namespace BomzaUI
                 ImGui::EndCombo();
             }
             if (isConflict)
-                ImGui::TextColored(Red, "Conflict: %s", GetConflictFeature(featureId, bind.key).c_str());
+                ImGui::TextColored(ImVec4(1.f, 0.3f, 0.43f, 1.f), "Conflict: %s", GetConflictFeature(featureId, bind.key).c_str());
             ImGui::EndPopup();
         }
 
@@ -306,10 +288,7 @@ namespace BomzaUI
     }
 }
 
-// ============================================================================
-// TAB PAGES — adapted to Rust cheat offsets
-// ============================================================================
-using namespace BomzaUI;
+using namespace BetterUI;
 
 inline void Aim()
 {
@@ -469,8 +448,6 @@ inline void Pawn()
         ImGui::Checkbox("Team ID", &ESP::TeamID);
         ImGui::Checkbox("Hotbar Text", &ESP::hotbar_text);
         ImGui::Checkbox("Bullet Tracers", &ESP::BulletTracers);
-        // VisCheck disabled — toggle removed from menu
-        // ImGui::Checkbox("VisCheck", &ESP::VisCheck);
         ImGui::Columns(1);
         EndCard();
 
@@ -733,11 +710,11 @@ inline void Settting()
     BeginCard("set_battle", "BATTLE MODE", ImVec2(col, 120.f));
     ImGui::Checkbox("Battle Mode", &SETTINGS::BattleMode);
     if (SETTINGS::BattleMode) {
-        ImGui::PushStyleColor(ImGuiCol_Text, Green);
+        ImGui::PushStyleColor(ImGuiCol_Text, Yellow);
         ImGui::TextUnformatted("● On - Filters Active");
         ImGui::PopStyleColor();
     } else {
-        ImGui::PushStyleColor(ImGuiCol_Text, Red);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.f));
         ImGui::TextUnformatted("● Off");
         ImGui::PopStyleColor();
     }
@@ -764,7 +741,7 @@ inline void Settting()
     EndCard();
 
     BeginCard("set_config", "CONFIGURATION", ImVec2(col, 190.f));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.02f, 0.10f, 0.30f, 1.f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.02f, 0.06f, 0.20f, 1.f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Blue);
     if (ImGui::Button("Load Config", ImVec2(-1.f, 38.f))) Config::Load();
     if (ImGui::Button("Save Config", ImVec2(-1.f, 38.f))) Config::Save();
@@ -773,7 +750,7 @@ inline void Settting()
         uint64_t now = GetTickCount64();
         if (now - Config::lastStatusTime < 5000) {
             bool isErr = Config::lastStatus.find("fail") != std::string::npos || Config::lastStatus.find("invalid") != std::string::npos;
-            ImGui::PushStyleColor(ImGuiCol_Text, isErr ? ImVec4(1.f, 0.3f, 0.43f, 1.f) : ImVec4(0.3f, 0.69f, 0.31f, 1.f));
+            ImGui::PushStyleColor(ImGuiCol_Text, isErr ? ImVec4(1.f, 0.3f, 0.43f, 1.f) : Yellow);
             ImGui::TextWrapped("%s", Config::lastStatus.c_str());
             ImGui::PopStyleColor();
         }
@@ -831,8 +808,8 @@ inline void Settting()
     EndCard();
 
     BeginCard("set_about", "ABOUT", ImVec2(col, 100.f));
-    ImGui::PushStyleColor(ImGuiCol_Text, Green);
-    ImGui::TextUnformatted("BOMZA");
+    ImGui::PushStyleColor(ImGuiCol_Text, Yellow);
+    ImGui::TextUnformatted("BETTER CHEATS");
     ImGui::PopStyleColor();
     TextMuted("Private Cheat");
     TextMuted("build " __DATE__);
@@ -842,16 +819,13 @@ inline void Settting()
     ImGui::EndChild();
 }
 
-// ============================================================================
-// MAIN RENDER
-// ============================================================================
-inline void ApplyTheme() { BomzaUI::ApplyStyle(); }
+inline void ApplyTheme() { BetterUI::ApplyStyle(); }
 
 inline void Render() {
     ApplyTheme();
 
     ImGui::SetNextWindowSize(ImVec2(1200.f, 740.f), ImGuiCond_Once);
-    ImGui::Begin("BOMZA##bomza", nullptr,
+    ImGui::Begin("BETTER CHEATS##better", nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoScrollbar |
@@ -894,6 +868,6 @@ inline void Render() {
     ImGui::End();
 }
 
-} // namespace BomzaMenu
+} // namespace BetterCheatsMenu
 
-#endif // BOMZA
+#endif // BETTERCHEATS

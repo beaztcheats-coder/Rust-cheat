@@ -79,6 +79,7 @@ void cache::do_Cache() {
         if (failCount > 0 && (failCount % 20) == 0) {
             if (Drv && !Drv->IsProcessAlive()) {
                 LOG("CACHE: RustClient.exe no longer running (failCount=%d) — shutting down cheat to prevent BSOD", failCount);
+                g_process_dead.store(true, std::memory_order_relaxed);
                 if (Drv) Drv->ioctl_blocked.store(true, std::memory_order_relaxed);
                 MISC::ShutdownRequested = true;
                 return;
@@ -207,6 +208,7 @@ void cache::do_Cache() {
         auto entity_array = read<uint64_t>(entity + 0x10);
         if (!entity_array || !is_valid(entity_array)) {
             markUnavailable();
+            if (++failCount == 1) LOG("BN chain FAIL: entity_array=0 or invalid (entity=0x%I64X +0x10)", entity);
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
@@ -215,18 +217,25 @@ void cache::do_Cache() {
 
         if (!localPlayer) {
             markUnavailable();
+            if (++failCount == 1) LOG("BN chain FAIL: localPlayer=0 at entity_array+0x20");
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
         }
 
         if (!is_valid((uintptr_t)localPlayer)) {
             markUnavailable();
+            if (++failCount == 1) LOG("BN chain FAIL: localPlayer invalid (0x%I64X)", (uint64_t)localPlayer);
             continue;
         }
 
         publishLocalPlayer(localPlayer);
 
         // BN chain succeeded — reset fail counter
+        static bool bnFirstSuccess = false;
+        if (!bnFirstSuccess) {
+            bnFirstSuccess = true;
+            LOG("BN chain SUCCESS: entity_size=%u localPlayer=0x%I64X array=0x%I64X", entity_size, (uint64_t)localPlayer, entity_array);
+        }
         if (failCount > 0) {
             LOG("BN chain RECOVERED after %d failures", failCount);
             failCount = 0;
@@ -236,6 +245,7 @@ void cache::do_Cache() {
         if ((cacheCycleCount % 3) == 0 && Drv) {
             if (!Drv->IsProcessAlive()) {
                 LOG("CACHE: RustClient.exe died during normal operation — shutting down to prevent BSOD");
+                g_process_dead.store(true, std::memory_order_relaxed);
                 Drv->ioctl_blocked.store(true, std::memory_order_relaxed);
                 MISC::ShutdownRequested = true;
                 return;
@@ -502,7 +512,7 @@ void cache::do_Cache() {
             else if (isPanther) { isAnimal = true; animalType = "Panther"; }
             else if (isTiger) { isAnimal = true; animalType = "Tiger"; }
             else if (isSnake) { isAnimal = true; animalType = "Snake"; }
-            if (isAnimal && (low.find("trap") != std::string::npos || low.find("hide") != std::string::npos || low.find("skull") != std::string::npos)) isAnimal = false;
+            if (isAnimal && (low.find("trap") != std::string::npos || low.find("hide") != std::string::npos || low.find("skull") != std::string::npos || low.find("rug") != std::string::npos || low.find("meat") != std::string::npos || low.find("pelt") != std::string::npos || low.find("cooked") != std::string::npos || low.find("stew") != std::string::npos || low.find("trophy") != std::string::npos)) isAnimal = false;
 
             // Fallback: if prefab name didn't match player patterns, check IL2CPP class name.
             // Reads the entity's actual TYPE from IL2CPP metadata — world items have class names
@@ -1159,6 +1169,7 @@ void cache::do_PositionRefresh() {
             if (!Drv->find_process(L"RustClient.exe")) {
                 if (++posProcMiss >= 3) {
                     LOG("POS: RustClient.exe no longer running — shutting down to prevent BSOD");
+                    g_process_dead.store(true, std::memory_order_relaxed);
                     MISC::ShutdownRequested = true;
                     return;
                 }
@@ -1184,84 +1195,7 @@ void cache::do_PositionRefresh() {
             continue;
         }
 
-        // Camera matrix (7 IOCTLs) — must run even when playerList is empty (needed for ALL ESP)
-        {
-            static int camDiag = 0;
-            do {
-                uint64_t cam_typeinfo = read<uint64_t>(GameAssembly + offsets::camera_pointer);
-                if (!cam_typeinfo || !is_valid(cam_typeinfo)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_typeinfo invalid (0x%I64X)", cam_typeinfo); camDiag++; } break; }
-                uint64_t cam_sf = read<uint64_t>(cam_typeinfo + offsets::BaseCamera::static_fields);
-                if (!cam_sf || !is_valid(cam_sf)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_sf invalid (0x%I64X)", cam_sf); camDiag++; } break; }
-                uint64_t cam_instance = read<uint64_t>(cam_sf + offsets::BaseCamera::wrapper_class);
-                if (!cam_instance || !is_valid(cam_instance)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_instance invalid (0x%I64X)", cam_instance); camDiag++; } break; }
-                uint64_t native_cam = read<uint64_t>(cam_instance + offsets::BaseCamera::entity);
-                if (!native_cam || !is_valid(native_cam)) native_cam = cam_instance;
-                if (!native_cam || !is_valid(native_cam)) { if (camDiag < 5) { LOG("CAM_CHAIN: native_cam invalid"); camDiag++; } break; }
-                float fov_test = read<float>(native_cam + offsets::BaseCamera::field_of_view);
-                if (!(fov_test > 1.0f && fov_test < 180.0f && std::isfinite(fov_test))) {
-                    if (camDiag < 5) { float f170 = read<float>(native_cam + 0x170); float f4c = read<float>(native_cam + 0x4C); LOG("CAM_CHAIN: fov=%.2f(0x170) FAILED -- 0x170=%.2f 0x4C=%.2f ncam=0x%I64X", fov_test, f170, f4c, native_cam); camDiag++; }
-                    break;
-                }
-
-                Vector3 camWorldPos = read<Vector3>(native_cam + offsets::BaseCamera::world_position);
-                {
-                    std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex);
-                    g_CameraWorldPos = camWorldPos;
-                }
-
-                Matrix4x4 viewCM = read<Matrix4x4>(native_cam + offsets::BaseCamera::viewMatrix);
-                Matrix4x4 projCM = read<Matrix4x4>(native_cam + offsets::BaseCamera::projectionMatrix);
-                if (!std::isfinite(viewCM._11) || !std::isfinite(projCM._11) || viewCM._11 == 0 || projCM._11 == 0) {
-                    if (camDiag < 5) {
-                        float v_2fc = read<float>(native_cam + 0x2FC);
-                        float v_24c = read<float>(native_cam + 0x24C);
-                        float p_18c = read<float>(native_cam + 0x18C);
-                        float p_b0 = read<float>(native_cam + 0xB0);
-                        float p_144 = read<float>(native_cam + 0x144);
-                        LOG("CAM_CHAIN: matrix zero -- v._11=%.4f(0x2FC) p._11=%.4f(0x18C) | scan: 0x2FC=%.4f 0x24C=%.4f 0x18C=%.4f 0xB0=%.4f 0x144=%.4f",
-                            viewCM._11, projCM._11, v_2fc, v_24c, p_18c, p_b0, p_144);
-                        camDiag++;
-                    }
-                    break;
-                }
-                if (camDiag < 3) { LOG("CAM_CHAIN: OK ncam=0x%I64X fov=%.1f v._11=%.4f p._11=%.4f", native_cam, fov_test, viewCM._11, projCM._11); camDiag++; }
-                Matrix4x4 viewRM, projRM;
-                viewRM._11=viewCM._11; viewRM._12=viewCM._21; viewRM._13=viewCM._31; viewRM._14=viewCM._41;
-                viewRM._21=viewCM._12; viewRM._22=viewCM._22; viewRM._23=viewCM._32; viewRM._24=viewCM._42;
-                viewRM._31=viewCM._13; viewRM._32=viewCM._23; viewRM._33=viewCM._33; viewRM._34=viewCM._43;
-                viewRM._41=viewCM._14; viewRM._42=viewCM._24; viewRM._43=viewCM._34; viewRM._44=viewCM._44;
-                projRM._11=projCM._11; projRM._12=projCM._21; projRM._13=projCM._31; projRM._14=projCM._41;
-                projRM._21=projCM._12; projRM._22=projCM._22; projRM._23=projCM._32; projRM._24=projCM._42;
-                projRM._31=projCM._13; projRM._32=projCM._23; projRM._33=projCM._33; projRM._34=projCM._43;
-                projRM._41=projCM._14; projRM._42=projCM._24; projRM._43=projCM._34; projRM._44=projCM._44;
-                Matrix4x4 vp{};
-                vp._11=projRM._11*viewRM._11+projRM._12*viewRM._21+projRM._13*viewRM._31+projRM._14*viewRM._41;
-                vp._12=projRM._11*viewRM._12+projRM._12*viewRM._22+projRM._13*viewRM._32+projRM._14*viewRM._42;
-                vp._13=projRM._11*viewRM._13+projRM._12*viewRM._23+projRM._13*viewRM._33+projRM._14*viewRM._43;
-                vp._14=projRM._11*viewRM._14+projRM._12*viewRM._24+projRM._13*viewRM._34+projRM._14*viewRM._44;
-                vp._21=projRM._21*viewRM._11+projRM._22*viewRM._21+projRM._23*viewRM._31+projRM._24*viewRM._41;
-                vp._22=projRM._21*viewRM._12+projRM._22*viewRM._22+projRM._23*viewRM._32+projRM._24*viewRM._42;
-                vp._23=projRM._21*viewRM._13+projRM._22*viewRM._23+projRM._23*viewRM._33+projRM._24*viewRM._43;
-                vp._24=projRM._21*viewRM._14+projRM._22*viewRM._24+projRM._23*viewRM._34+projRM._24*viewRM._44;
-                vp._31=projRM._31*viewRM._11+projRM._32*viewRM._21+projRM._33*viewRM._31+projRM._34*viewRM._41;
-                vp._32=projRM._31*viewRM._12+projRM._32*viewRM._22+projRM._33*viewRM._32+projRM._34*viewRM._42;
-                vp._33=projRM._31*viewRM._13+projRM._32*viewRM._23+projRM._33*viewRM._33+projRM._34*viewRM._43;
-                vp._34=projRM._31*viewRM._14+projRM._32*viewRM._24+projRM._33*viewRM._34+projRM._34*viewRM._44;
-                vp._41=projRM._41*viewRM._11+projRM._42*viewRM._21+projRM._43*viewRM._31+projRM._44*viewRM._41;
-                vp._42=projRM._41*viewRM._12+projRM._42*viewRM._22+projRM._43*viewRM._32+projRM._44*viewRM._42;
-                vp._43=projRM._41*viewRM._13+projRM._42*viewRM._23+projRM._43*viewRM._33+projRM._44*viewRM._43;
-                vp._44=projRM._41*viewRM._14+projRM._42*viewRM._24+projRM._43*viewRM._34+projRM._44*viewRM._44;
-                // Write to back buffer, then atomically publish via sequence increment
-                src->matrixBackBuffer._11=vp._11; src->matrixBackBuffer._12=vp._21; src->matrixBackBuffer._13=vp._31; src->matrixBackBuffer._14=vp._41;
-                src->matrixBackBuffer._21=vp._12; src->matrixBackBuffer._22=vp._22; src->matrixBackBuffer._23=vp._32; src->matrixBackBuffer._24=vp._42;
-                src->matrixBackBuffer._31=vp._13; src->matrixBackBuffer._32=vp._23; src->matrixBackBuffer._33=vp._33; src->matrixBackBuffer._34=vp._43;
-                src->matrixBackBuffer._41=vp._14; src->matrixBackBuffer._42=vp._24; src->matrixBackBuffer._43=vp._34; src->matrixBackBuffer._44=vp._44;
-                // Also update LocalPlayer_Matrix for backwards compat (render.hpp FOV)
-                src->LocalPlayer_Matrix = src->matrixBackBuffer;
-                // Publish — InterlockedIncrement acts as a full memory barrier
-                InterlockedIncrement(&src->matrixSequence);
-            } while(false);
-        }
+        // Camera matrix read moved to render thread (ReadFrameCameraMatrix in Cheat.hpp)
 
         // Local player data — only read neck transform if OFFArrows needs it
         Vector3 cachedLocalNeck = {};
@@ -1382,6 +1316,7 @@ void cache::do_SkeletonRefresh() {
             if (!Drv->find_process(L"RustClient.exe")) {
                 if (++skelProcMiss >= 3) {
                     LOG("SKEL: RustClient.exe no longer running — shutting down to prevent BSOD");
+                    g_process_dead.store(true, std::memory_order_relaxed);
                     MISC::ShutdownRequested = true;
                     return;
                 }

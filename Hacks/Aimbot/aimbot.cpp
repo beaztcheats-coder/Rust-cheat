@@ -67,6 +67,17 @@ static bool ScreenPointValid(const Vector2& p)
     return true;
 }
 
+static uint32_t s_hRngState = 0x1234ABCD;
+static inline float h_rand() {
+    s_hRngState = s_hRngState * 1664525u + 1013904223u;
+    return (float)((s_hRngState >> 8) & 0xFFFFFF) / (float)0x1000000;
+}
+static inline float h_gauss() {
+    float u1 = h_rand(); float u2 = h_rand();
+    if (u1 < 0.0001f) u1 = 0.0001f;
+    return sqrtf(-2.f * logf(u1)) * cosf(2.f * 3.14159265f * u2);
+}
+
 static int GetBestBone(Rust::BaseEntity* player)
 {
     // 0=Head, 1=Neck, 2=Chest, 3=Pelvis, 4=ClosestToCrosshair, 5=Smart
@@ -441,6 +452,13 @@ void aimbot::do_aimbot()
         if (!angle.Empty()) {
             Normalize(angle.y, angle.x);
 
+            if (AIMBOT::HumanizeEnabled) {
+                if (AIMBOT::MissProbability > 0.f && h_rand() < AIMBOT::MissProbability)
+                    return;
+                angle.x += h_gauss() * AIMBOT::JitterAmount;
+                angle.y += h_gauss() * AIMBOT::JitterAmount;
+            }
+
             static bool aim_logged = false;
             static int aim_count = 0;
             if (!aim_logged || aim_count < 10) {
@@ -479,10 +497,23 @@ void aimbot::do_aimbot()
                         if (!lpStillStable()) break;
                         Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
                         float smooth = AIMBOT::SMOOTHING;
+                        if (AIMBOT::HumanizeEnabled) {
+                            float variance = (h_rand() - 0.5f) * 2.f * AIMBOT::SmoothingVariance;
+                            smooth *= (1.f + variance);
+                            if (smooth < 1.f) smooth = 1.f;
+                        }
                         float deltaX = angle.x - currentAngle.x;
                         float deltaY = angle.y - currentAngle.y;
                         if (deltaY > 180.f) deltaY -= 360.f;
                         if (deltaY < -180.f) deltaY += 360.f;
+                        if (AIMBOT::HumanizeEnabled) {
+                            float deltaMag = sqrtf(deltaX * deltaX + deltaY * deltaY);
+                            if (deltaMag < 3.f && deltaMag > 0.5f) {
+                                float over = 1.f + (h_rand() * AIMBOT::OvershootAmount / 10.f);
+                                deltaX *= over;
+                                deltaY *= over;
+                            }
+                        }
                         Vector3 smoothed;
                         smoothed.x = currentAngle.x + deltaX / smooth;
                         smoothed.y = currentAngle.y + deltaY / smooth;
@@ -499,6 +530,10 @@ void aimbot::do_aimbot()
                         const float MAX_DELTA = 15.0f;
                         if (fabsf(deltaX) > MAX_DELTA) deltaX = (deltaX > 0.f ? MAX_DELTA : -MAX_DELTA);
                         if (fabsf(deltaY) > MAX_DELTA) deltaY = (deltaY > 0.f ? MAX_DELTA : -MAX_DELTA);
+                        if (AIMBOT::HumanizeEnabled) {
+                            deltaX += h_gauss() * AIMBOT::JitterAmount * 0.5f;
+                            deltaY += h_gauss() * AIMBOT::JitterAmount * 0.5f;
+                        }
                         Vector3 clamped(currentAngle.x + deltaX, currentAngle.y + deltaY, currentAngle.z);
                         write<Vector3>(input + offsets::PlayerInput::bodyAngles, clamped);
                     }

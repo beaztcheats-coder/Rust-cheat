@@ -74,10 +74,15 @@
   <PropertyGroup Condition="'$(TargetName)'=='bomzarust'">
     <BomzaDefine>BOMZA;</BomzaDefine>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetName)'=='bettercheats'">
+    <BetterCheatsDefine>BETTERCHEATS;</BetterCheatsDefine>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(TargetName)'=='Rust Prv Ext_debug'">
     <DebugDefine>BEAZT_DEBUG;</DebugDefine>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IntDir>$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
+    <OutDir>$(Platform)\$(Configuration)\</OutDir>
     <IncludePath>$(ProjectDir)Microsoft DirectX SDK\Include;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)Microsoft DirectX SDK\Lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -127,7 +132,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>false</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>$(BomzaDefine)$(DebugDefine)_CRT_NONSTDC_NO_WARNINGS;NDEBUG;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(BomzaDefine)$(DebugDefine)$(BetterCheatsDefine)_CRT_NONSTDC_NO_WARNINGS;NDEBUG;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -138,6 +143,7 @@
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <AdditionalOptions>-mllvm -string-obfus -mllvm -const-obfus %(AdditionalOptions)</AdditionalOptions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
+      <ObjectFileName>$(IntDir)%(Filename).obj</ObjectFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

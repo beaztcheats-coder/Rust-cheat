@@ -324,6 +324,44 @@ def main():
     total_applied += applied
     total_skipped += skipped
 
+    # Apply Frida offset patches (100% accurate field offsets from runtime dump)
+    frida_offset_patch = Path(__file__).parent / "output" / "frida_offset_patches.txt"
+    if frida_offset_patch.exists():
+        offsets_path = Path(cfg["offsets_hpp"])
+        content = offsets_path.read_text(encoding="utf-8", errors="ignore")
+        patch_text = frida_offset_patch.read_text(encoding="utf-8", errors="ignore")
+        ns_lines = re.findall(r"// NS: (.+)", patch_text)
+        old_lines = re.findall(r"// OLD: (.+)", patch_text)
+        new_lines = re.findall(r"// NEW: (.+)", patch_text)
+        applied_fo = 0
+        skipped_fo = 0
+        for ns, old_line, new_line in zip(ns_lines, old_lines, new_lines):
+            ns = ns.strip()
+            ns_block = extract_namespace_block(content, ns)
+            if ns_block:
+                block_start, block_end = extract_namespace_block(content, ns)
+                block_content = content[block_start:block_end]
+                if old_line in block_content:
+                    new_block = block_content.replace(old_line, new_line, 1)
+                    content = content[:block_start] + new_block + content[block_end:]
+                    applied_fo += 1
+                    print(f"[APPLY FRIDA-OFFSET] [{ns}] {old_line.strip()} -> {new_line.strip()}")
+                else:
+                    if old_line in content:
+                        content = content.replace(old_line, new_line, 1)
+                        applied_fo += 1
+                        print(f"[APPLY FRIDA-OFFSET] [global] {old_line.strip()} -> {new_line.strip()}")
+                    else:
+                        print(f"[SKIP FRIDA-OFFSET] Could not find: {old_line.strip()}")
+                        skipped_fo += 1
+        if applied_fo > 0:
+            offsets_path.write_text(content, encoding="utf-8")
+            print(f"[OK] Applied {applied_fo} Frida offset patches ({skipped_fo} skipped)")
+            total_applied += applied_fo
+            total_skipped += skipped_fo
+    else:
+        print("[INFO] No Frida offset patches file found — skipping")
+
     applied = apply_sdk_patches(cfg)
     total_applied += applied
 

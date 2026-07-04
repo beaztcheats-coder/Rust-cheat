@@ -12,15 +12,14 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 
 # Fallback operation sequences for decrypt functions.
 # Used when sha-dumper can't find a function (name obfuscation) or confidence is low.
-# These are the LAST KNOWN GOOD values from the working cheat build.
-# Updated: 2026-06-30 (Morphine build 23824285, ESP confirmed working)
+# Updated: 2026-07-03 (validict build 24037537)
 FALLBACK_DECRYPT_OPS = {
-    "base_networkable_0": [("rol", 2), ("xor", 0x111B9118), ("add", 0x79300E2E)],
-    "base_networkable_1": [("rol", 6), ("xor", 0xC5D748E1), ("add", 0x48498B34)],
-    "cl_active_item": [("add", 0x9420FF13), ("rol", 16), ("add", 0xEDC489FD), ("rol", 6)],
-    "decrypt_fov": [("rol", 31), ("sub", 0x270C775), ("xor", 0x93DAED4D)],
-    "player_inventory": [("rol", 25), ("sub", 0x249D878C), ("xor", 0x58D82066), ("add", 0x7CD2A7CE)],
-    "player_eyes": [("sub", 0x0C26F5B3), ("xor", 0x6EC84F5D), ("rol", 13)],
+    "base_networkable_0": [("rol", 0x16), ("sub", 0x512FB7E6), ("xor", 0x3C25B628), ("add", 0x606330A1)],
+    "base_networkable_1": [("rol", 0x12), ("xor", 0xE54E9BFF), ("rol", 0x8), ("xor", 0xCECB4770)],
+    "cl_active_item": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
+    "decrypt_fov": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("sub", 0x3BA7A498)],
+    "player_inventory": [("rol", 0x8), ("add", 0x18E53C82), ("rol", 0x1)],
+    "player_eyes": [("sub", 0x6FB58358), ("xor", 0x6DC93C8F), ("rol", 0x15), ("add", 0x4E3D6061)],
 }
 
 
@@ -28,17 +27,15 @@ def merge_fallback_funcs(funcs: dict) -> dict:
     """Merge fallback ops into the funcs dict.
 
     - MISSING functions: add fallback with 'fallback' confidence.
-    - LOW/MEDIUM confidence functions that DIFFER from fallback: replace with fallback.
-      This prevents wrong values from stale fingerprint matches (e.g., nk2).
-    - HIGH confidence functions: always keep (sha-dumper confirmed correct).
+    - ANY existing source data (Morphine/sha-dumper): ALWAYS KEEP IT.
+      Never override current-build data with stale fallback values.
+      The fallback is from the PREVIOUS build and is wrong after a game update.
     Returns a new dict — does not modify the original."""
     result = copy.deepcopy(funcs)
     for morph_name, fallback_ops in FALLBACK_DECRYPT_OPS.items():
-        fb_ops_list = [{"op": o[0], "value": o[1]} for o in fallback_ops]
-        fb_seq = tuple((o[0], o[1]) for o in fallback_ops)
-
         if morph_name not in result:
             # Missing — add fallback
+            fb_ops_list = [{"op": o[0], "value": o[1]} for o in fallback_ops]
             result[morph_name] = {
                 "ops": fb_ops_list,
                 "input_style": "pointer" if morph_name.startswith("base_networkable") else "raw",
@@ -47,27 +44,7 @@ def merge_fallback_funcs(funcs: dict) -> dict:
                 "confidence": "fallback",
                 "note": "Using last known good values (not found in sha-dumper)",
             }
-        else:
-            existing = result[morph_name]
-            confidence = existing.get("confidence", "unknown")
-
-            # Skip high-confidence entries (sha-dumper confirmed correct)
-            if confidence == "high":
-                continue
-
-            # For low/medium/fallback: check if values match fallback
-            existing_seq = tuple((o["op"], o["value"]) for o in existing.get("ops", []))
-            if existing_seq != fb_seq:
-                # Values differ from fallback — replace with fallback to prevent wrong values
-                old_conf = confidence
-                result[morph_name] = {
-                    "ops": fb_ops_list,
-                    "input_style": existing.get("input_style", "pointer" if morph_name.startswith("base_networkable") else "raw"),
-                    "return_style": existing.get("return_style", "handle" if morph_name.startswith("base_networkable") else "raw"),
-                    "read_offset": existing.get("read_offset"),
-                    "confidence": "fallback",
-                    "note": f"Replaced {old_conf} confidence (differed from fallback) — using last known good",
-                }
+        # else: source data exists — KEEP IT. Do NOT override with fallback.
     return result
 
 
@@ -84,7 +61,10 @@ def generate_decrypt_keys(prefix: str, ops: list) -> list:
         op_type_counts[op_type] = count
         suffix = f"_{count}" if count > 1 else ""
         key = f"{prefix}_{op_type}{suffix}"
-        result.append((key, op_type, op["value"]))
+        val = op["value"]
+        if isinstance(val, str):
+            val = int(val, 16) if val.startswith("0x") or val.startswith("0X") else int(val)
+        result.append((key, op_type, val))
     return result
 
 
@@ -96,7 +76,17 @@ def load_config():
 def load_master():
     path = Path(__file__).parent / "output" / "master.json"
     with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        master = json.load(f)
+    # Normalize decrypt function op values to ints (capstone merge may leave hex strings)
+    for fn_name, fn_info in master.get("decrypt_functions", {}).items():
+        for op in fn_info.get("ops", []):
+            val = op.get("value")
+            if isinstance(val, str):
+                try:
+                    op["value"] = int(val, 16) if val.startswith("0x") or val.startswith("0X") else int(val)
+                except ValueError:
+                    pass
+    return master
 
 
 def create_backups(cfg: dict):

@@ -104,10 +104,13 @@ def generate_draft(handle_rva: int, gc_array_rva: int, xor_keys: list, shifts: l
     return "\n".join(lines)
 
 
-def dump_raw_bytes(dll_path: Path, rva: int, size: int = 512) -> bytes:
+def dump_raw_bytes(dll_path: Path, rva: int, size: int = 512, pe_cache=None) -> bytes:
     try:
         import pefile
-        pe = pefile.PE(str(dll_path))
+        if pe_cache is not None:
+            pe = pe_cache
+        else:
+            pe = pefile.PE(str(dll_path), fast_load=True)
         file_offset = pe.get_offset_from_rva(rva)
         with open(dll_path, "rb") as f:
             f.seek(file_offset)
@@ -117,7 +120,7 @@ def dump_raw_bytes(dll_path: Path, rva: int, size: int = 512) -> bytes:
         return b""
 
 
-def follow_jmp(dll_path: Path, instructions: list, image_base: int) -> tuple:
+def follow_jmp(dll_path: Path, instructions: list, image_base: int, pe_cache=None) -> tuple:
     """If the first instruction is an unconditional jmp, disassemble the target RVA too."""
     if not instructions:
         return instructions, None
@@ -128,7 +131,7 @@ def follow_jmp(dll_path: Path, instructions: list, image_base: int) -> tuple:
             target_addr = int(target_str, 16)
             target_rva = target_addr - image_base
             print(f"[INFO] Following jmp to 0x{target_addr:X} (RVA 0x{target_rva:08X})")
-            raw2 = dump_raw_bytes(dll_path, target_rva, size=2048)
+            raw2 = dump_raw_bytes(dll_path, target_rva, size=2048, pe_cache=pe_cache)
             if raw2:
                 instructions2 = disassemble_with_capstone(raw2, target_addr)
                 return instructions2, target_rva
@@ -159,8 +162,14 @@ def main():
         print("    Set gameassembly_path in config.json to your Rust GameAssembly.dll")
         return
 
+    # Parse PE once and reuse (fast_load=True avoids parsing all data directories — saves ~90s on 200MB DLL)
+    import pefile
+    print("[INFO] Parsing GameAssembly.dll headers...")
+    pe = pefile.PE(str(dll_path), fast_load=True)
+    print("[OK] PE headers parsed")
+
     # Read raw bytes
-    raw = dump_raw_bytes(dll_path, handle_rva)
+    raw = dump_raw_bytes(dll_path, handle_rva, pe_cache=pe)
     if not raw:
         return
 
@@ -169,10 +178,10 @@ def main():
     instructions = disassemble_with_capstone(raw, image_base + handle_rva)
 
     # Follow unconditional jmp at entry point (common for exported Il2Cpp functions)
-    instructions, resolved_rva = follow_jmp(dll_path, instructions, image_base)
+    instructions, resolved_rva = follow_jmp(dll_path, instructions, image_base, pe_cache=pe)
     if resolved_rva is not None:
         handle_rva = resolved_rva
-        raw = dump_raw_bytes(dll_path, handle_rva, size=2048)
+        raw = dump_raw_bytes(dll_path, handle_rva, size=2048, pe_cache=pe)
 
     disasm_lines = []
     if instructions:

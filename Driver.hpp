@@ -10,6 +10,9 @@
 #include <mutex>
 #include "globals.h"
 
+inline std::atomic<bool> g_process_dead{ false };
+inline std::atomic<bool> g_shutting_down{ false };
+
 
 #define IOCTL_DISPATCH CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6B4F92A3, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
@@ -180,6 +183,9 @@ public:
 
     bool SendIoctl(PREQUEST_DATA request)
     {
+        if (hDriver == INVALID_HANDLE_VALUE) return false;
+        if (g_process_dead.load(std::memory_order_relaxed)) return false;
+        if (g_shutting_down.load(std::memory_order_relaxed)) return false;
         DWORD bytesReturned = 0;
         BOOL status = DeviceIoControl(hDriver, IOCTL_DISPATCH, request, sizeof(REQUEST_DATA), request, sizeof(REQUEST_DATA), &bytesReturned, nullptr);
         return status && bytesReturned == sizeof(REQUEST_DATA);
@@ -250,11 +256,15 @@ public:
     bool ReadMemory_ACE(PVOID address, PVOID buffer, uint32_t size)
     {
         if (size > IOCTL_MAX_SIZE) return false;
+        if (g_process_dead.load(std::memory_order_relaxed)) return false;
+        if (g_shutting_down.load(std::memory_order_relaxed)) return false;
         if (ioctl_blocked.load(std::memory_order_relaxed)) {
             uint64_t blocked_at = ioctl_blocked_time.load(std::memory_order_relaxed);
             if (blocked_at && GetTickCount64() - blocked_at > IOCTL_BLOCK_DURATION_MS) {
-                ioctl_blocked.store(false, std::memory_order_relaxed);
-                ioctl_fail_count.store(0, std::memory_order_relaxed);
+                if (!g_process_dead.load(std::memory_order_relaxed)) {
+                    ioctl_blocked.store(false, std::memory_order_relaxed);
+                    ioctl_fail_count.store(0, std::memory_order_relaxed);
+                }
             }
             if (ioctl_blocked.load(std::memory_order_relaxed)) return false;
         }
@@ -291,11 +301,15 @@ public:
     bool WriteMemory_ACE(PVOID address, PVOID buffer, uint32_t size)
     {
         if (size > IOCTL_MAX_SIZE) return false;
+        if (g_process_dead.load(std::memory_order_relaxed)) return false;
+        if (g_shutting_down.load(std::memory_order_relaxed)) return false;
         if (ioctl_blocked.load(std::memory_order_relaxed)) {
             uint64_t blocked_at = ioctl_blocked_time.load(std::memory_order_relaxed);
             if (blocked_at && GetTickCount64() - blocked_at > IOCTL_BLOCK_DURATION_MS) {
-                ioctl_blocked.store(false, std::memory_order_relaxed);
-                ioctl_fail_count.store(0, std::memory_order_relaxed);
+                if (!g_process_dead.load(std::memory_order_relaxed)) {
+                    ioctl_blocked.store(false, std::memory_order_relaxed);
+                    ioctl_fail_count.store(0, std::memory_order_relaxed);
+                }
             }
             if (ioctl_blocked.load(std::memory_order_relaxed)) return false;
         }
@@ -348,6 +362,11 @@ public:
     static constexpr uint64_t FINDPROC_CACHE_MS = 500;
 
     INT32 find_process(LPCTSTR process_name) {
+        // If process is dead, invalidate cache and return 0
+        if (g_process_dead.load(std::memory_order_relaxed)) {
+            findproc_cached_pid.store(0, std::memory_order_relaxed);
+            return 0;
+        }
         // Return cached PID if checked recently
         uint64_t now = GetTickCount64();
         uint64_t last = findproc_last_check_ms.load(std::memory_order_relaxed);
@@ -522,7 +541,7 @@ T read(uint64_t address) {
     if (is_valid(address)) {
         if (g_UseInternalReads && ReadMemory_Internal((PVOID)address, &buffer, sizeof(T)))
             return buffer;
-        if (Drv && !Drv->ioctl_blocked)
+        if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed))
             Drv->ReadMemory_ACE((PVOID)address, &buffer, sizeof(T));
     }
     return buffer;
@@ -532,7 +551,7 @@ T read(uint64_t address) {
 template <typename T>
 void write(uint64_t address, T buffer) {
     if (is_valid(address))
-        if (Drv && !Drv->ioctl_blocked)
+        if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed))
             Drv->WriteMemory_ACE((PVOID)address, &buffer, sizeof(T));
 }
 
@@ -548,7 +567,7 @@ inline std::string read_wstr(uintptr_t address) {
     if (!is_valid(address)) return "";
     wchar_t buf[256] = {};
     if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(address), buf, 255 * sizeof(wchar_t))))
-        if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(address), buf, 255 * sizeof(wchar_t));
+        if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(address), buf, 255 * sizeof(wchar_t));
     buf[255] = 0;
     std::string out;
     for (int i = 0; i < 255 && buf[i]; i++) {
@@ -563,7 +582,7 @@ inline std::string read_il2cpp_string(uintptr_t stringObj) {
     if (len == 0 || len > 255) return "";
     wchar_t buf[256] = {};
     if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(stringObj + 0x14), buf, len * sizeof(wchar_t))))
-        if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(stringObj + 0x14), buf, len * sizeof(wchar_t));
+        if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(stringObj + 0x14), buf, len * sizeof(wchar_t));
     buf[len] = 0;
     std::string out;
     out.reserve(len);
@@ -577,7 +596,7 @@ inline std::string readstring(uint64_t Address) {
     if (!is_valid(Address)) return "";
     std::unique_ptr<char[]> buffer(new char[64]);
     if (!(g_UseInternalReads && ReadMemory_Internal((PVOID)Address, buffer.get(), 64)))
-        if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE((PVOID)Address, buffer.get(), 64);
+        if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE((PVOID)Address, buffer.get(), 64);
     buffer[63] = '\0';
     return buffer.get();
 }
@@ -604,7 +623,7 @@ namespace mem {
         if (is_valid(address)) {
             if (g_UseInternalReads && ReadMemory_Internal((PVOID)address, &buffer, sizeof(T)))
                 return buffer;
-            if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE((PVOID)address, &buffer, sizeof(T));
+            if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE((PVOID)address, &buffer, sizeof(T));
         }
         return buffer;
     }

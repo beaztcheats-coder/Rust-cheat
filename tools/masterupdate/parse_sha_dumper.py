@@ -123,15 +123,16 @@ FINGERPRINT_PATTERNS = {
     "decrypt_fov": ["rol", "sub", "xor"],
 }
 
-# Last known good decrypt constants (Morphine build 23824285, confirmed working).
+# Last known good decrypt constants (validict build 24020771).
 # Used by pick_best_variant() to cross-check sha-dumper variants when .dat is locked.
+# Updated: 2026-07-03 (synced with compare_and_patch.py + generate_super_prompt.py)
 FALLBACK_DECRYPT_OPS = {
-    "base_networkable_0": [("rol", 2), ("xor", 0x111B9118), ("add", 0x79300E2E)],
-    "base_networkable_1": [("rol", 6), ("xor", 0xC5D748E1), ("add", 0x48498B34)],
-    "cl_active_item": [("add", 0x9420FF13), ("rol", 16), ("add", 0xEDC489FD), ("rol", 6)],
-    "decrypt_fov": [("rol", 31), ("sub", 0x270C779), ("xor", 0x93DAED41)],
-    "player_inventory": [("rol", 30), ("sub", 0x2D9831F6), ("xor", 0xDBFF84AD)],
-    "player_eyes": [("sub", 0x21A1F11F), ("xor", 0x749EF0FA), ("rol", 14), ("add", 0x3CA56202)],
+    "base_networkable_0": [("rol", 0x16), ("sub", 0x512FB7E6), ("xor", 0x3C25B628), ("add", 0x606330A1)],
+    "base_networkable_1": [("rol", 0x12), ("xor", 0xE54E9BFF), ("rol", 0x8), ("xor", 0xCECB4770)],
+    "cl_active_item": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
+    "decrypt_fov": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("sub", 0x3BA7A498)],
+    "player_inventory": [("rol", 0x8), ("add", 0x18E53C82), ("rol", 0x1)],
+    "player_eyes": [("sub", 0x6FB58358), ("xor", 0x6DC93C8F), ("rol", 0x15), ("add", 0x4E3D6061)],
 }
 
 # Static pointer field -> Morphine offset/klass_rva name

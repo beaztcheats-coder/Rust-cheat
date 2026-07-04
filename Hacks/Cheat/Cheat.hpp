@@ -1,10 +1,90 @@
 #include "Hacks/Aimbot/aimbot.hpp"
+#include "../AntiCheat/anybrain.hpp"
 #include "../../Logger.hpp"
 #include "../../Hotkeys.hpp"
 #include "../../Occlusion.hpp"
 #include <cmath>
 
 namespace Xheat {
+
+    bool ReadFrameCameraMatrix() {
+        static int camDiag = 0;
+        uint64_t cam_typeinfo = read<uint64_t>(GameAssembly + offsets::camera_pointer);
+        if (!cam_typeinfo || !is_valid(cam_typeinfo)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_typeinfo invalid (0x%I64X)", cam_typeinfo); camDiag++; } return false; }
+        uint64_t cam_sf = read<uint64_t>(cam_typeinfo + offsets::BaseCamera::static_fields);
+        if (!cam_sf || !is_valid(cam_sf)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_sf invalid (0x%I64X)", cam_sf); camDiag++; } return false; }
+        uint64_t cam_instance = read<uint64_t>(cam_sf + offsets::BaseCamera::wrapper_class);
+        if (!cam_instance || !is_valid(cam_instance)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_instance invalid (0x%I64X)", cam_instance); camDiag++; } return false; }
+        uint64_t native_cam = read<uint64_t>(cam_instance + offsets::BaseCamera::entity);
+        if (!native_cam || !is_valid(native_cam)) native_cam = cam_instance;
+        if (!native_cam || !is_valid(native_cam)) { if (camDiag < 5) { LOG("CAM_CHAIN: native_cam invalid"); camDiag++; } return false; }
+        float fov_test = read<float>(native_cam + offsets::BaseCamera::field_of_view);
+        if (!(fov_test > 1.0f && fov_test < 180.0f && std::isfinite(fov_test))) {
+            if (camDiag < 5) { LOG("CAM_CHAIN: fov=%.2f FAILED ncam=0x%I64X", fov_test, native_cam); camDiag++; }
+            return false;
+        }
+
+        Vector3 camWorldPos = read<Vector3>(native_cam + offsets::BaseCamera::world_position);
+        {
+            std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex);
+            g_CameraWorldPos = camWorldPos;
+        }
+
+        Matrix4x4 camMatrix = read<Matrix4x4>(native_cam + offsets::BaseCamera::viewMatrix);
+        if (!std::isfinite(camMatrix._11) || camMatrix._11 == 0) {
+            if (camDiag < 5) { LOG("CAM_CHAIN: matrix zero/NaN -- _11=%.4f ncam=0x%I64X", camMatrix._11, native_cam); camDiag++; }
+            return false;
+        }
+
+        bool isViewOnly = (std::fabs(camMatrix._14) < 0.001f &&
+                           std::fabs(camMatrix._24) < 0.001f &&
+                           std::fabs(camMatrix._34) < 0.001f);
+
+        if (isViewOnly) {
+            Matrix4x4 projCM = read<Matrix4x4>(native_cam + offsets::BaseCamera::projectionMatrix);
+            if (!std::isfinite(projCM._11) || projCM._11 == 0) {
+                if (camDiag < 5) { LOG("CAM_CHAIN: proj zero/NaN -- p._11=%.4f ncam=0x%I64X", projCM._11, native_cam); camDiag++; }
+                return false;
+            }
+            if (camDiag < 3) { LOG("CAM_CHAIN: view+proj path ncam=0x%I64X fov=%.1f v._11=%.4f p._11=%.4f", native_cam, fov_test, camMatrix._11, projCM._11); camDiag++; }
+            Matrix4x4 viewRM, projRM;
+            viewRM._11=camMatrix._11; viewRM._12=camMatrix._21; viewRM._13=camMatrix._31; viewRM._14=camMatrix._41;
+            viewRM._21=camMatrix._12; viewRM._22=camMatrix._22; viewRM._23=camMatrix._32; viewRM._24=camMatrix._42;
+            viewRM._31=camMatrix._13; viewRM._32=camMatrix._23; viewRM._33=camMatrix._33; viewRM._34=camMatrix._43;
+            viewRM._41=camMatrix._14; viewRM._42=camMatrix._24; viewRM._43=camMatrix._34; viewRM._44=camMatrix._44;
+            projRM._11=projCM._11; projRM._12=projCM._21; projRM._13=projCM._31; projRM._14=projCM._41;
+            projRM._21=projCM._12; projRM._22=projCM._22; projRM._23=projCM._32; projRM._24=projCM._42;
+            projRM._31=projCM._13; projRM._32=projCM._23; projRM._33=projCM._33; projRM._34=projCM._43;
+            projRM._41=projCM._14; projRM._42=projCM._24; projRM._43=projCM._34; projRM._44=projCM._44;
+            Matrix4x4 vp{};
+            vp._11=projRM._11*viewRM._11+projRM._12*viewRM._21+projRM._13*viewRM._31+projRM._14*viewRM._41;
+            vp._12=projRM._11*viewRM._12+projRM._12*viewRM._22+projRM._13*viewRM._32+projRM._14*viewRM._42;
+            vp._13=projRM._11*viewRM._13+projRM._12*viewRM._23+projRM._13*viewRM._33+projRM._14*viewRM._43;
+            vp._14=projRM._11*viewRM._14+projRM._12*viewRM._24+projRM._13*viewRM._34+projRM._14*viewRM._44;
+            vp._21=projRM._21*viewRM._11+projRM._22*viewRM._21+projRM._23*viewRM._31+projRM._24*viewRM._41;
+            vp._22=projRM._21*viewRM._12+projRM._22*viewRM._22+projRM._23*viewRM._32+projRM._24*viewRM._42;
+            vp._23=projRM._21*viewRM._13+projRM._22*viewRM._23+projRM._23*viewRM._33+projRM._24*viewRM._43;
+            vp._24=projRM._21*viewRM._14+projRM._22*viewRM._24+projRM._23*viewRM._34+projRM._24*viewRM._44;
+            vp._31=projRM._31*viewRM._11+projRM._32*viewRM._21+projRM._33*viewRM._31+projRM._34*viewRM._41;
+            vp._32=projRM._31*viewRM._12+projRM._32*viewRM._22+projRM._33*viewRM._32+projRM._34*viewRM._42;
+            vp._33=projRM._31*viewRM._13+projRM._32*viewRM._23+projRM._33*viewRM._33+projRM._34*viewRM._43;
+            vp._34=projRM._31*viewRM._14+projRM._32*viewRM._24+projRM._33*viewRM._34+projRM._34*viewRM._44;
+            vp._41=projRM._41*viewRM._11+projRM._42*viewRM._21+projRM._43*viewRM._31+projRM._44*viewRM._41;
+            vp._42=projRM._41*viewRM._12+projRM._42*viewRM._22+projRM._43*viewRM._32+projRM._44*viewRM._42;
+            vp._43=projRM._41*viewRM._13+projRM._42*viewRM._23+projRM._43*viewRM._33+projRM._44*viewRM._43;
+            vp._44=projRM._41*viewRM._14+projRM._42*viewRM._24+projRM._43*viewRM._34+projRM._44*viewRM._44;
+            Matrix4x4 vpT;
+            vpT._11=vp._11; vpT._12=vp._21; vpT._13=vp._31; vpT._14=vp._41;
+            vpT._21=vp._12; vpT._22=vp._22; vpT._23=vp._32; vpT._24=vp._42;
+            vpT._31=vp._13; vpT._32=vp._23; vpT._33=vp._33; vpT._34=vp._43;
+            vpT._41=vp._14; vpT._42=vp._24; vpT._43=vp._34; vpT._44=vp._44;
+            src->PublishMatrix(vpT);
+        } else {
+            if (camDiag < 3) { LOG("CAM_CHAIN: VP direct ncam=0x%I64X fov=%.1f _11=%.4f _44=%.4f", native_cam, fov_test, camMatrix._11, camMatrix._44); camDiag++; }
+            src->PublishMatrix(camMatrix);
+        }
+        return true;
+    }
 
     void __fastcall Do_Cheat()
     {
@@ -27,14 +107,14 @@ namespace Xheat {
                 && g_LocalPlayerGeneration.load(std::memory_order_acquire) == lpGeneration;
         };
 
-        // Camera matrix — take one atomic snapshot per frame (eliminates torn reads)
+        ReadFrameCameraMatrix();
+
         if ((src->LocalPlayer_Matrix._11 == 0 && src->LocalPlayer_Matrix._22 == 0 && src->LocalPlayer_Matrix._33 == 0 && src->LocalPlayer_Matrix._44 == 0)
             || !std::isfinite(src->LocalPlayer_Matrix._11) || !std::isfinite(src->LocalPlayer_Matrix._22)
             || !std::isfinite(src->LocalPlayer_Matrix._33) || !std::isfinite(src->LocalPlayer_Matrix._44)) {
             static int c4=0; if(c4<3){LOG("Do_Cheat SKIP: LocalPlayer_Matrix is zero/NaN (_11=%.2f _22=%.2f _33=%.2f _44=%.2f)", src->LocalPlayer_Matrix._11, src->LocalPlayer_Matrix._22, src->LocalPlayer_Matrix._33, src->LocalPlayer_Matrix._44);c4++;}
             return;
         }
-        // Per-frame snapshot via seqlock — all WorldToScreen calls in this frame use the same matrix
         Matrix4x4 frameMatrix = src->GetMatrixSnapshot();
         // Validate the snapshot too
         if ((frameMatrix._11 == 0 && frameMatrix._22 == 0 && frameMatrix._33 == 0 && frameMatrix._44 == 0)
@@ -45,6 +125,8 @@ namespace Xheat {
         if (!lpStillStable()) { static int c5=0; if(c5<3){LOG("Do_Cheat SKIP: lpStillStable failed after matrix check");c5++;} return; }
         static bool firstRun = true;
         if (firstRun) { LOG("Do_Cheat RUNNING — first frame (all gates passed)"); firstRun = false; }
+
+        Anybrain::Neutralize();
         static int screenWidth = 0;
         static int screenHeight = 0;
         if (!screenWidth) {

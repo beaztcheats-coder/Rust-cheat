@@ -10,7 +10,6 @@
 #include <map>
 #include <array>
 #include <unordered_map>
-#include <mutex>
 #include <D3DX11tex.h>
 #include <filesystem>
 #include "ida.h"
@@ -204,7 +203,7 @@ namespace decrypt {
     }
 
     // ============================================================
-    // Handle resolver ï¿½ preserved across updates (not Morphine-generated)
+    // Handle resolver — preserved across updates (not Morphine-generated)
     // ============================================================
 
     inline uint64_t resolve_possible_handle(uint64_t value)
@@ -212,7 +211,7 @@ namespace decrypt {
         if (!value) return 0;
         if (value & 1)
             return Il2cppGetHandle(value);
-        // If not 8-byte aligned, it might be a disguised GCHandle ï¿½ try Il2cppGetHandle
+        // If not 8-byte aligned, it might be a disguised GCHandle — try Il2cppGetHandle
         if (value & 0x7) {
             uint64_t resolved = Il2cppGetHandle(value);
             if (resolved && (resolved & 0x7) == 0 && resolved > 0x10000)
@@ -338,7 +337,7 @@ namespace decrypt {
         return val;
     }
 
-    // encrypt_fov: reverse of decrypt_fov ï¿½ add-sub-xor
+    // encrypt_fov: reverse of decrypt_fov — add-sub-xor
     inline uint32_t encrypt_fov(uint32_t val) {
         val += OffsetManager::DecryptCfg.fov_sub;
         val -= OffsetManager::DecryptCfg.fov_add;
@@ -367,24 +366,25 @@ namespace decrypt {
 class Rust {
 public:
     Matrix4x4 LocalPlayer_Matrix;          // kept for backwards compat (render.hpp FOV check)
-    Matrix4x4 matrixBackBuffer;            // published by render thread, read by aimbot/misc threads
-    mutable std::mutex matrixMutex;        // protects matrixBackBuffer + LocalPlayer_Matrix (no torn reads)
+    Matrix4x4 matrixBackBuffer;           // written by fast thread, atomically published
+    volatile LONG matrixSequence = 0;     // incremented after back buffer write completes
 
+    // Thread-safe snapshot — seqlock read pattern (retry if changed mid-copy)
     Matrix4x4 GetMatrixSnapshot() const {
-        std::lock_guard<std::mutex> lk(matrixMutex);
-        return matrixBackBuffer;
-    }
-
-    void PublishMatrix(const Matrix4x4& vpT) {
-        std::lock_guard<std::mutex> lk(matrixMutex);
-        matrixBackBuffer = vpT;
-        LocalPlayer_Matrix = vpT;
+        Matrix4x4 out;
+        LONG s1, s2;
+        do {
+            s1 = matrixSequence;
+            out = matrixBackBuffer;
+            s2 = matrixSequence;
+        } while (s1 != s2);
+        return out;
     }
 
     class BaseEntity {
     public:
         Vector3 Get_ObjectPosition() {
-            // Direct read chain (fast, no SSE walk) ï¿½ same as old working code
+            // Direct read chain (fast, no SSE walk) — same as old working code
             uintptr_t obj = read<uint64_t>((uintptr_t)this + offsets::BaseEntity::objRef);
             if (!obj || !is_valid(obj)) return Vector3();
             for (auto off : { offsets::BaseEntity::posChain0, offsets::BaseEntity::posChain1, offsets::BaseEntity::posChain2, offsets::BaseEntity::posChain3 }) {
@@ -682,7 +682,7 @@ public:
             return (Flags & offsets::base_player_flags::Wounded) != 0;
         }
 
-        // Find a component by Il2CppClass name ï¿½ future-proof resolution
+        // Find a component by Il2CppClass name — future-proof resolution
         // Walks the GameObject component array, reads each component's class name
         static uintptr_t GetComponentByName(uintptr_t entity, const char* targetName) {
             uintptr_t native = read<uintptr_t>(entity + 0x10);
@@ -712,7 +712,7 @@ public:
             return 0;
         }
 
-        // Resolve PlayerEyes via component walker (NOT decrypt ï¿½ per sha-dumper owner)
+        // Resolve PlayerEyes via component walker (NOT decrypt — per sha-dumper owner)
         uintptr_t GetPlayerEyes() {
             return GetComponentByName((uintptr_t)this, "PlayerEyes");
         }
@@ -789,7 +789,7 @@ public:
             return 0;
         }
 
-        // Find held weapon entity via children list ï¿½ bypasses inventory entirely
+        // Find held weapon entity via children list — bypasses inventory entirely
         // Uses ClActiveItem UID to identify the ACTUALLY held weapon (not just first found)
         uintptr_t Get_HeldWeapon() {
             // Cache: once we find a valid weapon, keep using it until it goes invalid
@@ -809,7 +809,7 @@ public:
             cachedWeapon = 0;
             cachedUid = targetUid;
 
-        // PASS 0: Component inventory approach ï¿½ match Item.ItemId against ClActiveItem UID
+        // PASS 0: Component inventory approach — match Item.ItemId against ClActiveItem UID
         if (targetUid) {
             uintptr_t inv = GetPlayerInventory();
             static bool pass0_logged = false;
@@ -822,7 +822,7 @@ public:
                     for (int belt_off : { (int)offsets::PlayerInventory::Belt, (int)offsets::PlayerInventory::BeltFallback1, (int)offsets::PlayerInventory::BeltFallback2 }) {
                         uintptr_t belt = read<uintptr_t>(inv + belt_off);
                         if (!belt || !is_valid(belt)) continue;
-                        // Read item list ï¿½ try both ItemList and fallback
+                        // Read item list — try both ItemList and fallback
                         for (int ilist_off : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
                             uintptr_t list = read<uintptr_t>(belt + ilist_off);
                             if (!list || !is_valid(list)) continue;
@@ -842,7 +842,7 @@ public:
                                 for (int uid_off : { (int)offsets::Item::ItemId, (int)offsets::Item::ItemIdFallback1, (int)offsets::Item::ItemIdFallback2 }) {
                                     uint32_t itemUid = read<uint32_t>(item + uid_off);
                                     if (itemUid == targetUid) {
-                                        // Found the held item ï¿½ read HeldEntity from it
+                                        // Found the held item — read HeldEntity from it
                                         uintptr_t heldEntity = read<uintptr_t>(item + offsets::Item::HeldEntity_1);
                                         if (heldEntity && is_valid(heldEntity)) {
                                             static bool inv_logged = false;
@@ -861,7 +861,7 @@ public:
                 }
             }
 
-            // PASS 1: Children list ï¿½ match by ownerItemUID (may fail if UID format differs)
+            // PASS 1: Children list — match by ownerItemUID (may fail if UID format differs)
             uintptr_t childrenList = read<uintptr_t>((uintptr_t)this + offsets::BaseNetworkable::children);
             if (childrenList && is_valid(childrenList)) {
                 uintptr_t items = read<uintptr_t>(childrenList + 0x10);
@@ -1307,7 +1307,7 @@ public:
     }
 };
 
-// Global item icon cache ï¿½ loads PNG icons from Rust's Bundles/items directory
+// Global item icon cache — loads PNG icons from Rust's Bundles/items directory
 // Keyed by item shortname (e.g., "rifle.ak" ? loads "rifle.ak.png")
 struct ItemIconCache {
     std::unordered_map<std::string, ID3D11ShaderResourceView*> cache;

@@ -21,7 +21,7 @@ namespace vischeck {
 
 #pragma comment(lib, "comdlg32.lib")
 
-#ifndef BOMZA
+#if !defined(BOMZA) && !defined(BETTERCHEATS)
 
 extern ID3D11ShaderResourceView* g_BeaztLogo;
 extern ImFont* BeaztFont;
@@ -679,7 +679,7 @@ inline void RefreshConfigList(bool force = false) {
     if (!force && !g_State.configListDirty && (now - g_State.lastConfigListRefreshMs) < 1000) return;
     std::vector<std::string> names; names.push_back("default");
     std::string prefix = std::string(RuntimePaths::ConfigPrefix()) + "_";
-    std::string pattern = "C:\\" + prefix + "*.dat";
+    std::string pattern = RuntimePaths::DllDirectory() + prefix + "*.dat";
     WIN32_FIND_DATAA fd;
     HANDLE hFind = FindFirstFileA(pattern.c_str(), &fd);
     if (hFind != INVALID_HANDLE_VALUE) {
@@ -795,6 +795,9 @@ inline void PresetLegit() {
     ESP::draw_distance = 200.f;
     AIMBOT::Memory = false; MISC::RecoilModifier = 0.f;
     MISC::NoSpread = false; MISC::Automatic = false;
+    AIMBOT::HumanizeEnabled = true; AIMBOT::JitterAmount = 1.5f; AIMBOT::OvershootAmount = 3.f;
+    AIMBOT::SmoothingVariance = 0.15f; AIMBOT::MissProbability = 0.02f;
+    MISC::RecoilVariance = true; MISC::RecoilFloor = 0.25f; MISC::AntiAnybrain = true;
     RADAR::Enabled = true;
     WORLD::Stone = true; WORLD::Metal = true; WORLD::Sulfer = true; WORLD::Hemp = true;
     WORLD::Stash = true; WORLD::DroppedItem = true; WORLD::Backpack = true;
@@ -825,6 +828,7 @@ inline void PresetAggressive() {
     AIMBOT::SMOOTHING = 3.f; AIMBOT::FovSize = 120;
     AIMBOT::FovCircle = true; AIMBOT::TargetLine = true;
     MISC::RecoilModifier = 100.f; MISC::NoSpread = true;
+    AIMBOT::HumanizeEnabled = false; MISC::RecoilVariance = false; MISC::AntiAnybrain = true;
     RADAR::Enabled = true;
     WORLD::Stone = true; WORLD::Metal = true; WORLD::Sulfer = true; WORLD::Hemp = true;
     WORLD::Stash = true; WORLD::DroppedItem = true; WORLD::Backpack = true;
@@ -1032,7 +1036,19 @@ inline void PageCombat() {
     Card("Recoil", [&]() {
         SettingRowGrid("Recoil Mod", &MISC::RecoilEnabled, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Writes recoil properties in weapon memory.", true);
         SettingRowGrid("Recoil Mod %", nullptr, &MISC::RecoilModifier, 0.f, 100.f, "%.0f%%");
-    }, CardHeight(2, true));
+        SettingRowGrid("Recoil Variance", &MISC::RecoilVariance, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Randomizes recoil scale +-10% per write.", true);
+        SettingRowGrid("Recoil Floor", nullptr, &MISC::RecoilFloor, 0.10f, 0.50f, "%.2f");
+    }, CardHeight(4, true));
+    Card("Humanization", [&]() {
+        SettingRowGrid("Humanize Aim", &AIMBOT::HumanizeEnabled, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Adds jitter/overshoot to aimbot for anti-AI detection.", true);
+        SettingRowGrid("Jitter Amount", nullptr, &AIMBOT::JitterAmount, 0.f, 5.f, "%.1f deg");
+        SettingRowGrid("Overshoot", nullptr, &AIMBOT::OvershootAmount, 0.f, 10.f, "%.1f");
+        SettingRowGrid("Smooth Variance", nullptr, &AIMBOT::SmoothingVariance, 0.f, 0.50f, "%.2f");
+        SettingRowGrid("Miss Probability", nullptr, &AIMBOT::MissProbability, 0.f, 0.10f, "%.2f");
+    }, CardHeight(5, true));
+    Card("Anti-Cheat", [&]() {
+        SettingRowGrid("Anti Anybrain", &MISC::AntiAnybrain, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Disables Anybrain SDK data collection. Requires Frida RVA.", true);
+    }, CardHeight(1, true));
     ImGui::EndChild();
 
     ImGui::SameLine(0, cols.gap);
@@ -1434,7 +1450,9 @@ inline void PageVisuals() {
         SettingRowGrid("Bright Night", &MISC::BrightNight);
         SettingRowGrid("Ambient Multiplier", nullptr, &MISC::ambientMultiplier, 0.0f, 20.0f, "%.2f");
         SettingRowGrid("Ambient Saturation", nullptr, &MISC::AmbientSaturation, 0.0f, 5.0f, "%.2f");
-    }, CardHeight(3, true));
+        SettingRowGrid("Time Changer", &MISC::Timechanger);
+        SettingRowGrid("Time Value", nullptr, nullptr, 0.f, 0.f, "", &MISC::timevalue, 0, 24);
+    }, CardHeight(5, true));
     ImGui::EndChild();
 }
 
@@ -1786,4 +1804,4 @@ inline void Render() {
 
 } // namespace BeaztMenu
 
-#endif // BOMZA
+#endif // BOMZA && BETTERCHEATS

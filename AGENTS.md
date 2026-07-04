@@ -10,13 +10,14 @@
 - Build can also be run via `tools\masterupdate\getnewoffsets.bat` (renamed from `auto_update.bat`) + `update_now.bat`
 - Requires DirectX SDK (included in repo under `Microsoft DirectX SDK/`)
 
-### Build flavors (3)
+### Build flavors (4)
 
 | Flavor | TargetName | Output DLL | Logging | Shutdown Cleanup | Menu |
 |--------|-----------|-----------|---------|-----------------|------|
 | **BeaZt debug** | `Rust Prv Ext_debug` | `Rust Prv Ext_debug.dll` | Auto-enabled (DLL name `_debug`) | Keeps log files; deletes configs/markers/decrypts only | BeaZt |
 | **BeaZt production** | `Rust Prv Ext` | `Rust Prv Ext.dll` | Disabled (enable via `C:\rust_debug_enabled.txt` marker) | **Deletes ALL trace files** (logs, configs, markers, decrypts) | BeaZt |
 | **Bomza production** | `bomzarust` | `bomzarust.dll` | Disabled (enable via `C:\rust_debug_enabled.txt` marker) | **Deletes ALL trace files** (logs, configs, markers, decrypts) | Bomza |
+| **Better Cheats production** | `bettercheats` | `bettercheats.dll` | Disabled (enable via `C:\rust_debug_enabled.txt` marker) | **Deletes ALL trace files** (logs, configs, markers, decrypts) | Better Cheats |
 
 ### Flavor behavior
 
@@ -44,19 +45,29 @@
 - Menu: Bomza branded (`Bomza/bomza_menu.hpp`)
 - Use for: Bomza customer distribution
 
-### Build all 3 flavors
+**Better Cheats production** (`bettercheats.dll`):
+- Same stealth behavior as BeaZt/Bomza production — logging off, full trace cleanup on shutdown
+- Detected via `RuntimePaths::IsBetterCheats()` (DLL name contains `bettercheats`)
+- Log path: `C:\cheat_debug_bc.log` (only if marker exists)
+- Config path: `C:\rustcfg_bc.dat`
+- Menu: Better Cheats branded (`BetterCheats/bettercheats_menu.hpp`, dark blue + yellow theme)
+- No spoofer/cleaner prompt — straight to cheat (same as Bomza)
+- Use for: Better Cheats customer distribution
+
+### Build all 4 flavors
 
 ```
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "E:\github\rust\Rust Prv Ext.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:TargetName="Rust Prv Ext_debug" /m
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "E:\github\rust\Rust Prv Ext.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:TargetName="Rust Prv Ext" /m
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "E:\github\rust\Rust Prv Ext.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:TargetName=bomzarust /m
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "E:\github\rust\Rust Prv Ext.vcxproj" /p:Configuration=Release /p:Platform=x64 /p:TargetName=bettercheats /m
 ```
 
 ### Debug logging
 
 - **Production builds**: Logging disabled by default. Enable by creating `C:\rust_debug_enabled.txt` (run as admin: `echo enabled > C:\rust_debug_enabled.txt`)
 - **Debug build** (`Rust Prv Ext_debug.dll`): Logging auto-enabled — DLL name contains `_debug`, detected at runtime via `GetModuleFileNameA` + `find("_debug")`
-- **Log output**: `C:\cheat_debug.log` (BeaZt) / `C:\cheat_debug_bomza.log` (Bomza)
+- **Log output**: `C:\cheat_debug.log` (BeaZt) / `C:\cheat_debug_bomza.log` (Bomza) / `C:\cheat_debug_bc.log` (Better Cheats)
 - **Stealth mode**: Production builds delete ALL trace files on shutdown (logs, configs, markers, decrypts). Debug builds keep logs but delete everything else.
 - **`Logger.hpp`**: `g_UpdateLoggingEnabled` defaults to `false`. Set to `true` only by: (1) `_debug` DLL name check, or (2) `C:\rust_debug_enabled.txt` marker file. Both checks are in `MainThreadImpl()` at `Rust Prv Ext.cpp` lines ~254-272.
 
@@ -67,9 +78,60 @@ On injection, BeaZt debug and production DLLs show a console prompt before cheat
 2. **[2] Clean after detection** — calls `CleanerMenu()` → interactive 8-phase deep cleaner → DLL exits via `FreeLibraryAndExitThread` (user restarts + re-injects)
 3. **[3] Just play** — skip, cheat continues
 
-**Bomza production**: No prompt — straight to cheat (`#ifndef BOMZA` guard). Spoofer/cleaner code compiled but dead-stripped by `/OPT:REF`.
+**Bomza production**: No prompt — straight to cheat (`#if !defined(BOMZA) && !defined(BETTERCHEATS)` guard). Spoofer/cleaner code compiled but dead-stripped by `/OPT:REF`.
+
+**Better Cheats production**: No prompt — straight to cheat (same guard as Bomza).
 
 **Files**: `Hacks/Misc/spoofer.cpp` (spoof logic), `Hacks/Misc/cleaner.cpp` (cleaner menu), `Rust Prv Ext.cpp` lines ~280-324 (prompt).
+
+## Offset Pipeline (100% Morphine-Independent)
+
+The pipeline works **without Morphine** using sha-dumper + capstone + Frida:
+
+### Sources (priority order)
+
+| Source | Provides | Requires Game? | Status |
+|--------|----------|---------------|--------|
+| **sha-dumper** (injected DLL) | Field offsets, static TypeInfos, BN chain offsets, camera offsets, GCHandle RVA, materials, mesh | Yes (game running) | Working |
+| **disasm_decrypts.py** (offline capstone) | Decrypt algorithms (ROL/XOR/ADD/SUB chains) — reads GameAssembly.dll from disk | No (offline) | Working — 5/6 decrypts identified |
+| **Frida** (runtime dump) | Field offsets, field types, method RVAs, cross-validation | Yes (game running) | Working (optional cross-validation) |
+| **Morphine** (web download) | All offsets + decrypts | No | **OPTIONAL** — cross-validation only |
+| **Il2CppInspectorPro** (offline) | Field offsets, TypeInfo RVAs, method RVAs | No | Broken (.NET 10 preview required) |
+
+### Pipeline flow (`getnewoffsets.bat`)
+
+1. **Morphine prompt** (optional, defaults to skip in 10s)
+2. **Il2CppInspectorPro** (offline, currently broken — .NET 10)
+3. **sha-dumper** (injected into game, dumps offsets + ciphers + camera + mesh)
+4. **parse_sha_dumper.py** — merges sha-dumper output into master.json
+5. **disasm_decrypts.py** — reads GameAssembly.dll from disk, disassembles all cipher functions with capstone, identifies 6 decrypt algorithms, merges into master.json
+6. **Frida** (optional, cross-validation)
+7. **compare_and_patch.py** — generates 5 patch files from master.json
+8. **apply_patches.py** — applies patches to offsets.hpp/sdk.hpp/OffsetManager.hpp
+
+### disasm_decrypts.py — How it works
+
+1. Parses ALL cipher sections from sha-dumper output (930+ sections including unknowns)
+2. For each cipher, reads bytes at fn_rva from GameAssembly.dll using `pefile`
+3. Disassembles with `capstone` (CS_ARCH_X86, CS_MODE_64)
+4. Extracts ROL/XOR/ADD/SUB operations (handles SHL+SHR+OR ROL pattern, loop unrolling)
+5. Matches against known patterns (exact match → high confidence)
+6. For unidentified ciphers, tries structural matching (op-type sequence only)
+7. For still-missing decrypts, searches GameAssembly.dll binary for known constants
+8. Merges results into master.json["decrypt_functions"]
+
+**Key advantage over sha-dumper HDE64**: Capstone correctly decodes ALL x86-64 instruction variants, including ROL implemented as SHL+SHR+OR on different registers. The sha-dumper's HDE64-based extractor missed ROL operations, producing wrong algorithms.
+
+### One-click update workflow
+
+```
+1. Start Rust (join any server)
+2. Run: tools\masterupdate\getnewoffsets.bat  (choose [1] Skip Morphine)
+3. Run: tools\masterupdate\update_now.bat
+4. Inject and play
+```
+
+No Morphine. No Frida (optional). No manual offset verification.
 
 ## What this is
 
@@ -89,20 +151,23 @@ External Rust cheat DLL injected via loader into host process. Reads/writes game
 | `Hacks/Aimbot/aimbot.cpp` | Memory aimbot (writes `bodyAngles` to `PlayerInput+0x44`) |
 | `Hacks/Visuals/visuals.cpp` | Box/Skeleton/Name/Distance/Health/Head ESP rendering |
 | `Hacks/Cheat/Cheat.hpp` | `Do_Cheat()` main loop — iterates entity lists, dispatches to visuals/aimbot/misc |
-| `Render/render.hpp` | ImGui D3D11 overlay: `Hijack()`, `Draw()`, `Menu()` (10-page UI, BeaZt/Vsharp branded) |
-| `Config.hpp` | Save/Load config (`C:\rustcfg.dat` / `C:\rustcfg_bomza.dat`) — key=value format |
+| `Render/render.hpp` | ImGui D3D11 overlay: `Hijack()`, `Draw()`, `Menu()` (10-page UI, BeaZt/Bomza/Better Cheats branded) |
+| `Config.hpp` | Save/Load config (`C:\rustcfg.dat` / `C:\rustcfg_bomza.dat` / `C:\rustcfg_bc.dat`) — key=value format |
 | `OffsetManager.hpp` | Decrypt config struct, `LoadDecryptConfig`/`SaveDecryptConfig`, embedded defaults |
-| `Logger.hpp` | File logging (`C:\cheat_debug.log` BeaZt / `C:\cheat_debug_bomza.log` Bomza) |
-| `RuntimePaths.hpp` | Detects BeaZt/Bomza variant by DLL filename, returns config/log/spoofer paths |
+| `Logger.hpp` | File logging (`C:\cheat_debug.log` BeaZt / `C:\cheat_debug_bomza.log` Bomza / `C:\cheat_debug_bc.log` Better Cheats) |
+| `RuntimePaths.hpp` | Detects BeaZt/Bomza/Better Cheats variant by DLL filename, returns config/log/spoofer paths |
 | `Rust Prv Ext.cpp` | `DllMain`, `MainThread`, init sequence, export functions (Main/Init/Run/etc.) |
-| `tools/masterupdate/` | Auto-updater: fetches Morphine/sha-dumper offsets, generates patches + super prompt |
+| `tools/masterupdate/` | Auto-updater: sha-dumper + capstone decrypt + Frida cross-validation, generates patches + super prompt |
+| `tools/masterupdate/disasm_decrypts.py` | **Offline capstone decrypt disassembler** — reads GameAssembly.dll from disk, disassembles decrypt functions with capstone, 100% Morphine-independent |
+| `tools/masterupdate/compare_and_patch.py` | Generates 5 patch files from master.json (offsets, sdk, decrypt, OffsetManager, rust_decrypts.dat) |
+| `tools/sha-dumper/` | Injected DLL: scans GameAssembly for field offsets, static TypeInfos, BN decrypts, camera offsets, materials, mesh |
 
 ## Critical runtime files
 
 | Path | Purpose | Notes |
 |------|---------|-------|
-| `C:\cheat_debug.log` / `C:\cheat_debug_bomza.log` | Diagnostic log | BeaZt / Bomza flavor-specific |
-| `C:\rustcfg.dat` / `C:\rustcfg_bomza.dat` | User settings | Saved/loaded via menu or `Config::Save()`/`Config::Load()` |
+| `C:\cheat_debug.log` / `C:\cheat_debug_bomza.log` / `C:\cheat_debug_bc.log` | Diagnostic log | BeaZt / Bomza / Better Cheats flavor-specific |
+| `C:\rustcfg.dat` / `C:\rustcfg_bomza.dat` / `C:\rustcfg_bc.dat` | User settings | Saved/loaded via menu or `Config::Save()`/`Config::Load()` |
 | `C:\rust_decrypts.dat` | Decrypt constants | Edit and reinject — **no recompile needed**. Auto-generated from embedded defaults if missing |
 
 ## Decrypt constant system
@@ -131,11 +196,11 @@ BN chain fails with `wrapper_class_ptr=0` for ~30 seconds after pressing HOME �
 
 ## DO NOT: Blindly trust UnknownCheats offsets
 
-The v1mper UC dump (June 6 2026) is from a **different GameAssembly.dll build**. All BasePlayer offsets from that dump were wrong for our binary. The authoritative source is the Morphine auto-generated output at `tools/masterupdate/output/offsets.hpp` — always verify against it.
+The v1mper UC dump (June 6 2026) is from a **different GameAssembly.dll build**. All BasePlayer offsets from that dump were wrong for our binary. The authoritative source is the sha-dumper + capstone output at `tools/masterupdate/output/master.json` — always verify against it.
 
-## Verified correct offsets (Morphine build 23824285)
+## Verified correct offsets (Build 24037537)
 
-**Static pointers**: `basenetworkable_pointer=0xE334210`, `camera_pointer=0xE37ACA0`, `TOD_Sky_TypeInfo=0xE3593D0`, `FOV ConVar_Graphics=0xE334790`
+**Static pointers**: `basenetworkable_pointer=0x0FD36298`, `camera_pointer=0x0FD0A5C0`, `TOD_Sky_TypeInfo=0x0FCEBC70`, `FOV ConVar_Graphics=0xFD05BC0`
 
 **BaseCamera** (sha-dumper now uses structural validation — auto-applied when `validated>=1`, falls back to UC sources when `validated=0`): `viewMatrix=0x2FC` (fefe4444 #24841 + diagnostic), `projectionMatrix=0x18C` (old UC dump), `world_position=0x444` (fefe4444 #24841), `field_of_view=0x170` (v1mper IL2CPP dump + temopzso #24865), `culling_mask=0x74` (v1mper IL2CPP dump), `static_fields=0xB8`, `wrapper_class=0x90`, `entity=0x10`
 
@@ -143,7 +208,7 @@ The v1mper UC dump (June 6 2026) is from a **different GameAssembly.dll build**.
 
 **PlayerInventory**: `Belt=0x60`, `Wear=0x30`, `Main=0x58`, `loot=0x48`
 
-**ItemContainer**: `ItemList=0x20` (Morphine), `ItemListFallback=0x10`
+**ItemContainer**: `ItemList=0x20` (sha-dumper + capstone), `ItemListFallback=0x10`
 
 **Item**: `ItemDefinition=0x38`, `ItemId=0x98`, `HeldEntity_1=0x40`, `Amount=0x64`
 

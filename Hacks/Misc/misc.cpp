@@ -7,6 +7,14 @@
 #include <chrono>
 #pragma comment(lib, "winmm.lib")
 
+std::mutex misc::s_miscMutex;
+
+static uint32_t s_miscRng = 0x789ABCDE;
+static inline float misc_rand() {
+    s_miscRng = s_miscRng * 1664525u + 1013904223u;
+    return (float)((s_miscRng >> 8) & 0xFFFFFF) / (float)0x1000000;
+}
+
 // Free Camera state
 static bool dcCamActive = false;
 static Vector3 dcCamBasePos = {};
@@ -125,7 +133,7 @@ static uintptr_t ResolveTodSkyPtr()
 
     static int tod_diag_count = 0;
 
-    // PRIMARY: Known path — staticFields + instances(0x98) → List → _items → [0]
+    // PRIMARY: Known path — staticFields + instances → List → _items → [0]
     {
         uint64_t instances = read<uint64_t>(staticFields + offsets::TOD_Sky_Static::instances);
         if (instances && is_valid(instances)) {
@@ -135,12 +143,19 @@ static uintptr_t ResolveTodSkyPtr()
                 if (sky && is_valid(sky)) {
                     gTodSkyPtr = (uintptr_t)sky;
                     if (tod_diag_count < 3) {
-                        LOG("TOD_DIAG: found sky via instances(0x98) -> 0x%I64X", sky);
+                        LOG("TOD_DIAG: found sky via instances(0x%I64X) -> sky=0x%I64X", offsets::TOD_Sky_Static::instances, sky);
                         tod_diag_count++;
                     }
                     return gTodSkyPtr;
                 }
             }
+        }
+        // Periodic retry log every ~5s
+        static uint64_t lastRetryLog = 0;
+        if (GetTickCount64() - lastRetryLog > 5000) {
+            lastRetryLog = GetTickCount64();
+            LOG("TOD_RETRY: typeinfo=0x%I64X sf=0x%I64X instances=0x%I64X items=0x%I64X — sky not found yet",
+                todTypeInfo, staticFields, instances, (uint64_t)(instances ? read<uint64_t>(instances + 0x10) : 0));
         }
     }
 
@@ -184,21 +199,27 @@ auto FovChanger_Bypass(float fov) -> void
     uintptr_t camPtr = ResolveCameraComponent();
     if (camPtr && is_valid(camPtr)) {
         write<float>(camPtr + offsets::BaseCamera::field_of_view, fov);
+        static int bpLog = 0; if (bpLog < 3) { LOG("FOV_BYPASS: wrote %f to cam=0x%I64X+0x%I64X", fov, (uint64_t)camPtr, offsets::BaseCamera::field_of_view); bpLog++; }
+    } else {
+        static int bpFail = 0; if (bpFail < 3) { LOG("FOV_BYPASS: camPtr invalid"); bpFail++; }
     }
 }
 
 auto FovChanger(float fov) -> void
 {
     uintptr_t kl = read<uintptr_t>(GameAssembly + offsets::FOV::ConVar_Graphics);
-    if (!is_valid(kl)) { FovChanger_Bypass(fov); return; }
+    if (!is_valid(kl)) { static int f1=0; if(f1<3){LOG("FOV: ConVar_Graphics invalid kl=0x%I64X RVA=0x%I64X — using bypass", (uint64_t)kl, offsets::FOV::ConVar_Graphics); f1++;} FovChanger_Bypass(fov); return; }
     uintptr_t field = read<uintptr_t>(kl + offsets::BaseCamera::static_fields);
-    if (!is_valid(field)) { FovChanger_Bypass(fov); return; }
+    if (!is_valid(field)) { static int f2=0; if(f2<3){LOG("FOV: static_fields invalid kl=0x%I64X — using bypass", (uint64_t)kl); f2++;} FovChanger_Bypass(fov); return; }
     uint32_t raw = *(uint32_t*)&fov;
     uint32_t encrypted = decrypt::encrypt_fov(raw);
     write<uint32_t>(field + offsets::FOV::fovWrite, encrypted);
+    static int f3 = 0; if (f3 < 3) { LOG("FOV: wrote enc=%u to field=0x%I64X+0x%I64X (kl=0x%I64X fov=%.0f)", encrypted, (uint64_t)field, offsets::FOV::fovWrite, (uint64_t)kl, fov); f3++; }
 };
 
 void misc::do_misc() {
+
+    std::lock_guard<std::mutex> miscLock(s_miscMutex);
 
     // Generation stability check + 10s quarantine — defined early so all phases can use it
     const uint64_t miscLpGeneration = g_LocalPlayerGeneration.load(std::memory_order_acquire);
@@ -219,6 +240,18 @@ void misc::do_misc() {
             miscQuarantineLp = lp;
         }
         if ((now - miscQuarantineStart) < 10000ULL) return;
+    }
+
+    // One-time toggle status dump
+    {
+        static bool dumpedToggles = false;
+        if (!dumpedToggles) {
+            dumpedToggles = true;
+            LOG("TOGGLES: Fov=%d Zoom=%d FovAmt=%.0f ZoomAmt=%.0f Bright=%d Time=%d timeval=%d Recoil=%d AdminFlags=%d",
+                (int)MISC::FovChanger, (int)MISC::Zoom, MISC::FovAmount, MISC::ZoomAmount,
+                (int)MISC::BrightNight, (int)MISC::Timechanger, MISC::timevalue,
+                (int)MISC::RecoilEnabled, (int)MISC::AdminFlags);
+        }
     }
 
     {
@@ -253,35 +286,7 @@ void misc::do_misc() {
         wasFovActive = fovActive;
     }
 
-    // Remove Layers — write to BOTH managed + native camera every frame
-    {
-        if (!SETTINGS::MenuOpen && HotkeyPressed("VISUAL.RemoveLayers")) {
-            MISC::RemoveLayersActive = !MISC::RemoveLayersActive;
-            LOG("RemoveLayers: %s", MISC::RemoveLayersActive ? "ON" : "OFF");
-        }
-        static int origCullMask = 0;
-        static bool cullMaskCached = false;
-        static uint64_t nativeCullOff = 0; // dynamically found native offset
-        static bool cullScanLogged = false;
-
-        // Resolve camera chain manually to get BOTH managed instance AND native cam
-        uintptr_t camManaged = 0; // managed Camera instance (static_fields + wrapper_class)
-        uintptr_t camNative = 0;  // native camera struct (managed + entity)
-        {
-            uint64_t cam_handle = read_chain<uint64_t>(GameAssembly, {
-                offsets::camera_pointer, offsets::BaseCamera::static_fields, offsets::BaseCamera::wrapper_class });
-            if (cam_handle) {
-                camManaged = (cam_handle & 1) ? decrypt::Il2cppGetHandle(cam_handle) : cam_handle;
-                if (camManaged && is_valid(camManaged)) {
-                    camNative = read<uintptr_t>(camManaged + offsets::BaseCamera::entity);
-                    if (!camNative || !is_valid(camNative)) camNative = camManaged;
-                }
-            }
-        }
-
-        // CULLMASK code disabled — Remove Layers feature broken and hidden from menu
-        // Kept for reference: scan was reading native camera memory unnecessarily
-    }
+    // Remove Layers — disabled (culling_mask offset unverified for this build)
 
     // TOD Bright Night / Ambient path (static TOD_Sky chain)
     {
@@ -302,6 +307,7 @@ void misc::do_misc() {
                 uintptr_t nightParams = read<uintptr_t>(todSky + offsets::TOD_Sky::NightParameters);
                 if (nightParams && is_valid(nightParams)) {
                     write<float>(nightParams + offsets::TOD_NightParameters::AmbientMultiplier, ambientMult);
+                    static int bnLog = 0; if (bnLog < 5) { LOG("BRIGHTNIGHT: wrote ambient=%.1f to nightParams=0x%I64X", ambientMult, (uint64_t)nightParams); bnLog++; }
                 }
 
                 uintptr_t ambientParams = read<uintptr_t>(todSky + offsets::TOD_Sky::AmbientParameters);
@@ -313,13 +319,34 @@ void misc::do_misc() {
                 write<float>(todSky + offsets::TOD_Sky::timeSinceAmbientUpdate, 999.0f);
             } else {
                 gTodSkyPtr = 0;
-                if (++brightNightFailCount >= 20) {
+                if (++brightNightFailCount >= 500) {
                     MISC::BrightNight = false;
                     brightNightFailCount = 0;
                 }
             }
         } else {
             brightNightFailCount = 0;
+        }
+    }
+
+    // TOD TimeChanger (extends BrightNight)
+    {
+        if (MISC::Timechanger) {
+            uintptr_t todSky = ResolveTodSkyPtr();
+            if (todSky && is_valid(todSky)) {
+                uintptr_t cycleParams = read<uintptr_t>(todSky + offsets::TOD_Sky::CycleParameters);
+                if (cycleParams && is_valid(cycleParams)) {
+                    float t = (float)MISC::timevalue;
+                    if (t < 0.f) t = 0.f;
+                    if (t > 24.f) t = 24.f;
+                    write<float>(cycleParams + 0x10, t);
+                    static int tcLog = 0; if (tcLog < 5) { LOG("TIMECHANGER: wrote time=%.0f to cycleParams=0x%I64X+0x10", t, (uint64_t)cycleParams); tcLog++; }
+                } else {
+                    static int tcFail = 0; if (tcFail < 3) { LOG("TIMECHANGER: cycleParams invalid (todSky=0x%I64X+0x%I64X)", (uint64_t)todSky, offsets::TOD_Sky::CycleParameters); tcFail++; }
+                }
+            } else {
+                static int tcFail2 = 0; if (tcFail2 < 3) { LOG("TIMECHANGER: todSky invalid"); tcFail2++; }
+            }
         }
     }
 
@@ -541,7 +568,7 @@ void misc::do_misc() {
         if (modVal < 0.f) modVal = 0.f;
         if (modVal > 100.f) modVal = 100.f;
         float scale = MISC::RecoilEnabled ? (100.f - modVal) / 100.f : 1.0f;
-        if (MISC::RecoilEnabled && scale < 0.15f) scale = 0.15f;
+        if (MISC::RecoilEnabled && scale < MISC::RecoilFloor) scale = MISC::RecoilFloor;
 
         // If recoil was just toggled off, restore ALL original values and clear cache
         if (needRecoilRestore) {
@@ -579,15 +606,27 @@ void misc::do_misc() {
                     continue;
                 }
                 wc[c].rp = rp;
-                write<float>(rp + offsets::RecoilProperties::RecoilYawMin, wc[c].oRP[0] * scale);
-                write<float>(rp + offsets::RecoilProperties::RecoilYawMax, wc[c].oRP[1] * scale);
-                write<float>(rp + offsets::RecoilProperties::RecoilPitchMin, wc[c].oRP[2] * scale);
-                write<float>(rp + offsets::RecoilProperties::RecoilPitchMax, wc[c].oRP[3] * scale);
+                float ws = scale;
+                if (MISC::RecoilVariance) {
+                    float v = (misc_rand() - 0.5f) * 0.2f;
+                    ws = scale * (1.f + v);
+                    if (ws < MISC::RecoilFloor) ws = MISC::RecoilFloor;
+                }
+                write<float>(rp + offsets::RecoilProperties::RecoilYawMin, wc[c].oRP[0] * ws);
+                write<float>(rp + offsets::RecoilProperties::RecoilYawMax, wc[c].oRP[1] * ws);
+                write<float>(rp + offsets::RecoilProperties::RecoilPitchMin, wc[c].oRP[2] * ws);
+                write<float>(rp + offsets::RecoilProperties::RecoilPitchMax, wc[c].oRP[3] * ws);
                 if (wc[c].nro && is_valid(wc[c].nro) && is_valid(wc[c].nro + 0x30)) {
-                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilYawMin, wc[c].oNRO[0] * scale);
-                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilYawMax, wc[c].oNRO[1] * scale);
-                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMin, wc[c].oNRO[2] * scale);
-                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMax, wc[c].oNRO[3] * scale);
+                    float wsNro = ws;
+                    if (MISC::RecoilVariance) {
+                        float v = (misc_rand() - 0.5f) * 0.2f;
+                        wsNro = scale * (1.f + v);
+                        if (wsNro < MISC::RecoilFloor) wsNro = MISC::RecoilFloor;
+                    }
+                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilYawMin, wc[c].oNRO[0] * wsNro);
+                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilYawMax, wc[c].oNRO[1] * wsNro);
+                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMin, wc[c].oNRO[2] * wsNro);
+                    write<float>(wc[c].nro + offsets::RecoilProperties::RecoilPitchMax, wc[c].oNRO[3] * wsNro);
                 }
             }
         }

@@ -7,11 +7,11 @@
 namespace offsets {
 	inline uint64_t basenetworkable_pointer = 0x0FD36298; // validict build 24037537
 	inline uint64_t camera_pointer = 0x0FD0A5C0;           // validict build 24037537
-	inline uint64_t Il2cppGetHandle = 0x10266600;          // sha-dumper build 24037537 (updated)
+	inline uint64_t Il2cppGetHandle = 0x101CA4E0;          // validict build 24037537
 	inline uint64_t TOD_Sky_TypeInfo = 0x0FCEBC70;         // validict build 24037537
 	inline uint64_t Class_TOD_Sky_Static = 0x0FCEBC70;    // validict build 24037537 (same as TypeInfo)
 	inline uint64_t EffectNetwork_Pointer = 0xE3790F8;   // verify
-	inline uint64_t Class_SingletonComponent_UI_LoadingScreen = 0x0FD11958; // sha-dumper build 24037537 (updated)
+	inline uint64_t Class_SingletonComponent_UI_LoadingScreen = 0xFCFDB28; // validict build 24037537
 	inline uint64_t Class_SingletonComponent_MixerSnapshotManager__c = 0xFD37CF0; // validict build 24037537
 	// Diagnostic camera scan TypeInfo RVAs (only used when kCacheVerboseLogs is on)
 	inline uint64_t cam_typeinfo_singleton = 0xE2D5CC8;    // SingletonComponent<MainCamera>

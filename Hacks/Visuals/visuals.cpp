@@ -295,6 +295,12 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
         int s = ESP::DistanceBracketStyle;
         DrawBottomLine(std::string(brackets[s]) + std::to_string((int)Distance) + "M" + bClose[s], ESP::color::Distance);
     }
+    if (ESP::ShowVisibility && drawNameDist) {
+        if (cached.isVisible)
+            DrawBottomLine("VISIBLE", IM_COL32(80, 255, 80, 255));
+        else
+            DrawBottomLine("HIDDEN", IM_COL32(255, 80, 80, 255));
+    }
     if (ESP::Weapon && drawWeaponDist && !weaponName.empty()) {
         DrawBottomLine(weaponName, ESP::color::Weapon);
     }

@@ -101,6 +101,7 @@ namespace Config {
         SaveBool(h, "ESP.AmmoBar", ESP::AmmoBar);
         SaveBool(h, "ESP.MovementTrails", ESP::MovementTrails);
         SaveBool(h, "ESP.BulletTracers", ESP::BulletTracers);
+        SaveBool(h, "ESP.ShowVisibility", ESP::ShowVisibility);
         SaveFloat(h, "ESP.TracerThickness", ESP::TracerThickness);
         SaveBool(h, "ESP.TracerOutline", ESP::TracerOutline);
         SaveFloat(h, "ESP.EspFontSize", ESP::EspFontSize);
@@ -405,6 +406,11 @@ namespace Config {
         SaveBool(h, "AIM.TargetText", AIMBOT::TargetText);
         SaveBool(h, "AIM.TargetLineFromMuzzle", AIMBOT::TargetLineFromMuzzle);
         SaveFloat(h, "AIM.TargetLineThickness", AIMBOT::TargetLineThickness);
+        SaveBool(h, "AIM.HumanizeEnabled", AIMBOT::HumanizeEnabled);
+        SaveFloat(h, "AIM.JitterAmount", AIMBOT::JitterAmount);
+        SaveFloat(h, "AIM.OvershootAmount", AIMBOT::OvershootAmount);
+        SaveFloat(h, "AIM.SmoothingVariance", AIMBOT::SmoothingVariance);
+        SaveFloat(h, "AIM.MissProbability", AIMBOT::MissProbability);
         SaveInt(h, "AIM.TargetLineColorR", (int)(AIMBOT::color::TargetLine.Value.x * 255.f));
         SaveInt(h, "AIM.TargetLineColorG", (int)(AIMBOT::color::TargetLine.Value.y * 255.f));
         SaveInt(h, "AIM.TargetLineColorB", (int)(AIMBOT::color::TargetLine.Value.z * 255.f));
@@ -418,6 +424,9 @@ namespace Config {
         SaveFloat(h, "MISC.ZoomAmount", MISC::ZoomAmount);
         SaveBool(h, "MISC.RecoilEnabled", MISC::RecoilEnabled);
         SaveFloat(h, "MISC.RecoilModifier", MISC::RecoilModifier);
+        SaveBool(h, "MISC.RecoilVariance", MISC::RecoilVariance);
+        SaveFloat(h, "MISC.RecoilFloor", MISC::RecoilFloor);
+        SaveBool(h, "MISC.AntiAnybrain", MISC::AntiAnybrain);
         SaveBool(h, "MISC.ChangeBurst", MISC::ChangeBurst);
         SaveBool(h, "MISC.QuickBurst", MISC::QuickBurst);
         SaveFloat(h, "MISC.BURSTAMOUNT", MISC::BURSTAMOUNT);
@@ -629,6 +638,7 @@ namespace Config {
         LOAD_BOOL("ESP.AmmoBar", ESP::AmmoBar);
         LOAD_BOOL("ESP.MovementTrails", ESP::MovementTrails);
         LOAD_BOOL("ESP.BulletTracers", ESP::BulletTracers);
+        LOAD_BOOL("ESP.ShowVisibility", ESP::ShowVisibility);
         LOAD_FLOAT("ESP.TracerThickness", ESP::TracerThickness);
         LOAD_BOOL("ESP.TracerOutline", ESP::TracerOutline);
         LOAD_FLOAT("ESP.EspFontSize", ESP::EspFontSize);
@@ -933,6 +943,11 @@ namespace Config {
         LOAD_BOOL("AIM.TargetText", AIMBOT::TargetText);
         LOAD_BOOL("AIM.TargetLineFromMuzzle", AIMBOT::TargetLineFromMuzzle);
         LOAD_FLOAT("AIM.TargetLineThickness", AIMBOT::TargetLineThickness);
+        LOAD_BOOL("AIM.HumanizeEnabled", AIMBOT::HumanizeEnabled);
+        LOAD_FLOAT("AIM.JitterAmount", AIMBOT::JitterAmount);
+        LOAD_FLOAT("AIM.OvershootAmount", AIMBOT::OvershootAmount);
+        LOAD_FLOAT("AIM.SmoothingVariance", AIMBOT::SmoothingVariance);
+        LOAD_FLOAT("AIM.MissProbability", AIMBOT::MissProbability);
         if (lstrcmpA(key, "AIM.TargetLineColorR") == 0) { AIMBOT::color::TargetLine.Value.x = iv / 255.f; return; }
         if (lstrcmpA(key, "AIM.TargetLineColorG") == 0) { AIMBOT::color::TargetLine.Value.y = iv / 255.f; return; }
         if (lstrcmpA(key, "AIM.TargetLineColorB") == 0) { AIMBOT::color::TargetLine.Value.z = iv / 255.f; return; }
@@ -942,6 +957,9 @@ namespace Config {
 
         LOAD_BOOL("MISC.FovChanger", MISC::FovChanger);
         LOAD_FLOAT("MISC.FovAmount", MISC::FovAmount);
+        LOAD_BOOL("MISC.RecoilVariance", MISC::RecoilVariance);
+        LOAD_FLOAT("MISC.RecoilFloor", MISC::RecoilFloor);
+        LOAD_BOOL("MISC.AntiAnybrain", MISC::AntiAnybrain);
         LOAD_BOOL("MISC.Zoom", MISC::Zoom);
         LOAD_FLOAT("MISC.ZoomAmount", MISC::ZoomAmount);
         LOAD_BOOL("MISC.RecoilEnabled", MISC::RecoilEnabled);

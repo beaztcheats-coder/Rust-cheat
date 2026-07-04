@@ -36,7 +36,7 @@ exit /b 1
 :found_python
 call :log "[OK] Python: %PYTHON_CMD%"
 
-REM === Check that auto_update.bat was run first ===
+REM === Check that getnewoffsets.bat was run first ===
 set MISSING_FILES=0
 if not exist "output\offsets_patch.txt" set /a MISSING_FILES+=1
 if not exist "output\sdk_decrypt_patch.txt" set /a MISSING_FILES+=1
@@ -61,8 +61,28 @@ pause
 exit /b 1
 
 :start_steps
+REM === Step 0: Create known-good backup BEFORE patching ===
+call :log "[0/5] Creating pre-update backup of source files..."
+set "BACKUP_DIR=output\pre_update_backup"
+if not exist "%BACKUP_DIR%" mkdir "%BACKUP_DIR%"
+for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
+set "TIMESTAMP=%dt:~0,8%_%dt:~8,6%"
+set "BACKUP_STAMP=%BACKUP_DIR%\%TIMESTAMP%"
+mkdir "%BACKUP_STAMP%" 2>nul
+copy /Y "%~dp0..\..\offsets.hpp" "%BACKUP_STAMP%\offsets.hpp" >nul 2>&1
+copy /Y "%~dp0..\..\sdk.hpp" "%BACKUP_STAMP%\sdk.hpp" >nul 2>&1
+copy /Y "%~dp0..\..\OffsetManager.hpp" "%BACKUP_STAMP%\OffsetManager.hpp" >nul 2>&1
+call :log "[OK] Pre-update backup saved to %BACKUP_STAMP%"
+echo.
+echo   Pre-update backup: %BACKUP_STAMP%
+echo   If the update breaks something, restore with:
+echo     copy /Y "%BACKUP_STAMP%\offsets.hpp" "E:\github\Rust-cheat\offsets.hpp"
+echo     copy /Y "%BACKUP_STAMP%\sdk.hpp" "E:\github\Rust-cheat\sdk.hpp"
+echo     copy /Y "%BACKUP_STAMP%\OffsetManager.hpp" "E:\github\Rust-cheat\OffsetManager.hpp"
+echo.
+
 REM === Step 1: Enable auto_apply temporarily ===
-call :log "[1/4] Enabling auto-apply in config.json..."
+call :log "[1/5] Enabling auto-apply in config.json..."
 %PYTHON_CMD% -c "import json; c=json.load(open('config.json')); c['auto_apply']=True; json.dump(c, open('config.json','w'), indent=2)" > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
@@ -70,7 +90,7 @@ if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if not "%RC%"=="0" goto step1_failed
 
 REM === Step 2: Apply patches ===
-call :log "[2/4] Applying patches..."
+call :log "[2/5] Applying patches..."
 %PYTHON_CMD% apply_patches.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
@@ -78,7 +98,7 @@ if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if not "%RC%"=="0" call :log "[WARN] apply_patches.py returned RC=%RC% (continuing; build may fail)."
 
 REM === Step 3: Disable auto_apply ===
-call :log "[3/4] Disabling auto-apply in config.json..."
+call :log "[3/5] Disabling auto-apply in config.json..."
 %PYTHON_CMD% -c "import json; c=json.load(open('config.json')); c['auto_apply']=False; json.dump(c, open('config.json','w'), indent=2)" > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
@@ -86,8 +106,8 @@ if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if not "%RC%"=="0" call :log "[WARN] Could not disable auto_apply (RC=%RC%). Edit config.json manually."
 
 REM === Step 4: Build all flavors ===
-call :log "[4/4] Building all 3 cheat flavors (this may take a while)..."
-%PYTHON_CMD% build_cheat.py "Rust Prv Ext" "Rust Prv Ext_debug" "bomzarust" > "%STEPLOG%" 2>&1
+call :log "[4/5] Building all 4 cheat flavors (this may take a while)..."
+%PYTHON_CMD% build_cheat.py "Rust Prv Ext" "Rust Prv Ext_debug" "bomzarust" "bettercheats" > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
@@ -96,6 +116,7 @@ if not "%RC%"=="0" goto build_failed
 call :log "[OK] All builds succeeded."
 if exist "output\build_log_Rust Prv Ext.txt" type "output\build_log_Rust Prv Ext.txt" >> "%LOG%"
 if exist "output\build_log_bomzarust.txt" type "output\build_log_bomzarust.txt" >> "%LOG%"
+if exist "output\build_log_bettercheats.txt" type "output\build_log_bettercheats.txt" >> "%LOG%"
 
 REM === Copy mesh data for distribution ===
 if exist "output\rust_mesh.tri" (
@@ -115,6 +136,7 @@ echo   Cheat DLLs:
 echo     x64\Release\Rust Prv Ext.dll (production)
 echo     x64\Release\Rust Prv Ext_debug.dll (debug - auto-logging)
 echo     x64\Release\bomzarust.dll (bomza)
+echo     x64\Release\bettercheats.dll (better cheats)
 if exist "output\rust_mesh.tri" (
     echo   Mesh data:
 echo     rust_mesh.tri ^(copy alongside DLL for VisCheck^)
@@ -163,11 +185,13 @@ for /f "delims=" %%d in ('dir /b /ad /o-n backups\') do (
 call :log "[ERROR] No backup found - manual fix required."
 echo No backup found - manual fix required.
 :restored
-call :log "[ERROR] Update FAILED. Paste output\opencode_update_prompt.txt into opencode for manual fix."
+call :log "[ERROR] Update FAILED. Pre-update backup also available at: %BACKUP_STAMP%"
 echo.
 echo ================================================================
-echo   BUILD FAILED. Backup restored (if any).
-echo   Paste output\opencode_update_prompt.txt into opencode for a manual fix.
+echo   BUILD FAILED. Backup restored.
+echo   If restore didn't work, use pre-update backup:
+echo     %BACKUP_STAMP%
+echo   Or paste output\opencode_update_prompt.txt into opencode for a manual fix.
 echo   Full log: %CD%\%LOG%
 echo ================================================================
 pause

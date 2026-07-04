@@ -141,7 +141,7 @@ bool RunEmbeddedSpoofer()
     s_status = {};
     s_status.attempted = true;
 
-#if defined(VSHARP) || defined(BOMZA)
+#if defined(VSHARP) || defined(BOMZA) || defined(BETTERCHEATS)
     const char* spoofHeader = "HWID Spoofer";
 #else
     const char* spoofHeader = "BEAZT Spoofer";
@@ -168,14 +168,14 @@ bool RunEmbeddedSpoofer()
     }
 
     spoof_log_open();
-#if defined(VSHARP) || defined(BOMZA)
+#if defined(VSHARP) || defined(BOMZA) || defined(BETTERCHEATS)
     spoof_log_write("=== HWID Spoofer ===\r\n");
 #else
     spoof_log_write("=== BEAZT Embedded Spoofer ===\r\n");
 #endif
 
     spoof_con("========================================\r\n");
-#if defined(VSHARP) || defined(BOMZA)
+#if defined(VSHARP) || defined(BOMZA) || defined(BETTERCHEATS)
     spoof_con("  HWID Spoofer (embedded)\r\n");
 #else
     spoof_con("  BEAZT HWID Spoofer (embedded)\r\n");

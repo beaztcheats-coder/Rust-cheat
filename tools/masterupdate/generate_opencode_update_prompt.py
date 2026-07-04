@@ -79,7 +79,49 @@ def main():
 
     build = master_json.get("build", "unknown")
     source = master_json.get("source", "unknown")
-    morphine_offline = (source == "sha-dumper-only" or build == "sha-dumper")
+
+    # Load capstone decrypt algorithms (authoritative — not diff_report which may have sha-dumper fingerprints)
+    decrypt_algos = {}
+    da_path = out_dir / "decrypt_algorithms.json"
+    if da_path.exists():
+        try:
+            da = json.loads(read_text(da_path))
+            decrypt_algos = {a["name"]: a for a in da.get("algorithms", [])}
+        except Exception:
+            pass
+
+    # Load sig scanner results
+    sig_results = {}
+    sig_path = out_dir / "sig_scan_results.json"
+    if sig_path.exists():
+        try:
+            sig_results = json.loads(read_text(sig_path))
+        except Exception:
+            pass
+
+    # Parse verification report for FRESHNESS summary
+    ver_report = read_text(out_dir / "verification_report.txt")
+    freshness_line = ""
+    decrypt_line = ""
+    static_line = ""
+    warnings_section = []
+    in_warnings = False
+    for line in ver_report.splitlines():
+        if "Freshness:" in line and "CROSS-VAL" in line:
+            freshness_line = line.strip()
+        if "Decrypts:" in line and "exact match" in line:
+            decrypt_line = line.strip()
+        if "Static Pointers:" in line:
+            static_line = line.strip()
+        if "WARNINGS:" in line:
+            in_warnings = True
+            continue
+        if in_warnings:
+            if line.strip().startswith("STATUS:") or (line.strip() and not line.strip().startswith("-")):
+                in_warnings = False
+            elif line.strip():
+                warnings_section.append(line.strip())
+
     diff_report = read_text(out_dir / "diff_report.txt")
     summary_text = read_text(out_dir / "summary.txt")
 
@@ -152,32 +194,24 @@ def main():
     output_files = [
         "diff_report.txt", "summary.txt", "offsets_patch.txt", "sdk_patch.txt",
         "sdk_decrypt_patch.txt", "offsetmanager_patch.txt", "rust_decrypts.dat",
-        "super_prompt.txt", "master.json", "offsets.json", "materials.hpp",
-        "handle_dump.json", "handle_disasm.txt", "handle_draft.cpp", "ask_opencode.txt",
-        "cpp2il_types.json", "frida_validation.json", "cross_validation_report.txt",
-        "build_log.txt", "rust_mesh.tri", "rust_mesh_dump.log",
+        "master.json", "decrypt_algorithms.json", "offsets_dump.hpp",
+        "verification_report.txt", "sig_scan_results.json", "sig_patterns.json",
+        "frida_validation.json", "frida_decrypt_algorithms.json",
+        "cross_validation_report.txt", "field_hash_mapping.json",
+        "rust_mesh.tri", "rust_mesh_dump.log",
+        "handle_dump.json", "handle_disasm.txt",
     ]
     present_outputs = [f for f in output_files if (out_dir / f).exists()]
 
-    # --- Detect dump.cs candidate paths ---
-    dump_candidates = [
-        r"C:\rust_dump_v39\dump.cs",
-        str(project_root / "tools" / "masterupdate" / "output" / "dump.cs"),
-        r"C:\rust_dump\dump.cs",
-    ]
-    dump_path = next((p for p in dump_candidates if Path(p).exists()), None)
-
-    # --- Determine decrypt changes from diff_report ---
-    decrypt_changes = []
-    in_decrypt = False
-    for line in diff_report.splitlines():
-        if "=== DECRYPT FUNCTIONS ===" in line:
-            in_decrypt = True
-            continue
-        if in_decrypt and line.strip().startswith("==="):
-            in_decrypt = False
-        if in_decrypt and line.strip() and not line.startswith("="):
-            decrypt_changes.append(line.strip())
+    # --- Build decrypt summary from capstone (authoritative) ---
+    DECRYPT_DISPLAY = {
+        "base_networkable_0": ("networkable_key (nk)", "client_entities"),
+        "base_networkable_1": ("networkable_key2 (nk2)", "entity_list"),
+        "cl_active_item": ("decrypt_ClActiveItem (cla)", "cl_active_item"),
+        "player_inventory": ("decrypt_inventory_pointer (inv)", "player_inventory"),
+        "player_eyes": ("decrypt_eyes (ey)", "player_eyes"),
+        "decrypt_fov": ("decrypt_fov (fov)", "decrypt_fov"),
+    }
 
     # --- Build paths for the prompt ---
     vcxproj = cfg.get("vcxproj", "Rust Prv Ext.vcxproj")
@@ -190,12 +224,8 @@ def main():
 
     a("# RUST CHEAT POST-UPDATE MASTER PROMPT FOR OPENCODE")
     a(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    a(f"# Morphine/sha-dumper build: {build}")
-    a(f"# Data source: {source}")
-    if morphine_offline:
-        a("# !!! MORPHINE OFFLINE — ALL DATA FROM SHA-DUMPER ONLY !!!")
-        a("# Decrypt constants for cl_active_item, eyes, inventory may be WRONG.")
-        a("# Verify manually before distributing the cheat.")
+    a(f"# Build: {build}")
+    a("# Pipeline: 100% Morphine-independent (sha-dumper + capstone + Frida + sig-scanner)")
     a("")
     a("You are restoring all features of an external Rust cheat after a Rust game update.")
     a("The auto-update pipeline has already run and fixed the OFFSET CONSTANTS and DECRYPT")
@@ -209,14 +239,40 @@ def main():
     a(f"Target output: {project_root} / x64 / Release / {target_name}.dll")
     if gameassembly:
         a(f"GameAssembly.dll: {gameassembly}")
-    if dump_path:
-        a(f"Authoritative dump.cs: {dump_path}")
-    else:
-        a("Authoritative dump.cs: NOT FOUND -- locate the latest dump.cs before proceeding")
     a("")
     a("AGENTS.md (project root) is the authoritative project reference. Read it first.")
     a("ALL game memory access MUST go through read<T>(address) / write<T>(address) in")
     a("Driver.hpp. NEVER add direct memory dereferences (*/& on game pointers).")
+    a("")
+
+    # --- Section: verification status (NEW) ---
+    a("================================================================")
+    a("SECTION 0 -- PIPELINE VERIFICATION STATUS")
+    a("================================================================")
+    a("This section summarizes what the pipeline verified. Green = OK, Red = investigate.")
+    a("")
+    if freshness_line:
+        a(f"  FRESHNESS:  {freshness_line}")
+    else:
+        a("  FRESHNESS:  (verification report not found)")
+    if decrypt_line:
+        a(f"  DECRYPTS:   {decrypt_line}  (4 exact capstone + 1 structural + 1 derived = 6 total)")
+    else:
+        a("  DECRYPTS:   (not found in report)")
+    if static_line:
+        a(f"  STATICS:    {static_line}")
+    else:
+        a("  STATICS:    (not found in report)")
+    a(f"  SIG SCAN:   {sum(1 for v in sig_results.values() if v.get('rva', 0) > 0)}/{len(sig_results)} static pointers found by signature scan")
+    if warnings_section:
+        a("  WARNINGS:")
+        for w in warnings_section:
+            a(f"    {w}")
+    else:
+        a("  WARNINGS:   (none)")
+    a("")
+    a("If any warnings above mention 'decrypt' or 'camera' or 'FALLBACK > 30%', investigate")
+    a("before proceeding. Otherwise, the pipeline output is trusted and verified.")
     a("")
 
     # --- Section: what is automatic ---

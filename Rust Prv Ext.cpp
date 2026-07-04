@@ -7,13 +7,15 @@
 #include <chrono>
 #include <atomic>
 #include <conio.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
 #include "Logger.hpp"
 #include "Config.hpp"
 #include "Overlay.hpp"
 #include "OffsetManager.hpp"
 #include "RuntimePaths.hpp"
 
-#ifndef BOMZA
+#if !defined(BOMZA) && !defined(BETTERCHEATS)
 #include "Hacks/Misc/spoofer.hpp"
 #include "Hacks/Misc/cleaner.hpp"
 #endif
@@ -223,11 +225,28 @@ DWORD WINAPI MainThread(LPVOID lpReserved)
 
 void MainThreadImpl()
 {
-    // Diagnostic: write to file BEFORE console creation, so we know the DLL loaded even if console fails
+    timeBeginPeriod(1);
+
+    // RAW DIAGNOSTIC: write to %TEMP% IMMEDIATELY — guaranteed writable
+    {
+        char tempPath[MAX_PATH];
+        GetTempPathA(MAX_PATH, tempPath);
+        strcat_s(tempPath, "cheat_debug.log");
+        HANDLE hDiag = CreateFileA(tempPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (hDiag != INVALID_HANDLE_VALUE) {
+            std::string dllDir = RuntimePaths::DllDirectory();
+            std::string msg = "[BOOT] DLL loaded. DllDir=" + dllDir + " TempLog=" + std::string(tempPath) + "\r\n";
+            DWORD written;
+            WriteFile(hDiag, msg.c_str(), (DWORD)msg.size(), &written, NULL);
+            CloseHandle(hDiag);
+        }
+    }
+
+    // Diagnostic marker in DLL directory
     {
         HANDLE hDiag = CreateFileA(RuntimePaths::DiagnosticMarkerPath(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (hDiag != INVALID_HANDLE_VALUE) {
-            const char* msg = "DLL loaded — MainThreadImpl started\n";
+            const char* msg = "DLL loaded\n";
             DWORD written;
             WriteFile(hDiag, msg, (DWORD)strlen(msg), &written, NULL);
             CloseHandle(hDiag);
@@ -244,6 +263,9 @@ void MainThreadImpl()
 #ifdef BOMZA
         printf("         B O M Z A\n");
         printf("    Bomza Cheat  -  External\n");
+#elif defined(BETTERCHEATS)
+        printf("      B E T T E R   C H E A T S\n");
+        printf("    Rust External  -  Better Cheats\n");
 #else
         printf("       T H E   B E A Z T   V 3\n");
         printf("    Rust Private  -  External Cheat\n");
@@ -268,16 +290,20 @@ void MainThreadImpl()
                     for (char& c : lower) c = (char)tolower((unsigned char)c);
                     if (lower.find("_debug") != std::string::npos) {
                         g_UpdateLoggingEnabled = true;
+                        // Create marker file so logging persists across reinjections
+                        HANDLE hMarker = CreateFileA("C:\\rust_debug_enabled.txt", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                        if (hMarker != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(hMarker, "1", 1, &w, NULL); CloseHandle(hMarker); }
                     }
                 }
             }
         }
+        // For debug DLLs: force logging on (runtime check, not compile-time)
         Logger::Get().Init(RuntimePaths::DefaultLogPath());
         LOG("DLL injected, MainThread started");
         LOG("Build: %s %s", __DATE__, __TIME__);
         LOG("Logging: %s", g_UpdateLoggingEnabled ? "ENABLED" : "disabled");
 
-#ifndef BOMZA
+#if !defined(BOMZA) && !defined(BETTERCHEATS)
         // === BEAZT STARTUP PROMPT: Spoof / Clean / Play ===
         {
             SafeCLS();
@@ -297,6 +323,8 @@ void MainThreadImpl()
             if (choice == '1') {
                 LOG("Startup: user chose Spoof and Play");
                 RunEmbeddedSpoofer();
+                ConsolePrint("\n  Spoof complete. Press any key to continue...\n");
+                SafePause();
             }
             else if (choice == '2') {
                 LOG("Startup: user chose Clean after detection");
@@ -433,59 +461,75 @@ void MainThreadImpl()
             ConsolePrintHex("CR3", Drv->process_cr3);
             LOG_HEX("process_cr3", Drv->process_cr3);
 
+            // Log decrypt constants for diagnostics
+            LOG("DecryptCfg: nk_rol=0x%X nk_sub=0x%X nk_xor=0x%X nk_add=0x%X", OffsetManager::DecryptCfg.nk_rol, OffsetManager::DecryptCfg.nk_sub, OffsetManager::DecryptCfg.nk_xor, OffsetManager::DecryptCfg.nk_add);
+            LOG("DecryptCfg: nk2_rol=0x%X nk2_xor=0x%X nk2_rol_2=0x%X nk2_xor_2=0x%X", OffsetManager::DecryptCfg.nk2_rol, OffsetManager::DecryptCfg.nk2_xor, OffsetManager::DecryptCfg.nk2_rol_2, OffsetManager::DecryptCfg.nk2_xor_2);
+            LOG("DecryptCfg: fov_xor=0x%X fov_add=0x%X fov_sub=0x%X", OffsetManager::DecryptCfg.fov_xor, OffsetManager::DecryptCfg.fov_add, OffsetManager::DecryptCfg.fov_sub);
+            LOG("Offsets: bn_ptr=0x%I64X cam_ptr=0x%I64X wrapper=0x%I64X entity=0x%I64X",
+                offsets::basenetworkable_pointer, offsets::camera_pointer,
+                offsets::BaseNetworkable::wrapper_class, offsets::BaseNetworkable::entity);
+
             LOG("Init complete, starting cache + overlay...");
             ConsolePrint("Starting... console will hide.\n");
             Sleep(1000);
 
             ShowWindow(GetConsoleWindow(), SW_HIDE);
 
-        // Self-delete: spawn hidden batch that removes DLL + ALL trace files after DLL unloads
+        // Self-delete: ONLY for production builds — debug keeps all files for analysis
         {
             char selfPath[MAX_PATH] = {};
-            HMODULE hSelf = nullptr;
+            HMODULE selfModule = nullptr;
             GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                (LPCSTR)&selfPath, &hSelf);
-            GetModuleFileNameA(hSelf, selfPath, sizeof(selfPath));
+                (LPCSTR)&selfPath, &selfModule);
+            GetModuleFileNameA(selfModule, selfPath, sizeof(selfPath));
 
-            // Extract DLL directory for trace file cleanup
-            std::string dllDir = RuntimePaths::DllDirectory();
+            // Check if this is a debug DLL
+            std::string dllCheck(selfPath);
+            for (char& c : dllCheck) c = (char)tolower((unsigned char)c);
+            bool isDebug = dllCheck.find("_debug") != std::string::npos;
 
-            char batPath[MAX_PATH];
-            wsprintfA(batPath, "%s\\del.bat", getenv("TEMP") ? getenv("TEMP") : "C:\\Windows\\Temp");
+            if (!isDebug) {
+                // Production: spawn hidden batch that removes DLL + trace files after unloads
+                std::string dllDir = RuntimePaths::DllDirectory();
 
-            HANDLE hBat = CreateFileA(batPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (hBat != INVALID_HANDLE_VALUE) {
-                std::string bat;
-                bat += "@echo off\r\n";
-                bat += ":retry\r\n";
-                bat += "timeout /t 1 /nobreak >nul\r\n";
-                bat += "del /f /q \"" + std::string(selfPath) + "\" 2>nul\r\n";
-                bat += "if exist \"" + std::string(selfPath) + "\" goto retry\r\n";
-                // Delete all trace files from DLL directory
-                bat += "del /f /q \"" + dllDir + "rust_mesh.tri\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "rust_decrypts.dat\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "rustcfg_*.dat\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "cheat_debug_*.log\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "cheat_debug.log\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "cheat_dll_loaded.txt\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "rust_debug_enabled.txt\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "spoofer_debug.log\" 2>nul\r\n";
-                bat += "del /f /q \"" + dllDir + "spoof_seed.dat\" 2>nul\r\n";
-                bat += "del /f /q \"%~f0\" 2>nul\r\n";
-                bat += "exit\r\n";
-                DWORD written;
-                WriteFile(hBat, bat.c_str(), (DWORD)bat.size(), &written, NULL);
-                CloseHandle(hBat);
+                char batPath[MAX_PATH];
+                wsprintfA(batPath, "%s\\del.bat", getenv("TEMP") ? getenv("TEMP") : "C:\\Windows\\Temp");
 
-                STARTUPINFOA si = { sizeof(si) };
-                PROCESS_INFORMATION pi = {};
-                si.dwFlags = STARTF_USESHOWWINDOW;
-                si.wShowWindow = SW_HIDE;
-                char cmdLine[512];
-                wsprintfA(cmdLine, "cmd.exe /c \"%s\"", batPath);
-                CreateProcessA(NULL, cmdLine, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
-                if (pi.hProcess) CloseHandle(pi.hProcess);
-                if (pi.hThread) CloseHandle(pi.hThread);
+                HANDLE hBat = CreateFileA(batPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (hBat != INVALID_HANDLE_VALUE) {
+                    std::string bat;
+                    bat += "@echo off\r\n";
+                    bat += ":retry\r\n";
+                    bat += "timeout /t 1 /nobreak >nul\r\n";
+                    bat += "del /f /q \"" + std::string(selfPath) + "\" 2>nul\r\n";
+                    bat += "if exist \"" + std::string(selfPath) + "\" goto retry\r\n";
+                    bat += "del /f /q \"" + dllDir + "rust_mesh.tri\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "rust_decrypts.dat\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "rustcfg_*.dat\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "cheat_debug_*.log\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "cheat_debug.log\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "cheat_dll_loaded.txt\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "rust_debug_enabled.txt\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "spoofer_debug.log\" 2>nul\r\n";
+                    bat += "del /f /q \"" + dllDir + "spoof_seed.dat\" 2>nul\r\n";
+                    bat += "del /f /q \"%~f0\" 2>nul\r\n";
+                    bat += "exit\r\n";
+                    DWORD written;
+                    WriteFile(hBat, bat.c_str(), (DWORD)bat.size(), &written, NULL);
+                    CloseHandle(hBat);
+
+                    STARTUPINFOA si = { sizeof(si) };
+                    PROCESS_INFORMATION pi = {};
+                    si.dwFlags = STARTF_USESHOWWINDOW;
+                    si.wShowWindow = SW_HIDE;
+                    char cmdLine[512];
+                    wsprintfA(cmdLine, "cmd.exe /c \"%s\"", batPath);
+                    CreateProcessA(NULL, cmdLine, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
+                    if (pi.hProcess) CloseHandle(pi.hProcess);
+                    if (pi.hThread) CloseHandle(pi.hThread);
+                }
+            } else {
+                LOG("DEBUG build: self-delete batch SKIPPED — all files preserved");
             }
         }
 
@@ -493,6 +537,30 @@ void MainThreadImpl()
         StartFastRefreshWorker("initial");
         StartSkeletonWorker("initial");
         StartCacheWatchdog();
+
+        // Centralized process-death watchdog — checks IsProcessAlive every 100ms.
+        // This is the FASTEST detection path. When Rust exits, this thread
+        // immediately blocks all IOCTLs (g_process_dead + ioctl_blocked) to
+        // prevent worker threads from sending IOCTLs with stale CR3 → BSOD.
+        std::thread([]() {
+            __try {
+                while (!MISC::ShutdownRequested) {
+                    Sleep(100);
+                    if (Drv && Drv->processid) {
+                        if (!Drv->IsProcessAlive()) {
+                            LOG("WATCHDOG: RustClient.exe died — blocking all IOCTLs to prevent BSOD");
+                            g_process_dead.store(true, std::memory_order_seq_cst);
+                            Drv->ioctl_blocked.store(true, std::memory_order_seq_cst);
+                            MISC::ShutdownRequested = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                LOG("CRASH in process-death watchdog! Exception code: 0x%X", GetExceptionCode());
+            }
+        }).detach();
 
         // Aimbot + misc background threads (off the render path)
         std::thread([]() {
@@ -503,11 +571,12 @@ void MainThreadImpl()
                         && g_BnStableCycles.load(std::memory_order_relaxed) >= 3) {
                         hx->do_misc();
                     }
-                    if ((++miscCycle % 200) == 0 && Drv) {
+                    if ((++miscCycle % 20) == 0 && Drv) {
                         static int miscProcMiss = 0;
                         if (!Drv->find_process(L"RustClient.exe")) {
                             if (++miscProcMiss >= 3) {
                                 LOG("MISC: RustClient.exe no longer running — shutting down to prevent BSOD");
+                                g_process_dead.store(true, std::memory_order_relaxed);
                                 MISC::ShutdownRequested = true;
                                 break;
                             }
@@ -532,11 +601,12 @@ void MainThreadImpl()
                         && (!SETTINGS::BattleMode || BATTLE::Aimbot)) {
                         aim->do_aimbot();
                     }
-                    if ((++aimCycle % 400) == 0 && Drv) {
+                    if ((++aimCycle % 20) == 0 && Drv) {
                         static int aimProcMiss = 0;
                         if (!Drv->find_process(L"RustClient.exe")) {
                             if (++aimProcMiss >= 3) {
                                 LOG("AIMBOT: RustClient.exe no longer running — shutting down to prevent BSOD");
+                                g_process_dead.store(true, std::memory_order_relaxed);
                                 MISC::ShutdownRequested = true;
                                 break;
                             }
@@ -560,6 +630,7 @@ void MainThreadImpl()
         LOG("Cheat shutting down — restoring game memory + cleaning traces");
 
         // 0. Immediately block ALL IOCTLs — stops worker threads from sending driver requests
+        g_shutting_down.store(true, std::memory_order_relaxed);
         if (Drv) Drv->ioctl_blocked.store(true, std::memory_order_relaxed);
 
         // 1. Signal all worker threads to stop BEFORE final do_misc (prevents concurrent do_misc race)
@@ -583,56 +654,51 @@ void MainThreadImpl()
         // 3. Wait for ALL workers to stop (check all heartbeats)
         {
             ULONGLONG startWait = GetTickCount64();
-            while (GetTickCount64() - startWait < 3000) {
+            while (GetTickCount64() - startWait < 10000) {
                 ULONGLONG now = GetTickCount64();
                 ULONGLONG hb = g_CacheHeartbeatMs.load(std::memory_order_acquire);
                 ULONGLONG fhb = g_FastRefreshHeartbeatMs.load(std::memory_order_acquire);
                 ULONGLONG shb = g_SkeletonHeartbeatMs.load(std::memory_order_acquire);
-                bool cacheIdle = (now - hb > 1500);
-                bool fastIdle = (now - fhb > 500);
-                bool skelIdle = (now - shb > 500);
+                bool cacheIdle = (now - hb > 2000);
+                bool fastIdle = (now - fhb > 1000);
+                bool skelIdle = (now - shb > 1000);
                 if (cacheIdle && fastIdle && skelIdle) break;
                 Sleep(100);
             }
         }
-        Sleep(200); // extra safety margin for detached threads to fully exit
+        Sleep(500); // extra safety margin for detached threads to fully exit
 
-        // 4. Close driver handle — null pointer FIRST so workers stop referencing it
-        DriverInterface* oldDrv = (DriverInterface*)InterlockedExchangePointer((volatile PVOID*)&Drv, nullptr);
-        if (oldDrv) { delete oldDrv; }
+        // 4. Null the Drv pointer so no new IOCTLs are attempted.
+        // DO NOT delete Drv or CloseHandle — if an IOCTL is still in-flight
+        // (worker didn't fully stop within the timeout), deleting the object
+        // causes use-after-free → BSOD. The process is about to exit anyway,
+        // so let Windows clean up the driver handle on process termination.
+        Drv = nullptr;
 
-        // 5. Delete ALL trace files (production: full cleanup; debug: keep logs for analysis)
-        std::string dllDir = RuntimePaths::DllDirectory();
-        auto delFile = [&](const char* filename) {
-            std::string p = dllDir + filename;
-            DeleteFileA(p.c_str());
-        };
-        delFile("rust_decrypts.dat");
-        delFile("cheat_dll_loaded.txt");
-        delFile("rust_debug_enabled.txt");
-        delFile("spoofer_debug.log");
-        delFile("spoof_seed.dat");
-        delFile("rustcfg.dat");
-        delFile("rustcfg_bomza.dat");
-        delFile("rust_mesh.tri");
-        // Delete named configs (wildcard via DLL dir)
-        std::string wildcard = dllDir + "rustcfg_*.dat";
-        WIN32_FIND_DATAA fd;
-        HANDLE hFind = FindFirstFileA(wildcard.c_str(), &fd);
-        if (hFind != INVALID_HANDLE_VALUE) {
-            do {
-                std::string fp = dllDir + fd.cFileName;
-                DeleteFileA(fp.c_str());
-            } while (FindNextFileA(hFind, &fd));
-            FindClose(hFind);
-        }
-        // Production builds: delete all log files. Debug builds: keep logs for diagnostics.
+        // 5. Delete trace files — ONLY for production builds. Debug keeps everything.
         if (!g_UpdateLoggingEnabled) {
+            std::string dllDir = RuntimePaths::DllDirectory();
+            auto delFile = [&](const char* filename) {
+                std::string p = dllDir + filename;
+                DeleteFileA(p.c_str());
+            };
+            delFile("rust_decrypts.dat");
+            delFile("cheat_dll_loaded.txt");
+            delFile("rust_debug_enabled.txt");
+            delFile("spoofer_debug.log");
+            delFile("spoof_seed.dat");
+            // NOTE: Do NOT delete config files (rustcfg*.dat) — user settings must persist
+            delFile("rust_mesh.tri");
             delFile("cheat_debug.log");
             delFile("cheat_debug_bomza.log");
+            delFile("cheat_debug_bc.log");
+            LOG("Production cleanup: trace files deleted (configs preserved)");
+        } else {
+            LOG("DEBUG build: no trace files deleted — all preserved for analysis");
         }
 
         LOG("Shutdown complete — DLL unloading");
+        timeEndPeriod(1);
 
         // 6. Unload the DLL from the host process
         // The self-delete batch file (already running) will delete the DLL file

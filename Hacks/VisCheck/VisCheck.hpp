@@ -75,7 +75,7 @@ std::vector<T> read_vec(uint64_t address, uint32_t count) {
     uint32_t bytes = count * (uint32_t)sizeof(T);
     if (g_UseInternalReads && ReadMemory_Internal((PVOID)address, result.data(), bytes))
         return result;
-    if (Drv && !Drv->ioctl_blocked)
+    if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed))
         Drv->ReadMemory_ACE((PVOID)address, result.data(), bytes);
     return result;
 }

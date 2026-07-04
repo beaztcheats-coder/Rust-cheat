@@ -485,6 +485,9 @@ struct Vector4 {
 	float x, y, z, w;
 };
 
+inline int g_ScreenW = 0;
+inline int g_ScreenH = 0;
+
 inline Vector2 WorldToScreen(const Vector3& entity_position, Matrix4x4 view_matrix)
 {
 	Vector3 trans_vec{ view_matrix._14, view_matrix._24, view_matrix._34 };
@@ -498,11 +501,8 @@ inline Vector2 WorldToScreen(const Vector3& entity_position, Matrix4x4 view_matr
 	float y = up_vec.Dot(entity_position) + view_matrix._42;
 	float x = right_vec.Dot(entity_position) + view_matrix._41;
 
-	RECT rc = {0};
-	HWND hw = FindWindowA("onGuiClass", nullptr);
-	if (hw) GetClientRect(hw, &rc);
-	int screenW = (rc.right > 0) ? rc.right : GetSystemMetrics(SM_CXSCREEN);
-	int screenH = (rc.bottom > 0) ? rc.bottom : GetSystemMetrics(SM_CYSCREEN);
+	int screenW = g_ScreenW > 0 ? g_ScreenW : GetSystemMetrics(SM_CXSCREEN);
+	int screenH = g_ScreenH > 0 ? g_ScreenH : GetSystemMetrics(SM_CYSCREEN);
 
 	Vector2 Screen_position = Vector2((screenW / 2.f) * (1.f + x / w), (screenH / 2.f) * (1.f - y / w));
 	return Screen_position;

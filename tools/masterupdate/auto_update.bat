@@ -39,6 +39,30 @@ exit /b 1
 :found_python
 call :log "[OK] Python: %PYTHON_CMD%"
 
+REM === Ask user about Morphine ===
+echo.
+echo ================================================================
+echo   MORPHINE OFFSET SOURCE
+echo ================================================================
+echo   Has Morphine updated for the new Rust build?
+echo.
+echo   [1] Yes - Fetch Morphine offsets (recommended)
+echo   [2] No  - Skip Morphine, use sha-dumper + Frida only
+echo.
+echo   If Morphine has not updated yet, choose [2].
+echo   You can re-run this script later with [1] once they update.
+echo ================================================================
+echo.
+choice /C 12 /N /M "Select option [1 or 2]: "
+if errorlevel 2 (
+    call :log "[USER] Morphine skipped - using sha-dumper + Frida only"
+    set MORPHINE_OK=0
+    if not exist "output" mkdir output
+    %PYTHON_CMD% -c "import json; json.dump({'offsets':{},'structs':{},'klass_rvas':{},'namespaces':{},'decrypt_functions':{},'decrypts':{},'materials':{}}, open('output/master.json','w'), indent=2)"
+    call :log "[OK] Empty master.json created for downstream scripts"
+    goto step3
+)
+
 REM === Step 1: Fetch Morphine offsets ===
 call :log "[1/12] Fetching Morphine offsets..."
 %PYTHON_CMD% fetch_morphine.py > "%STEPLOG%" 2>&1
@@ -161,15 +185,48 @@ if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if not "%RC%"=="0" call :log "[WARN] Il2CppInspector parse had issues (RC=%RC%) - continuing."
 
 REM === Step 6: Run Frida validation (100% accurate runtime dump) ===
-call :log "[6/12] Running Frida runtime dumper..."
+call :log "[6/13] Running Frida runtime dumper..."
 %PYTHON_CMD% run_frida_validation.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if not "%RC%"=="0" call :log "[WARN] Frida dump had issues (RC=%RC%) - sha-dumper/Morphine data still available."
 
+REM === Step 6b: Run Frida decrypt scanner (extract decrypt algorithms from game memory) ===
+call :log "[6b/13] Running Frida decrypt algorithm scanner..."
+%PYTHON_CMD% frida_decrypt_scan.py > "%STEPLOG%" 2>&1
+set "RC=%errorlevel%"
+if exist "%STEPLOG%" type "%STEPLOG%"
+if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
+if exist "output\frida_decrypt_algorithms.json" call :log "[OK] Decrypt algorithms extracted to frida_decrypt_algorithms.json"
+if not "%RC%"=="0" call :log "[WARN] Decrypt scan had issues (RC=%RC%) - sha-dumper/Morphine decrypts still available."
+
+REM === Step 6c: Generate offset patches from Frida data (100% accurate field offsets) ===
+call :log "[6c/13] Generating Frida offset patches..."
+%PYTHON_CMD% apply_frida_offsets.py > "%STEPLOG%" 2>&1
+set "RC=%errorlevel%"
+if exist "%STEPLOG%" type "%STEPLOG%"
+if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
+if exist "output\frida_offset_patches.txt" call :log "[OK] Frida offset patches generated"
+if not "%RC%"=="0" call :log "[WARN] Frida offset patch generation had issues (RC=%RC%)."
+
+REM === Step 6d: Apply hash mapping (Morphine-independent field resolution) ===
+call :log "[6d/13] Applying Frida hash mapping..."
+if not exist "output\field_hash_mapping.json" (
+    call :log "[INFO] No hash mapping yet — building from current offsets.hpp + Frida dump..."
+    %PYTHON_CMD% frida_hash_mapper.py --build > "%STEPLOG%" 2>&1
+    if exist "%STEPLOG%" type "%STEPLOG%"
+    if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
+) else (
+    call :log "[OK] Hash mapping exists — applying to generate patches..."
+    %PYTHON_CMD% frida_hash_mapper.py --apply > "%STEPLOG%" 2>&1
+    if exist "%STEPLOG%" type "%STEPLOG%"
+    if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
+)
+if exist "output\field_hash_mapping.json" call :log "[OK] Hash mapping active"
+
 REM === Step 7: Compare and generate patches ===
-call :log "[7/12] Comparing offsets and generating patches..."
+call :log "[7/13] Comparing offsets and generating patches..."
 if not exist "output\master.json" (
     call :log "[ERROR] master.json not found - Morphine and sha-dumper both failed. Cannot generate patches."
     call :log "       Super prompt will still be generated with available data (Frida dump)."

@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 #include "offsets.hpp"
 #include "OffsetManager.hpp"
 #include "vectorMath.hpp"
@@ -71,6 +71,36 @@ struct dynamic_array { uint64_t base; uint64_t mem_id; uint64_t sz; uint64_t cap
 // ============================================================
 // Auto-generated decrypt namespace patch from Morphine
 // Build: sha-dumper
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: 23824285
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: 23824285
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: 23824285
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: sha-dumper
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: 24020771
 // Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
 // ============================================================
 
@@ -173,7 +203,7 @@ namespace decrypt {
     }
 
     // ============================================================
-    // Handle resolver â€” preserved across updates (not Morphine-generated)
+    // Handle resolver — preserved across updates (not Morphine-generated)
     // ============================================================
 
     inline uint64_t resolve_possible_handle(uint64_t value)
@@ -181,7 +211,7 @@ namespace decrypt {
         if (!value) return 0;
         if (value & 1)
             return Il2cppGetHandle(value);
-        // If not 8-byte aligned, it might be a disguised GCHandle â€” try Il2cppGetHandle
+        // If not 8-byte aligned, it might be a disguised GCHandle — try Il2cppGetHandle
         if (value & 0x7) {
             uint64_t resolved = Il2cppGetHandle(value);
             if (resolved && (resolved & 0x7) == 0 && resolved > 0x10000)
@@ -196,10 +226,7 @@ namespace decrypt {
         return value;
     }
 
-    // WARNING: client_entities not found in any data source
-
-    // WARNING: entity_list not found in any data source
-
+    // networkable_key (client_entities): rol-sub-xor-add
     inline uintptr_t networkable_key(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -209,9 +236,10 @@ namespace decrypt {
         do {
             uint32_t x = *data;
             uint32_t v1 = (x << OffsetManager::DecryptCfg.nk_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk_rol)); // ROL
-            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.nk_xor; // XOR
-            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk_add; // ADD
-            *data = v3;
+            uint32_t v2 = v1 - OffsetManager::DecryptCfg.nk_sub; // SUB
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.nk_xor; // XOR
+            uint32_t v4 = v3 + OffsetManager::DecryptCfg.nk_add; // ADD
+            *data = v4;
             data++;
             --count;
         } while (count);
@@ -220,7 +248,7 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
-    // PRESERVED: base_networkable_1 â€” Using last known good values (not found in sha-dumper)
+    // networkable_key2 (entity_list): rol-xor-rol-xor
     inline uintptr_t networkable_key2(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -231,8 +259,9 @@ namespace decrypt {
             uint32_t x = *data;
             uint32_t v1 = (x << OffsetManager::DecryptCfg.nk2_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk2_rol)); // ROL
             uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.nk2_xor; // XOR
-            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk2_add; // ADD
-            *data = v3;
+            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.nk2_rol_2) | (v2 >> (32 - OffsetManager::DecryptCfg.nk2_rol_2)); // ROL
+            uint32_t v4 = v3 ^ OffsetManager::DecryptCfg.nk2_xor_2; // XOR
+            *data = v4;
             data++;
             --count;
         } while (count);
@@ -241,6 +270,7 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
+    // cl_active_item: xor-add-rol-sub
     inline uint64_t decrypt_ClActiveItem(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -249,10 +279,10 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = x + OffsetManager::DecryptCfg.cla_add; // ADD
-            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.cla_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
-            uint32_t v3 = v2 + OffsetManager::DecryptCfg.cla_add_2; // ADD
-            uint32_t v4 = (v3 << OffsetManager::DecryptCfg.cla_rol_2) | (v3 >> (32 - OffsetManager::DecryptCfg.cla_rol_2)); // ROL
+            uint32_t v1 = x ^ OffsetManager::DecryptCfg.cla_xor; // XOR
+            uint32_t v2 = v1 + OffsetManager::DecryptCfg.cla_add; // ADD
+            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.cla_rol) | (v2 >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
+            uint32_t v4 = v3 - OffsetManager::DecryptCfg.cla_sub; // SUB
             *data = v4;
             data++;
             --count;
@@ -260,6 +290,7 @@ namespace decrypt {
         return value;
     }
 
+    // player_inventory: rol-add-rol
     inline uint64_t decrypt_inventory_pointer(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -269,8 +300,8 @@ namespace decrypt {
         do {
             uint32_t x = *data;
             uint32_t v1 = (x << OffsetManager::DecryptCfg.inv_rol) | (x >> (32 - OffsetManager::DecryptCfg.inv_rol)); // ROL
-            uint32_t v2 = v1 - OffsetManager::DecryptCfg.inv_sub; // SUB
-            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.inv_xor; // XOR
+            uint32_t v2 = v1 + OffsetManager::DecryptCfg.inv_add; // ADD
+            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.inv_rol_2) | (v2 >> (32 - OffsetManager::DecryptCfg.inv_rol_2)); // ROL
             *data = v3;
             data++;
             --count;
@@ -278,6 +309,7 @@ namespace decrypt {
         return value;
     }
 
+    // player_eyes: sub-xor-rol-add
     inline uint64_t decrypt_eyes(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -297,23 +329,28 @@ namespace decrypt {
         return value;
     }
 
-    // PRESERVED: decrypt_fov â€” Using last known good values (not found in sha-dumper)
+    // decrypt_fov: xor-add-sub
     inline uint32_t decrypt_fov(uint32_t val) {
-        val = (val << OffsetManager::DecryptCfg.fov_rol) | (val >> (32 - OffsetManager::DecryptCfg.fov_rol));
-        val -= OffsetManager::DecryptCfg.fov_sub;
         val ^= OffsetManager::DecryptCfg.fov_xor;
+        val += OffsetManager::DecryptCfg.fov_add;
+        val -= OffsetManager::DecryptCfg.fov_sub;
         return val;
     }
 
-    // encrypt_fov â€” reverse of decrypt_fov, preserved across updates
+    // encrypt_fov: reverse of decrypt_fov — add-sub-xor
     inline uint32_t encrypt_fov(uint32_t val) {
-        val ^= OffsetManager::DecryptCfg.fov_xor;
         val += OffsetManager::DecryptCfg.fov_sub;
-        val = (val >> OffsetManager::DecryptCfg.fov_rol) | (val << (32 - OffsetManager::DecryptCfg.fov_rol));
+        val -= OffsetManager::DecryptCfg.fov_add;
+        val ^= OffsetManager::DecryptCfg.fov_xor;
         return val;
     }
 
 } // namespace decrypt
+ // namespace decrypt
+ // namespace decrypt
+ // namespace decrypt
+ // namespace decrypt
+ // namespace decrypt
  // namespace decrypt
 
 
@@ -332,7 +369,7 @@ public:
     Matrix4x4 matrixBackBuffer;           // written by fast thread, atomically published
     volatile LONG matrixSequence = 0;     // incremented after back buffer write completes
 
-    // Thread-safe snapshot â€” seqlock read pattern (retry if changed mid-copy)
+    // Thread-safe snapshot — seqlock read pattern (retry if changed mid-copy)
     Matrix4x4 GetMatrixSnapshot() const {
         Matrix4x4 out;
         LONG s1, s2;
@@ -347,7 +384,7 @@ public:
     class BaseEntity {
     public:
         Vector3 Get_ObjectPosition() {
-            // Direct read chain (fast, no SSE walk) â€” same as old working code
+            // Direct read chain (fast, no SSE walk) — same as old working code
             uintptr_t obj = read<uint64_t>((uintptr_t)this + offsets::BaseEntity::objRef);
             if (!obj || !is_valid(obj)) return Vector3();
             for (auto off : { offsets::BaseEntity::posChain0, offsets::BaseEntity::posChain1, offsets::BaseEntity::posChain2, offsets::BaseEntity::posChain3 }) {
@@ -377,12 +414,12 @@ public:
                 if (!transform_internal || !is_valid(transform_internal)) return Vector3(0, 0, 0);
                 struct tempshit1 { uint64_t some_ptr; int32_t index; } temp;
                 if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(transform_internal + 0x28), &temp, sizeof(temp))))
-                    if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(transform_internal + 0x28), &temp, sizeof(temp));
+                    if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(transform_internal + 0x28), &temp, sizeof(temp));
                 if (!temp.some_ptr || !is_valid(temp.some_ptr)) return Vector3();
                 if (temp.index < 0 || temp.index > 255) return Vector3();
                 struct tempshit2 { uint64_t relation_array; int64_t dependency_index_array; } temp2;
                 if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(temp.some_ptr + 0x18), &temp2, sizeof(temp2))))
-                    if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(temp.some_ptr + 0x18), &temp2, sizeof(temp2));
+                    if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(temp.some_ptr + 0x18), &temp2, sizeof(temp2));
                 if (!temp2.relation_array || !is_valid(temp2.relation_array)) return Vector3();
                 if (!temp2.dependency_index_array || !is_valid((uint64_t)temp2.dependency_index_array)) return Vector3();
                 __m128 xmmword_1410D1340 = { -2.f, 2.f, -2.f, 0.f };
@@ -402,7 +439,7 @@ public:
                     if (!is_valid(rel_addr)) break;
                     struct tempshit3 { __m128 temp_2; __m128i temp_0; __m128 temp_1; } temp3;
                     if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(rel_addr), &temp3, sizeof(temp3))))
-                        if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(rel_addr), &temp3, sizeof(temp3));
+                        if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(rel_addr), &temp3, sizeof(temp3));
                     __m128 v10 = _mm_mul_ps(temp3.temp_1, temp_main);
                     __m128 v11 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, 0));
                     __m128 v12 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, 85));
@@ -519,7 +556,8 @@ public:
 
         bool IsDead() {
             if (!(uintptr_t)this) return true;
-            return read<bool>((uintptr_t)(uintptr_t)this + offsets::BaseCombatEntity::Lifestate);
+            int lifestate = read<int>((uintptr_t)(uintptr_t)this + offsets::BaseCombatEntity::Lifestate);
+            return lifestate == 1;
         }
 
         bool IsSleeping() {
@@ -534,9 +572,13 @@ public:
             if (!PlayerModel || !is_valid(PlayerModel)) return false;
             uint64_t visAddr = (uint64_t)PlayerModel + offsets::PlayerModel::visible;
             if (!is_valid(visAddr)) return false;
-            struct { bool hasValue; bool value; } nb;
-            if (!(g_UseInternalReads && ReadMemory_Internal((PVOID)visAddr, &nb, 2)))
-                if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE((PVOID)visAddr, &nb, 2);
+            struct { bool hasValue; bool value; } nb = { false, false };
+            bool readOk = false;
+            if (g_UseInternalReads)
+                readOk = ReadMemory_Internal((PVOID)visAddr, &nb, 2);
+            if (!readOk && Drv && !Drv->ioctl_blocked)
+                readOk = Drv->ReadMemory_ACE((PVOID)visAddr, &nb, 2);
+            if (!readOk) return false;
             return nb.hasValue ? nb.value : true;
         }
 
@@ -640,7 +682,7 @@ public:
             return (Flags & offsets::base_player_flags::Wounded) != 0;
         }
 
-        // Find a component by Il2CppClass name â€” future-proof resolution
+        // Find a component by Il2CppClass name — future-proof resolution
         // Walks the GameObject component array, reads each component's class name
         static uintptr_t GetComponentByName(uintptr_t entity, const char* targetName) {
             uintptr_t native = read<uintptr_t>(entity + 0x10);
@@ -657,20 +699,20 @@ public:
                 if (!handle || !is_valid(handle)) continue;
                 uintptr_t comp = (handle & 1) ? decrypt::Il2cppGetHandle(handle) : (handle & ~0x7ULL);
                 if (!comp || !is_valid(comp)) continue;
-                // Read Il2CppClass name: comp+0x00 â†’ klass, klass+0x10 â†’ name (char*)
+                // Read Il2CppClass name: comp+0x00 ? klass, klass+0x10 ? name (char*)
                 uintptr_t klass = read<uintptr_t>(comp);
                 if (!klass || !is_valid(klass)) continue;
                 uintptr_t namePtr = read<uintptr_t>(klass + 0x10);
                 if (!namePtr || !is_valid(namePtr)) continue;
                 char nameBuf[32] = {};
                 if (!(g_UseInternalReads && ReadMemory_Internal((PVOID)namePtr, nameBuf, 31)))
-                    if (Drv && !Drv->ioctl_blocked) Drv->ReadMemory_ACE((PVOID)namePtr, nameBuf, 31);
+                    if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE((PVOID)namePtr, nameBuf, 31);
                 if (strcmp(nameBuf, targetName) == 0) return comp;
             }
             return 0;
         }
 
-        // Resolve PlayerEyes via component walker (NOT decrypt â€” per sha-dumper owner)
+        // Resolve PlayerEyes via component walker (NOT decrypt — per sha-dumper owner)
         uintptr_t GetPlayerEyes() {
             return GetComponentByName((uintptr_t)this, "PlayerEyes");
         }
@@ -747,7 +789,7 @@ public:
             return 0;
         }
 
-        // Find held weapon entity via children list â€” bypasses inventory entirely
+        // Find held weapon entity via children list — bypasses inventory entirely
         // Uses ClActiveItem UID to identify the ACTUALLY held weapon (not just first found)
         uintptr_t Get_HeldWeapon() {
             // Cache: once we find a valid weapon, keep using it until it goes invalid
@@ -767,7 +809,7 @@ public:
             cachedWeapon = 0;
             cachedUid = targetUid;
 
-        // PASS 0: Component inventory approach â€” match Item.ItemId against ClActiveItem UID
+        // PASS 0: Component inventory approach — match Item.ItemId against ClActiveItem UID
         if (targetUid) {
             uintptr_t inv = GetPlayerInventory();
             static bool pass0_logged = false;
@@ -780,7 +822,7 @@ public:
                     for (int belt_off : { (int)offsets::PlayerInventory::Belt, (int)offsets::PlayerInventory::BeltFallback1, (int)offsets::PlayerInventory::BeltFallback2 }) {
                         uintptr_t belt = read<uintptr_t>(inv + belt_off);
                         if (!belt || !is_valid(belt)) continue;
-                        // Read item list â€” try both ItemList and fallback
+                        // Read item list — try both ItemList and fallback
                         for (int ilist_off : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
                             uintptr_t list = read<uintptr_t>(belt + ilist_off);
                             if (!list || !is_valid(list)) continue;
@@ -800,7 +842,7 @@ public:
                                 for (int uid_off : { (int)offsets::Item::ItemId, (int)offsets::Item::ItemIdFallback1, (int)offsets::Item::ItemIdFallback2 }) {
                                     uint32_t itemUid = read<uint32_t>(item + uid_off);
                                     if (itemUid == targetUid) {
-                                        // Found the held item â€” read HeldEntity from it
+                                        // Found the held item — read HeldEntity from it
                                         uintptr_t heldEntity = read<uintptr_t>(item + offsets::Item::HeldEntity_1);
                                         if (heldEntity && is_valid(heldEntity)) {
                                             static bool inv_logged = false;
@@ -819,7 +861,7 @@ public:
                 }
             }
 
-            // PASS 1: Children list â€” match by ownerItemUID (may fail if UID format differs)
+            // PASS 1: Children list — match by ownerItemUID (may fail if UID format differs)
             uintptr_t childrenList = read<uintptr_t>((uintptr_t)this + offsets::BaseNetworkable::children);
             if (childrenList && is_valid(childrenList)) {
                 uintptr_t items = read<uintptr_t>(childrenList + 0x10);
@@ -1265,8 +1307,8 @@ public:
     }
 };
 
-// Global item icon cache â€” loads PNG icons from Rust's Bundles/items directory
-// Keyed by item shortname (e.g., "rifle.ak" â†’ loads "rifle.ak.png")
+// Global item icon cache — loads PNG icons from Rust's Bundles/items directory
+// Keyed by item shortname (e.g., "rifle.ak" ? loads "rifle.ak.png")
 struct ItemIconCache {
     std::unordered_map<std::string, ID3D11ShaderResourceView*> cache;
     std::string itemsPath;

@@ -26,7 +26,7 @@ def main():
     elif cfg.get("build_flavors"):
         flavors = cfg["build_flavors"]
     else:
-        flavors = ["Rust Prv Ext", "Rust Prv Ext_debug", "bomzarust"]
+        flavors = ["Rust Prv Ext", "Rust Prv Ext_debug", "bomzarust", "bettercheats"]
 
     out_dir = Path(__file__).parent / "output"
     out_dir.mkdir(parents=True, exist_ok=True)

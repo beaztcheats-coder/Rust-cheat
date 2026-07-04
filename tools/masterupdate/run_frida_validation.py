@@ -28,13 +28,22 @@ VALIDATION_OUTPUT = OUTPUT_DIR / "frida_validation.json"
 
 # Classes we care about for offset validation
 TARGET_CLASSES = {
+    # Core entity classes
     "BasePlayer", "BaseCombatEntity", "BaseNetworkable", "BaseEntity",
-    "BaseCamera", "Camera", "PlayerEyes", "PlayerInput", "PlayerModel",
-    "PlayerInventory", "BaseProjectile", "RecoilProperties",
-    "BaseMovement", "PlayerWalkMovement", "Item", "ItemDefinition",
-    "ItemContainer", "TOD_Sky", "SkinnedMultiMesh", "Model",
-    "BaseProjectileExt", "FlintStrikeWeapon", "WorldItem",
-    "HeldEntity", "ViewModel", "BaseEntity", "ConsoleSystem",
+    "BaseCamera", "Camera",
+    # Player components
+    "PlayerEyes", "PlayerInput", "PlayerModel", "PlayerInventory",
+    "BaseMovement", "PlayerWalkMovement", "ModelState",
+    # Weapons/items
+    "BaseProjectile", "RecoilProperties", "BaseProjectileExt",
+    "FlintStrikeWeapon", "Item", "ItemDefinition", "ItemContainer",
+    "HeldEntity", "ViewModel", "BaseViewModel", "WorldItem",
+    # Visuals
+    "SkinnedMultiMesh", "Model", "TOD_Sky",
+    # ConVars
+    "ConsoleSystem", "ConVar_Graphics", "ConVar_Admin",
+    # Network/effects
+    "EffectNetwork", "ServerProjectile",
 }
 
 
@@ -79,13 +88,62 @@ try {
     setTimeout(() => {
         try {
             Il2Cpp.perform(() => {
-                send({ action: "init", elapsed_ms: new Date() - t0, application: Il2Cpp.application, unityVersion: Il2Cpp.unityVersion });
+                const ga = Process.getModuleByName('GameAssembly.dll').base;
+                send({ action: "init", elapsed_ms: new Date() - t0, application: Il2Cpp.application, unityVersion: Il2Cpp.unityVersion, ga: ga.toString() });
+
+                // === Static pointer resolution (100% accurate RVAs) ===
+                const staticTargets = ["BaseNetworkable","MainCamera","TOD_Sky","PlayerEyes",
+                    "ConsoleSystem","ConVar_Graphics","ConVar_Admin","Item","ItemId",
+                    "BaseCombatEntity","BaseEntity","Signage","BuildingBlock","BuildingPrivlidge",
+                    "Door","WorldItem","BaseVehicle","BaseNpc","DroppedItemContainer",
+                    "OreResourceEntity","CollectibleEntity","PlayerInventory",
+                    "Anybrain","InputRedirector",
+                    "%c2f2c0e8736dd3e41ecde4f7bd640d9d249d1d65"];
+                const staticRvas = {};
+                try {
+                    Il2Cpp.domain.assemblies.forEach(asm => {
+                        asm.image.classes.forEach(klass => {
+                            try { klass.fields.length; } catch(e) {}
+                            if (staticTargets.indexOf(klass.name) !== -1) {
+                                try {
+                                    const handle = klass.handle;
+                                    if (handle && !handle.isNull()) {
+                                        const rva = handle.sub(ga).toInt32();
+                                        if (rva > 0) {
+                                            staticRvas[klass.name] = "0x" + rva.toString(16).toUpperCase();
+                                        }
+                                    }
+                                } catch(e) {}
+                            }
+                        });
+                    });
+                } catch(e) {}
+                send({ action: "static_rvas", data: staticRvas });
+
                 const t1 = new Date();
                 let classCount = 0;
                 Il2Cpp.domain.assemblies.forEach(assembly => {
                     send({ type: "assembly", name: assembly.name, class_count: assembly.image.classCount });
                     assembly.image.classes.forEach((klass, i) => {
                         classCount++;
+                        // Dump methods for key classes (decrypt function discovery)
+                        let methods = null;
+                        try {
+                            const klassName = klass.name;
+                            if (klassName === "BaseNetworkable" || klassName === "BasePlayer" ||
+                                klassName === "PlayerInventory" || klassName === "PlayerEyes" ||
+                                klassName === "Item" || klassName === "BaseProjectile" ||
+                                klassName === "ConVar_Graphics" || klassName === "ServerProjectile" ||
+                                klassName === "Anybrain" || klassName === "InputRedirector" ||
+                                (klass.namespace === "anybrain")) {
+                                methods = klass.methods.map(m => ({
+                                    name: m.name,
+                                    address: m.virtualAddress ? m.virtualAddress.toString(16) : null,
+                                    rva: m.virtualAddress ? "0x" + m.virtualAddress.sub(ga).toInt32().toString(16).toUpperCase() : null,
+                                    parameters: m.parameters ? m.parameters.length : 0
+                                }));
+                            }
+                        } catch(e) {}
                         send({
                             type: "class",
                             namespace: klass.namespace,
@@ -97,7 +155,8 @@ try {
                                 is_static: field.isStatic,
                                 is_literal: field.isLiteral,
                                 offset: field.isLiteral ? undefined : field.offset
-                            }))
+                            })),
+                            methods: methods
                         });
                     });
                 });
@@ -115,6 +174,8 @@ try {
     # Output files
     dump_file = open(str(DUMP_OUTPUT), "w", encoding="utf-8")
     extracted_offsets = {}
+    frida_methods = {}
+    static_rvas = {}
     class_count = 0
     done = False
     error_msg = None
@@ -143,9 +204,19 @@ try {
         if action == "init":
             uv = payload.get("unityVersion", "?")
             app = payload.get("application", "?")
-            print(f"[OK] Unity: {uv}  App: {app}")
+            ga_str = payload.get("ga", "?")
+            print(f"[OK] Unity: {uv}  App: {app}  GA: {ga_str}")
             dump_file.write(f"=== Frida IL2CPP Full Bridge Dump ===\n")
-            dump_file.write(f"Unity: {uv}\n\n")
+            dump_file.write(f"Unity: {uv}\n")
+            dump_file.write(f"GameAssembly base: {ga_str}\n\n")
+            return
+
+        if action == "static_rvas":
+            rvas = payload.get("data", {})
+            static_rvas.update(rvas)
+            print(f"[OK] Static RVAs resolved: {len(rvas)} classes")
+            for name, rva in sorted(rvas.items()):
+                print(f"  {name}: {rva}")
             return
 
         if action == "exit":
@@ -169,9 +240,16 @@ try {
             name = payload.get("name", "")
             fields = payload.get("fields", [])
 
-            # Filter instance fields
+            # Extract method addresses BEFORE field filter (Anybrain class has no fields but has Update() method)
+            methods = payload.get("methods")
+            if methods:
+                key = f"{ns}.{name}" if ns else name
+                frida_methods[key] = methods
+
+            # Filter instance + static fields (include static-only classes for Anybrain)
             instance = [f for f in fields if not f.get("is_static") and not f.get("is_literal")]
-            if not instance:
+            statics = [f for f in fields if f.get("is_static") and not f.get("is_literal")]
+            if not instance and not statics:
                 return
 
             full = f"{ns}.{name}" if ns else name
@@ -187,14 +265,19 @@ try {
 
             dump_file.write("}\n\n")
 
-            # Extract offsets for target classes
-            if name in TARGET_CLASSES:
-                key = f"{ns}.{name}" if ns else name
-                extracted_offsets[key] = {}
-                for f in instance:
-                    off = f.get("offset")
-                    if off is not None:
-                        extracted_offsets[key][f["name"]] = f"0x{off:X}"
+            # Extract offsets for ALL classes (not just target list)
+            # Store as {field_name: {offset, type}} so apply_frida_offsets can match by type
+            key = f"{ns}.{name}" if ns else name
+            extracted_offsets[key] = {}
+            for f in instance:
+                off = f.get("offset")
+                if off is not None:
+                    extracted_offsets[key][f["name"]] = {"offset": f"0x{off:X}", "type": f.get("type", "")}
+            # Also extract static field offsets (needed for Anybrain static cache class)
+            for f in statics:
+                off = f.get("offset")
+                if off is not None:
+                    extracted_offsets[key][f["name"]] = {"offset": f"0x{off:X}", "type": f.get("type", ""), "static": True}
 
             return
 
@@ -234,15 +317,28 @@ try {
         "status": "SUCCESS" if not error_msg else "PARTIAL",
         "error": error_msg,
         "classes_dumped": class_count,
-        "target_classes_found": len(extracted_offsets),
+        "classes_with_offsets": len(extracted_offsets),
+        "static_rvas": static_rvas,
         "offsets": extracted_offsets,
     }
 
+    # Save static RVAs to a separate file for compare_and_patch.py to use
+    STATIC_RVA_FILE = OUTPUT_DIR / "frida_static_rvas.json"
+    STATIC_RVA_FILE.write_text(json.dumps(static_rvas, indent=2), encoding="utf-8")
+
     VALIDATION_OUTPUT.write_text(json.dumps(validation, indent=2), encoding="utf-8")
+
+    # Save method addresses for decrypt discovery
+    METHODS_OUTPUT = OUTPUT_DIR / "frida_methods.json"
+    METHODS_OUTPUT.write_text(json.dumps(frida_methods, indent=2), encoding="utf-8")
 
     print(f"\n[OK] Full dump: {DUMP_OUTPUT}")
     print(f"[OK] Extracted offsets: {VALIDATION_OUTPUT}")
-    print(f"[OK] Target classes found: {len(extracted_offsets)}")
+    print(f"[OK] Method addresses: {METHODS_OUTPUT}")
+    print(f"[OK] Static RVAs: {STATIC_RVA_FILE}")
+    print(f"[OK] Classes with offsets: {len(extracted_offsets)}")
+    print(f"[OK] Classes with methods: {len(frida_methods)}")
+    print(f"[OK] Static RVAs resolved: {len(static_rvas)}")
 
     if extracted_offsets:
         print("\n[FRIDA] Sample verified offsets:")

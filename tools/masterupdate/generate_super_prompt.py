@@ -14,14 +14,14 @@ from pathlib import Path
 from datetime import datetime
 
 # Last known good decrypt constants — used to flag mismatches in the super prompt
-# Updated: 2026-06-30 (Morphine build 23824285)
+# Updated: 2026-07-03 (validict build 24037537)
 FALLBACK_DECRYPT_OPS = {
-    "base_networkable_0": [("rol", 2), ("xor", 0x111B9118), ("add", 0x79300E2E)],
-    "base_networkable_1": [("rol", 6), ("xor", 0xC5D748E1), ("add", 0x48498B34)],
-    "cl_active_item": [("add", 0x9420FF13), ("rol", 16), ("add", 0xEDC489FD), ("rol", 6)],
-    "decrypt_fov": [("rol", 31), ("sub", 0x270C775), ("xor", 0x93DAED4D)],
-    "player_inventory": [("rol", 25), ("sub", 0x249D878C), ("xor", 0x58D82066), ("add", 0x7CD2A7CE)],
-    "player_eyes": [("sub", 0x0C26F5B3), ("xor", 0x6EC84F5D), ("rol", 13)],
+    "base_networkable_0": [("rol", 0x16), ("sub", 0x512FB7E6), ("xor", 0x3C25B628), ("add", 0x606330A1)],
+    "base_networkable_1": [("rol", 0x12), ("xor", 0xE54E9BFF), ("rol", 0x8), ("xor", 0xCECB4770)],
+    "cl_active_item": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
+    "decrypt_fov": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("sub", 0x3BA7A498)],
+    "player_inventory": [("rol", 0x8), ("add", 0x18E53C82), ("rol", 0x1)],
+    "player_eyes": [("sub", 0x6FB58358), ("xor", 0x6DC93C8F), ("rol", 0x15), ("add", 0x4E3D6061)],
 }
 
 CONFIG_PATH = Path(__file__).parent / "config.json"

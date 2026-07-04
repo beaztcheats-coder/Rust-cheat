@@ -28,10 +28,9 @@ namespace OffsetManager {
         uint32_t cla_sub = 0x3BA7A498;
 
         // decrypt_inventory_pointer (player_inventory): rol-add-rol
-        // Updated: capstone + Frida cross-validated (Morphine's ROL 8/ADD 0x18E53C82/ROL 1 was wrong — HDE64 misdecode)
-        uint32_t inv_rol = 0xE;
-        uint32_t inv_add = 0x0F898622;
-        uint32_t inv_rol_2 = 0x1D;
+        uint32_t inv_rol = 0x8;
+        uint32_t inv_add = 0x18E53C82;
+        uint32_t inv_rol_2 = 0x1;
 
         // decrypt_eyes (player_eyes): sub-xor-rol-add
         uint32_t ey_sub = 0x6FB58358;
