@@ -21,17 +21,18 @@ namespace OffsetManager {
         uint32_t nk2_rol_2 = 0x8;
         uint32_t nk2_xor_2 = 0xCECB4770;
 
-        // decrypt_ClActiveItem (cl_active_item): xor-add-rol-sub
-        uint32_t cla_xor = 0x8041A4D4;
-        uint32_t cla_add = 0x2270CDAC;
-        uint32_t cla_rol = 0x1D;
-        uint32_t cla_sub = 0x3BA7A498;
+        // decrypt_ClActiveItem (cl_active_item): sub-rol-xor-add
+        // Validict confirmed — CLA_TRYALL diagnostic proved these match children UIDs
+        uint32_t cla_sub = 0x1D2981D5;
+        uint32_t cla_rol = 0x2;
+        uint32_t cla_xor = 0x8DA4E5D3;
+        uint32_t cla_add = 0x6189597E;
 
         // decrypt_inventory_pointer (player_inventory): rol-add-rol
-        // Updated: capstone + Frida cross-validated (Morphine's ROL 8/ADD 0x18E53C82/ROL 1 was wrong — HDE64 misdecode)
-        uint32_t inv_rol = 0xE;
-        uint32_t inv_add = 0x0F898622;
-        uint32_t inv_rol_2 = 0x1D;
+        // Confirmed correct: ROL 8, ADD 0x18E53C82, ROL 1
+        uint32_t inv_rol = 0x8;
+        uint32_t inv_add = 0x18E53C82;
+        uint32_t inv_rol_2 = 0x1;
 
         // decrypt_eyes (player_eyes): sub-xor-rol-add
         uint32_t ey_sub = 0x6FB58358;
@@ -39,9 +40,10 @@ namespace OffsetManager {
         uint32_t ey_rol = 0x15;
         uint32_t ey_add = 0x4E3D6061;
 
-        // decrypt_fov: xor-add-sub
+        // decrypt_fov: xor-add-rol-sub
         uint32_t fov_xor = 0x8041A4D4;
         uint32_t fov_add = 0x2270CDAC;
+        uint32_t fov_rol = 0x1D;
         uint32_t fov_sub = 0x3BA7A498;
     };
 

@@ -27,7 +27,9 @@ namespace Config {
         }
 
         if (cfg == "default") return GetDefaultConfigPath();
-        return RuntimePaths::DllDirectory() + RuntimePaths::ConfigPrefix() + "_" + cfg + ".dat";
+        char tempPath[MAX_PATH];
+        GetTempPathA(MAX_PATH, tempPath);
+        return std::string(tempPath) + RuntimePaths::ConfigPrefix() + "_" + cfg + ".dat";
     }
 
     inline void SaveBool(HANDLE h, const char* key, bool val) {

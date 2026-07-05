@@ -271,7 +271,8 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
-    // cl_active_item: xor-add-rol-sub
+    // cl_active_item: sub-rol-xor-add
+    // Validict confirmed — produces UIDs matching children entities
     inline uint64_t decrypt_ClActiveItem(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -280,10 +281,10 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = x ^ OffsetManager::DecryptCfg.cla_xor; // XOR
-            uint32_t v2 = v1 + OffsetManager::DecryptCfg.cla_add; // ADD
-            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.cla_rol) | (v2 >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
-            uint32_t v4 = v3 - OffsetManager::DecryptCfg.cla_sub; // SUB
+            uint32_t v1 = x - OffsetManager::DecryptCfg.cla_sub; // SUB
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.cla_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.cla_xor; // XOR
+            uint32_t v4 = v3 + OffsetManager::DecryptCfg.cla_add; // ADD
             *data = v4;
             data++;
             --count;
@@ -330,17 +331,19 @@ namespace decrypt {
         return value;
     }
 
-    // decrypt_fov: xor-add-sub
+    // decrypt_fov: xor-add-rol-sub
     inline uint32_t decrypt_fov(uint32_t val) {
         val ^= OffsetManager::DecryptCfg.fov_xor;
         val += OffsetManager::DecryptCfg.fov_add;
+        val = (val << OffsetManager::DecryptCfg.fov_rol) | (val >> (32 - OffsetManager::DecryptCfg.fov_rol));
         val -= OffsetManager::DecryptCfg.fov_sub;
         return val;
     }
 
-    // encrypt_fov: reverse of decrypt_fov � add-sub-xor
+    // encrypt_fov: reverse — add-ror-sub-xor
     inline uint32_t encrypt_fov(uint32_t val) {
         val += OffsetManager::DecryptCfg.fov_sub;
+        val = (val >> OffsetManager::DecryptCfg.fov_rol) | (val << (32 - OffsetManager::DecryptCfg.fov_rol));
         val -= OffsetManager::DecryptCfg.fov_add;
         val ^= OffsetManager::DecryptCfg.fov_xor;
         return val;
@@ -789,10 +792,9 @@ public:
             return 0;
         }
 
-        // Find held weapon entity via children list � bypasses inventory entirely
-        // Uses ClActiveItem UID to identify the ACTUALLY held weapon (not just first found)
+        // Find held weapon entity via inventory or children list
+        // Uses ClActiveItem UID to identify the ACTUALLY held weapon
         uintptr_t Get_HeldWeapon() {
-            // Cache: once we find a valid weapon, keep using it until it goes invalid
             static uintptr_t cachedWeapon = 0;
             static uint32_t cachedUid = 0;
 
@@ -801,58 +803,43 @@ public:
             uint64_t uiddecrypt = uidValid ? decrypt::decrypt_ClActiveItem(active_item_id) : 0;
             uint32_t targetUid = uiddecrypt ? (uint32_t)(uiddecrypt & 0xFFFFFFFF) : 0;
 
-            // Check if cached weapon is still valid AND clActiveItem hasn't changed
+            // Return cached weapon if clActiveItem hasn't changed and entity is still valid
             if (cachedWeapon && is_valid(cachedWeapon) && targetUid == cachedUid) {
-                uintptr_t rp = read<uintptr_t>(cachedWeapon + offsets::BaseProjectile::recoil);
-                if (rp && is_valid(rp)) return cachedWeapon;
+                return cachedWeapon;
             }
             cachedWeapon = 0;
             cachedUid = targetUid;
 
-        // PASS 0: Component inventory approach � match Item.ItemId against ClActiveItem UID
-        if (targetUid) {
-            uintptr_t inv = GetPlayerInventory();
-            static bool pass0_logged = false;
-            if (!pass0_logged) {
-                LOG("PASS0: inv=0x%I64X targetUid=0x%X", (uint64_t)inv, targetUid);
-                pass0_logged = true;
-            }
+            if (!targetUid) return 0;
+
+            // PASS 0: ResolvePlayerInventory + belt ItemId match → HeldEntity
+            uintptr_t inv = ResolvePlayerInventory();
             if (inv && is_valid(inv)) {
-                    // Read belt container at PlayerInventory::Belt (0x30)
-                    for (int belt_off : { (int)offsets::PlayerInventory::Belt, (int)offsets::PlayerInventory::BeltFallback1, (int)offsets::PlayerInventory::BeltFallback2 }) {
-                        uintptr_t belt = read<uintptr_t>(inv + belt_off);
-                        if (!belt || !is_valid(belt)) continue;
-                        // Read item list � try both ItemList and fallback
-                        for (int ilist_off : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
-                            uintptr_t list = read<uintptr_t>(belt + ilist_off);
-                            if (!list || !is_valid(list)) continue;
-                            int sz = read<int>(list + 0x18);
-                            uintptr_t arr = read<uintptr_t>(list + 0x10);
-                            if (!arr || !is_valid(arr) || sz <= 0 || sz > 7) continue;
-                            for (int i = 0; i < sz && i <= 6; i++) {
-                                uintptr_t itemRaw = read<uintptr_t>(arr + 0x20 + i * 8);
-                                if (!itemRaw || !is_valid(itemRaw)) continue;
-                                uintptr_t item = itemRaw;
-                                if (itemRaw & 1) {
-                                    uintptr_t r = decrypt::Il2cppGetHandle(itemRaw);
-                                    if (r && r > 0x10000) item = r;
-                                }
-                                if (!item || !is_valid(item)) continue;
-                                // Try ItemId at multiple offsets
-                                for (int uid_off : { (int)offsets::Item::ItemId, (int)offsets::Item::ItemIdFallback1, (int)offsets::Item::ItemIdFallback2 }) {
-                                    uint32_t itemUid = read<uint32_t>(item + uid_off);
-                                    if (itemUid == targetUid) {
-                                        // Found the held item � read HeldEntity from it
-                                        uintptr_t heldEntity = read<uintptr_t>(item + offsets::Item::HeldEntity_1);
-                                        if (heldEntity && is_valid(heldEntity)) {
-                                            static bool inv_logged = false;
-                                            if (!inv_logged) {
-                                                LOG("HELDWEAPON_INV: belt_off=0x%X ilist_off=0x%X item[%d] uid@+0x%X heldEntity=0x%I64X",
-                                                    belt_off, ilist_off, i, uid_off, heldEntity);
-                                                inv_logged = true;
-                                            }
-                                            return heldEntity;
-                                        }
+                for (int belt_off : { (int)offsets::PlayerInventory::Belt, (int)offsets::PlayerInventory::BeltFallback1, (int)offsets::PlayerInventory::BeltFallback2 }) {
+                    uintptr_t belt = read<uintptr_t>(inv + belt_off);
+                    if (!belt || !is_valid(belt)) continue;
+                    for (int ilist_off : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
+                        uintptr_t list = read<uintptr_t>(belt + ilist_off);
+                        if (!list || !is_valid(list)) continue;
+                        int sz = read<int>(list + 0x18);
+                        uintptr_t arr = read<uintptr_t>(list + 0x10);
+                        if (!arr || !is_valid(arr) || sz <= 0 || sz > 7) continue;
+                        for (int i = 0; i < sz && i <= 6; i++) {
+                            uintptr_t itemRaw = read<uintptr_t>(arr + 0x20 + i * 8);
+                            if (!itemRaw || !is_valid(itemRaw)) continue;
+                            uintptr_t item = itemRaw;
+                            if (itemRaw & 1) {
+                                uintptr_t r = decrypt::Il2cppGetHandle(itemRaw);
+                                if (r && r > 0x10000) item = r;
+                            }
+                            if (!item || !is_valid(item)) continue;
+                            for (int uid_off : { (int)offsets::Item::ItemId, (int)offsets::Item::ItemIdFallback1, (int)offsets::Item::ItemIdFallback2 }) {
+                                uint32_t itemUid = read<uint32_t>(item + uid_off);
+                                if (itemUid == targetUid) {
+                                    uintptr_t heldEntity = read<uintptr_t>(item + offsets::Item::HeldEntity_1);
+                                    if (heldEntity && is_valid(heldEntity)) {
+                                        cachedWeapon = heldEntity;
+                                        return heldEntity;
                                     }
                                 }
                             }
@@ -861,58 +848,22 @@ public:
                 }
             }
 
-            // PASS 1: Children list � match by ownerItemUID (may fail if UID format differs)
+            // PASS 1: Children list — match by ownerItemUID, return on match (no recoil requirement)
             uintptr_t childrenList = read<uintptr_t>((uintptr_t)this + offsets::BaseNetworkable::children);
             if (childrenList && is_valid(childrenList)) {
                 uintptr_t items = read<uintptr_t>(childrenList + 0x10);
                 int count = read<int>(childrenList + 0x18);
                 if (items && is_valid(items) && count > 0 && count < 32) {
-                    uintptr_t children[32];
-                    int childCount = 0;
-                    for (int i = 0; i < count && childCount < 32; i++) {
+                    for (int i = 0; i < count; i++) {
                         uintptr_t childRaw = read<uintptr_t>(items + 0x20 + i * 8);
-                        if (!childRaw) { children[childCount++] = 0; continue; }
+                        if (!childRaw) continue;
                         uintptr_t child = (childRaw & 1) ? decrypt::Il2cppGetHandle(childRaw) : childRaw;
-                        children[childCount++] = (child && is_valid(child)) ? child : 0;
-                    }
-
-                    // Try UID match
-                    if (targetUid) {
-                        static bool uid_logged = false;
-                        for (int i = 0; i < childCount; i++) {
-                            if (!children[i]) continue;
-                            uint32_t ownerUid32 = read<uint32_t>(children[i] + offsets::HeldEntity::ownerItemUID);
-                            uint64_t ownerUid64 = read<uint64_t>(children[i] + offsets::HeldEntity::ownerItemUID);
-                            bool match32 = (ownerUid32 == targetUid);
-                            bool match64lo = ((uint32_t)(ownerUid64 & 0xFFFFFFFF) == targetUid);
-                            if (!uid_logged) {
-                                LOG("WEAPON_UID[%d]: child=0x%I64X uid32=0x%X uid64=0x%I64X target=0x%X match=%d",
-                                    i, children[i], ownerUid32, ownerUid64, targetUid, match32 || match64lo);
-                            }
-                            if (match32 || match64lo) {
-                                uintptr_t rp = read<uintptr_t>(children[i] + offsets::BaseProjectile::recoil);
-                                if (rp && is_valid(rp)) {
-                                    if (!uid_logged) { LOG("HELDWEAPON_MATCH: child[%d] uid match", i); uid_logged = true; }
-                                    return children[i];
-                                }
-                            }
+                        if (!child || !is_valid(child)) continue;
+                        uint32_t ownerUid32 = read<uint32_t>(child + offsets::HeldEntity::ownerItemUID);
+                        if (ownerUid32 == targetUid) {
+                            cachedWeapon = child;
+                            return child;
                         }
-                        if (!uid_logged) { LOG("HELDWEAPON_NOMATCH: targetUid=0x%X not found in %d children", targetUid, childCount); uid_logged = true; }
-                    }
-
-                    // Fallback: first child with NON-ZERO recoil (skip attachments)
-                    for (int i = 0; i < childCount; i++) {
-                        if (!children[i]) continue;
-                        uintptr_t rp = read<uintptr_t>(children[i] + offsets::BaseProjectile::recoil);
-                        if (!rp || !is_valid(rp)) continue;
-                        float yawMin = read<float>(rp + offsets::RecoilProperties::RecoilYawMin);
-                        float yawMax = read<float>(rp + offsets::RecoilProperties::RecoilYawMax);
-                        float pitchMin = read<float>(rp + offsets::RecoilProperties::RecoilPitchMin);
-                        float pitchMax = read<float>(rp + offsets::RecoilProperties::RecoilPitchMax);
-                        if (!std::isfinite(yawMin) || fabsf(yawMin) >= 50.f) continue;
-                        if (yawMin == 0.f && yawMax == 0.f && pitchMin == 0.f && pitchMax == 0.f) continue;
-                        cachedWeapon = children[i];
-                        return cachedWeapon;
                     }
                 }
             }
@@ -929,29 +880,32 @@ public:
             uintptr_t player_inventory = ResolvePlayerInventory();
             if (!player_inventory || !is_valid(player_inventory)) return nullptr;
 
-            uint64_t belt = read<uint64_t>(player_inventory + offsets::PlayerInventory::Belt);
-            if (!belt || !is_valid(belt)) return nullptr;
+            // Try multiple belt offsets — belt may be at different offsets or empty
+            for (int belt_off : { (int)offsets::PlayerInventory::Belt, (int)offsets::PlayerInventory::BeltFallback1, (int)offsets::PlayerInventory::BeltFallback2 }) {
+                uint64_t belt = read<uint64_t>(player_inventory + belt_off);
+                if (!belt || !is_valid(belt)) continue;
 
-            for (int ilo : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
-                uint64_t list = read<uint64_t>(belt + ilo);
-                if (!list || !is_valid(list)) continue;
-                int sz = read<int>(list + 0x18);
-                if (sz <= 0 || sz > 7) continue;
-                uint64_t arr = read<uint64_t>(list + 0x10);
-                if (!arr || !is_valid(arr)) continue;
+                for (int ilo : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
+                    uint64_t list = read<uint64_t>(belt + ilo);
+                    if (!list || !is_valid(list)) continue;
+                    int sz = read<int>(list + 0x18);
+                    if (sz <= 0 || sz > 7) continue;
+                    uint64_t arr = read<uint64_t>(list + 0x10);
+                    if (!arr || !is_valid(arr)) continue;
 
-                for (int i = 0; i < sz && i <= 6; i++) {
-                    uint64_t itemRaw = read<uint64_t>(arr + 0x20 + i * 8);
-                    if (!itemRaw || !is_valid(itemRaw)) continue;
-                    uint64_t itm = itemRaw;
-                    if (itemRaw & 1) {
-                        uint64_t r = decrypt::Il2cppGetHandle(itemRaw);
-                        if (r && r > 0x10000) itm = r;
-                    }
-                    if (!itm || !is_valid(itm)) continue;
-                    for (int uo : { (int)offsets::Item::ItemId, (int)offsets::Item::ItemIdFallback1, (int)offsets::Item::ItemIdFallback2 }) {
-                        if (read<uint32_t>(itm + uo) == targetUid)
-                            return (HeldItem*)itm;
+                    for (int i = 0; i < sz && i <= 6; i++) {
+                        uint64_t itemRaw = read<uint64_t>(arr + 0x20 + i * 8);
+                        if (!itemRaw || !is_valid(itemRaw)) continue;
+                        uint64_t itm = itemRaw;
+                        if (itemRaw & 1) {
+                            uint64_t r = decrypt::Il2cppGetHandle(itemRaw);
+                            if (r && r > 0x10000) itm = r;
+                        }
+                        if (!itm || !is_valid(itm)) continue;
+                        for (int uo : { (int)offsets::Item::ItemId, (int)offsets::Item::ItemIdFallback1, (int)offsets::Item::ItemIdFallback2 }) {
+                            if (read<uint32_t>(itm + uo) == targetUid)
+                                return (HeldItem*)itm;
+                        }
                     }
                 }
             }
@@ -965,26 +919,29 @@ public:
             uintptr_t inv = ResolvePlayerInventory();
             if (!inv || !is_valid(inv)) return item;
 
-            uint64_t belt = read<uint64_t>(inv + offsets::PlayerInventory::Belt);
-            if (!belt || !is_valid(belt)) return item;
+            for (int belt_off : { (int)offsets::PlayerInventory::Belt, (int)offsets::PlayerInventory::BeltFallback1, (int)offsets::PlayerInventory::BeltFallback2 }) {
+                uint64_t belt = read<uint64_t>(inv + belt_off);
+                if (!belt || !is_valid(belt)) continue;
 
-            for (int ilo : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
-                uint64_t list = read<uint64_t>(belt + ilo);
-                if (!list || !is_valid(list)) continue;
-                int sz = read<int>(list + 0x18);
-                if (sz <= 0 || sz > 7) continue;
-                uint64_t arr = read<uint64_t>(list + 0x10);
-                if (!arr || !is_valid(arr)) continue;
-                for (int i = 0; i < sz && i <= 6; i++) {
-                    uint64_t itemRaw = read<uint64_t>(arr + 0x20 + i * 8);
-                    if (!itemRaw || !is_valid(itemRaw)) continue;
-                    uint64_t itm = itemRaw;
-                    if (itemRaw & 1) {
-                        uint64_t r = decrypt::Il2cppGetHandle(itemRaw);
-                        if (r && r > 0x10000) itm = r;
+                for (int ilo : { (int)offsets::ItemContainer::ItemList, (int)offsets::ItemContainer::ItemListFallback }) {
+                    uint64_t list = read<uint64_t>(belt + ilo);
+                    if (!list || !is_valid(list)) continue;
+                    int sz = read<int>(list + 0x18);
+                    if (sz <= 0 || sz > 7) continue;
+                    uint64_t arr = read<uint64_t>(list + 0x10);
+                    if (!arr || !is_valid(arr)) continue;
+                    for (int i = 0; i < sz && i <= 6; i++) {
+                        uint64_t itemRaw = read<uint64_t>(arr + 0x20 + i * 8);
+                        if (!itemRaw || !is_valid(itemRaw)) continue;
+                        uint64_t itm = itemRaw;
+                        if (itemRaw & 1) {
+                            uint64_t r = decrypt::Il2cppGetHandle(itemRaw);
+                            if (r && r > 0x10000) itm = r;
+                        }
+                        if (itm && is_valid(itm))
+                            item.push_back((HeldItem*)itm);
                     }
-                    if (itm && is_valid(itm))
-                        item.push_back((HeldItem*)itm);
+                    if (!item.empty()) break;
                 }
                 if (!item.empty()) break;
             }

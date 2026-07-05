@@ -13,6 +13,7 @@ struct EspCacheData {
     Vector3 spine1Pos;
     Vector3 velocity;
     Vector3 bones[15];
+    Vector3 boneAnchorPos;  // player headPos at time bones were read — for skeleton position correction
     Vector3 localNeckPos;
     Vector3 localEyePos;
     Vector3 bodyAngles;
@@ -60,9 +61,10 @@ struct GhostData {
 extern std::unordered_map<uintptr_t, GhostData> g_GhostCache;
 extern std::mutex g_GhostCacheMutex;
 
-extern std::atomic<int> g_BnStableCycles;
-extern std::atomic<uint64_t> g_CacheHeartbeatMs;
-extern std::atomic<uint32_t> g_CacheThreadEpoch;
+    extern std::atomic<int> g_BnStableCycles;
+    extern std::atomic<uint64_t> g_CacheHeartbeatMs;
+    extern std::atomic<int> g_CacheLastEntity;
+    extern std::atomic<uint32_t> g_CacheThreadEpoch;
 extern std::atomic<uintptr_t> g_LocalPlayerAddr;
 extern std::atomic<uint64_t> g_LocalPlayerGeneration;
 extern std::atomic<uint64_t> g_FastRefreshHeartbeatMs;

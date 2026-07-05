@@ -45,8 +45,8 @@ OUTPUT_FILE = OUTPUT_DIR / "decrypt_algorithms.json"
 KNOWN_PATTERNS = {
     "base_networkable_0": [("rol", 0x16), ("sub", 0x512FB7E6), ("xor", 0x3C25B628), ("add", 0x606330A1)],
     "base_networkable_1": [("rol", 0x12), ("xor", 0xE54E9BFF), ("rol", 0x8), ("xor", 0xCECB4770)],
-    "cl_active_item":     [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
-    "decrypt_fov":        [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("sub", 0x3BA7A498)],
+    "cl_active_item":     [("sub", 0x1D2981D5), ("rol", 0x2), ("xor", 0x8DA4E5D3), ("add", 0x6189597E)],
+    "decrypt_fov":        [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
     "player_inventory":   [("rol", 0x8), ("add", 0x18E53C82), ("rol", 0x1)],
     "player_eyes":        [("sub", 0x6FB58358), ("xor", 0x6DC93C8F), ("rol", 0x15), ("add", 0x4E3D6061)],
 }
@@ -127,7 +127,8 @@ def parse_sha_dumper_ciphers(path):
 # Format: canonical_name → [constant_value, ...] (any of these can be searched)
 SEED_CONSTANTS = {
     "player_inventory":  [0x18E53C82, 0x0F898622],  # Fallback ADD + structural match ADD
-    "decrypt_fov":       [0x2270CDAC, 0x8041A4D4, 0x3BA7A498],  # Shared with cl_active_item
+    "cl_active_item":    [0x1D2981D5, 0x8DA4E5D3, 0x6189597E],  # Validict confirmed — CLA_TRYALL proved match
+    "decrypt_fov":       [0x8041A4D4, 0x2270CDAC, 0x3BA7A498],  # Validict-confirmed (independent function, NOT derived from cl_active_item)
 }
 
 
@@ -628,9 +629,11 @@ def main():
                     print(f"  [SKIP] {canonical}: no match found in binary search")
 
     # Step 3c: Derive decrypt_fov from cl_active_item if possible
-    # The fov decrypt uses the same constants as cl_active_item but WITHOUT the ROL step.
-    # cl_active_item: XOR → ADD → ROL → SUB
-    # decrypt_fov:    XOR → ADD → SUB (skip ROL)
+    # NOTE: decrypt_fov is an INDEPENDENT function with its own constants — NOT derived from cl_active_item.
+    # This derivation is kept as a FALLBACK only (last resort when binary search fails).
+    # Validict confirmed: decrypt_fov = XOR→ADD→ROL 29→SUB (different constants from cl_active_item)
+    # cl_active_item: SUB → ROL → XOR → ADD
+    # decrypt_fov:    XOR → ADD → ROL → SUB (different function entirely)
     if "decrypt_fov" in missing and "cl_active_item" in identified:
         print(f"\n[3c] Deriving decrypt_fov from cl_active_item (same constants, skip ROL)...")
         cla_ops = identified["cl_active_item"]["ops_raw"]

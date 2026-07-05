@@ -111,7 +111,7 @@ namespace BasePlayer {
 	inline uint64_t ClActiveItem = 0x568;      // validict build 24037537 (unchanged)
 	inline uint64_t BaseMovement = 0x788;      // validict build 24037537
 	inline uint64_t DisplayName = 0x6E0;       // validict build 24037537
-	inline uint64_t ModelState = 0x398;
+	inline uint64_t ModelState = 0x490;  // validict: modelState
 	inline uint64_t Mounted = 0x588;           // validict build 24037537
 	inline uint64_t BeltDirect = 0x2B8;
 	inline uint64_t CurrentTeam = 0x538;       // validict build 24037537 (unchanged)
@@ -143,7 +143,7 @@ namespace unity_string {
 
   namespace ModelState
   {
-      constexpr uint64_t flags = 0x1C;          // newer source
+      constexpr uint64_t flags = 0x44;          // validict: model_state.flags
       constexpr uint64_t Flying    = 0x40;      // bit 6: freecam flying mode
       constexpr uint64_t OnGround  = 0x04;      // bit 2
       constexpr uint64_t Sleeping  = 0x08;      // bit 3
@@ -153,12 +153,12 @@ namespace unity_string {
 
   namespace PlayerInventory
   {
-      inline uint64_t Belt = 0x60;        // validict build 24037537 containerBelt
-      inline uint64_t Wear = 0x28;        // validict build 24037537 containerWear
-      inline uint64_t Main = 0x30;        // validict build 24037537 containerMain
-      inline uint64_t loot = 0x48;        // validict build 24037537 (unchanged)
-      constexpr uint64_t BeltFallback1 = 0x28;
-      constexpr uint64_t BeltFallback2 = 0x38;
+      inline uint64_t Belt = 0x30;        // validict: containerBelt
+      inline uint64_t Wear = 0x60;        // validict: containerWear
+      inline uint64_t Main = 0x28;        // validict: containerMain
+      inline uint64_t loot = 0x48;        // validict: loot
+      constexpr uint64_t BeltFallback1 = 0x60;  // containerWear fallback
+      constexpr uint64_t BeltFallback2 = 0x28;  // containerMain fallback
   }
 
   namespace ItemContainer
@@ -171,8 +171,8 @@ namespace unity_string {
    	{
     	inline uint64_t SkinnedMultiMesh = 0x398; // validict build 24037537 skinned_mesh
      		inline uint64_t is_npc = 0x00000389;           // validict build 24037537 isNpc
-     		inline uint64_t position = 0x0000039C;         // validict build 24037537 position
-    		inline uint64_t velocity = 0x000004FC;         // Morphine updated (was 0x178)
+    		inline uint64_t position = 0x000002F8;         // validict: player_model.position
+     		inline uint64_t velocity = 0x00000368;         // validict: player_model.newVelocity
     		inline uint64_t visible = 0x000000C4;           // Morphine live dump visibility
     		inline uint64_t boneTransforms = 0x00000098;    // Morphine build 23824285
     		inline uint64_t rootBone = 0x00000098;          // Morphine build 23824285
@@ -189,7 +189,7 @@ namespace unity_string {
     {
         constexpr uint64_t ItemDefinition = 0xA0;       // validict build 24037537 itemdefinition
         constexpr uint64_t ItemId = 0x60;               // validict build 24037537 uid
-        constexpr uint64_t HeldEntity_1 = 0x70;         // validict build 24037537 held_entity
+        constexpr uint64_t HeldEntity_1 = 0x48;         // validict: held_entity
         constexpr uint64_t Amount = 0xE0;               // validict build 24037537 amount
         constexpr uint64_t ItemIdFallback1 = 0x38;
         constexpr uint64_t ItemIdFallback2 = 0x70;
@@ -319,7 +319,7 @@ namespace unity_string {
 
   namespace ItemMagazine
   {
-      constexpr uint64_t contents = 0x30;
+       constexpr uint64_t contents = 0x1C; // validict: item_magazine.contents
   }
 
   namespace EffectNetwork

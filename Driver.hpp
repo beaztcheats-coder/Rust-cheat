@@ -144,13 +144,13 @@ public:
 
     // IOCTL failure tracking — prevents BSOD from stale CR3 after game closes
     std::atomic<int> ioctl_fail_count{ 0 };
-    static constexpr int IOCTL_FAIL_LIMIT = 300;
+    static constexpr int IOCTL_FAIL_LIMIT = 500;        // block reads when fail count exceeds this
     std::atomic<bool> ioctl_blocked{ false };
     std::atomic<uint64_t> ioctl_blocked_time{ 0 };
     std::atomic<uint64_t> ioctl_last_decay_time{ 0 };
     static constexpr ULONGLONG IOCTL_DECAY_INTERVAL_MS = 500;
-    static constexpr int IOCTL_DECAY_AMOUNT = 10;
-    static constexpr ULONGLONG IOCTL_BLOCK_DURATION_MS = 1000;
+    static constexpr int IOCTL_DECAY_AMOUNT = 50;        // was 10 — 5x faster recovery
+    static constexpr ULONGLONG IOCTL_BLOCK_DURATION_MS = 500; // was 1000 — shorter blocks
     static constexpr uint32_t IOCTL_MAX_SIZE = 0x100000;
     std::atomic<bool> silent_reads{ false };
 
@@ -261,10 +261,8 @@ public:
         if (ioctl_blocked.load(std::memory_order_relaxed)) {
             uint64_t blocked_at = ioctl_blocked_time.load(std::memory_order_relaxed);
             if (blocked_at && GetTickCount64() - blocked_at > IOCTL_BLOCK_DURATION_MS) {
-                if (!g_process_dead.load(std::memory_order_relaxed)) {
-                    ioctl_blocked.store(false, std::memory_order_relaxed);
-                    ioctl_fail_count.store(0, std::memory_order_relaxed);
-                }
+                ioctl_blocked.store(false, std::memory_order_relaxed);
+                ioctl_fail_count.store(0, std::memory_order_relaxed);
             }
             if (ioctl_blocked.load(std::memory_order_relaxed)) return false;
         }
@@ -306,10 +304,8 @@ public:
         if (ioctl_blocked.load(std::memory_order_relaxed)) {
             uint64_t blocked_at = ioctl_blocked_time.load(std::memory_order_relaxed);
             if (blocked_at && GetTickCount64() - blocked_at > IOCTL_BLOCK_DURATION_MS) {
-                if (!g_process_dead.load(std::memory_order_relaxed)) {
-                    ioctl_blocked.store(false, std::memory_order_relaxed);
-                    ioctl_fail_count.store(0, std::memory_order_relaxed);
-                }
+                ioctl_blocked.store(false, std::memory_order_relaxed);
+                ioctl_fail_count.store(0, std::memory_order_relaxed);
             }
             if (ioctl_blocked.load(std::memory_order_relaxed)) return false;
         }
@@ -332,12 +328,10 @@ public:
         }
         else
         {
-            if (!silent_reads.load(std::memory_order_relaxed)) {
-                int fails = ioctl_fail_count.fetch_add(1, std::memory_order_relaxed) + 1;
-                if (fails >= IOCTL_FAIL_LIMIT) {
-                    ioctl_blocked_time.store(GetTickCount64(), std::memory_order_relaxed);
-                    ioctl_blocked.store(true, std::memory_order_relaxed);
-                }
+            int fails = ioctl_fail_count.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (fails >= IOCTL_FAIL_LIMIT) {
+                ioctl_blocked_time.store(GetTickCount64(), std::memory_order_relaxed);
+                ioctl_blocked.store(true, std::memory_order_relaxed);
             }
         }
         return false;

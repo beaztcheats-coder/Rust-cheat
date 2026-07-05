@@ -136,6 +136,93 @@ static void spoof_net_cleanup() {
     spoof_con("  Network stack reset OK\r\n");
 }
 
+static bool spoof_is_bitlocker_on() {
+    STARTUPINFOA si = {}; si.cb = sizeof(si); si.dwFlags = STARTF_USESHOWWINDOW; si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi = {};
+    char tmpPath[MAX_PATH]; GetTempPathA(MAX_PATH, tmpPath);
+    char outPath[MAX_PATH]; wsprintfA(outPath, "%sbitlock_check.txt", tmpPath);
+    char cmd[512]; wsprintfA(cmd, "cmd.exe /c manage-bde -status C: > \"%s\" 2>&1", outPath);
+    if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) return false;
+    WaitForSingleObject(pi.hProcess, 10000);
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    HANDLE hf = CreateFileA(outPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hf == INVALID_HANDLE_VALUE) { DeleteFileA(outPath); return false; }
+    char buf[4096] = {}; DWORD rd = 0; ReadFile(hf, buf, sizeof(buf)-1, &rd, NULL); CloseHandle(hf);
+    DeleteFileA(outPath);
+    std::string s(buf);
+    std::string lower = s;
+    for (auto& c : lower) c = (char)tolower(c);
+    return lower.find("protection on") != std::string::npos;
+}
+
+static void spoof_registry_deep_cleanup() {
+    spoof_con("  Deep registry cleanup...\r\n");
+
+    const char* regVals[][2] = {
+        {"SOFTWARE\\Microsoft\\Cryptography", "MachineGuid"},
+        {"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate", "SusClientId"},
+        {"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate", "SusClientIdValidation"},
+        {"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters", "Dhcpv6DUID"},
+        {"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", "BuildGUID"},
+        {"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", "ProductId"},
+        {"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", "InstallDate"},
+        {"SYSTEM\\CurrentControlSet\\Control\\SystemInformation", "ComputerHardwareId"},
+        {"SYSTEM\\CurrentControlSet\\Control\\SystemInformation", "ComputerHardwareIds"},
+    };
+    for (auto& v : regVals) {
+        char cmd[512];
+        wsprintfA(cmd, "cmd.exe /c reg delete \"HKLM\\%s\" /v \"%s\" /f >nul 2>&1", v[0], v[1]);
+        spoof_cleanup_cmd(cmd);
+    }
+
+    const char* nvidiaPaths[] = {
+        "SOFTWARE\\NVIDIA Corporation\\Global\\ClientUUID",
+        "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}",
+    };
+    for (auto& p : nvidiaPaths) {
+        char cmd[512];
+        wsprintfA(cmd, "cmd.exe /c reg delete \"HKLM\\%s\" /f >nul 2>&1", p);
+        spoof_cleanup_cmd(cmd);
+    }
+
+    const char* regTrees[] = {
+        "SYSTEM\\CurrentControlSet\\Control\\ComputerHardwareIds",
+        "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\SusClientId",
+    };
+    for (auto& t : regTrees) {
+        char cmd[512];
+        wsprintfA(cmd, "cmd.exe /c reg delete \"HKLM\\%s\" /f >nul 2>&1", t);
+        spoof_cleanup_cmd(cmd);
+    }
+    spoof_con("  Deep registry cleanup OK\r\n");
+}
+
+static void spoof_file_trace_cleanup() {
+    spoof_con("  Cleaning file traces...\r\n");
+    spoof_cleanup_cmd("cmd.exe /c del /f /q C:\\Windows\\Prefetch\\*.pf >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c del /f /q %WINDIR%\\Prefetch\\*.pf >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c fsutil usn deletejournal /d /n C: >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c del /f /q %WINDIR%\\inf\\setupapi.dev.log >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c del /f /q %WINDIR%\\inf\\setupapi.app.log >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c del /f /q %WINDIR%\\Panther\\*.xml >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c del /f /q %LOCALAPPDATA%\\Indexed\\IndexerVolumeGuid >nul 2>&1");
+    spoof_con("  File traces cleaned OK\r\n");
+}
+
+static void spoof_edid_cleanup() {
+    spoof_con("  Cleaning monitor EDID...\r\n");
+    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Enum\\DISPLAY\" /f >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\ConfigTree\" /f >nul 2>&1");
+    spoof_con("  EDID cleaned OK\r\n");
+}
+
+static void spoof_bluetooth_cleanup() {
+    spoof_con("  Cleaning Bluetooth...\r\n");
+    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\BTHPORT\\Parameters\\Keys\" /f >nul 2>&1");
+    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Enum\\BTH\" /f >nul 2>&1");
+    spoof_con("  Bluetooth cleaned OK\r\n");
+}
+
 bool RunEmbeddedSpoofer()
 {
     s_status = {};
@@ -317,9 +404,17 @@ bool RunEmbeddedSpoofer()
     s_status.attemptedCount = attempted;
     s_status.driverMismatch = earlyMismatchAbort;
 
-    // TPM + network cleanup (fire-and-forget, non-blocking)
     spoof_con("[*] Running cleanup...\r\n");
-    spoof_tpm_cleanup();
+    if (spoof_is_bitlocker_on()) {
+        spoof_con("  [!] BitLocker ON — skipping TPM wipe to avoid recovery lockout\r\n");
+        LOG("Spoofer: BitLocker detected, skipping TPM cleanup");
+    } else {
+        spoof_tpm_cleanup();
+    }
+    spoof_registry_deep_cleanup();
+    spoof_file_trace_cleanup();
+    spoof_edid_cleanup();
+    spoof_bluetooth_cleanup();
     spoof_net_cleanup();
 
     CloseHandle(hDrv);

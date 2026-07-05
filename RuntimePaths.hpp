@@ -84,9 +84,11 @@ namespace RuntimePaths {
     inline const char* DefaultConfigPath() {
         static std::string path;
         if (path.empty()) {
-            if (IsBetterCheats())      path = DllDirectory() + "rustcfg_bc.dat";
-            else if (IsBomza())         path = DllDirectory() + "rustcfg_bomza.dat";
-            else                        path = DllDirectory() + "rustcfg.dat";
+            char tempPath[MAX_PATH];
+            GetTempPathA(MAX_PATH, tempPath);
+            if (IsBetterCheats())      path = std::string(tempPath) + "rustcfg_bc.dat";
+            else if (IsBomza())         path = std::string(tempPath) + "rustcfg_bomza.dat";
+            else                        path = std::string(tempPath) + "rustcfg.dat";
         }
         return path.c_str();
     }

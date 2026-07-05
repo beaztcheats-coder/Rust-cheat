@@ -107,21 +107,13 @@ namespace Xheat {
                 && g_LocalPlayerGeneration.load(std::memory_order_acquire) == lpGeneration;
         };
 
-        ReadFrameCameraMatrix();
-
-        if ((src->LocalPlayer_Matrix._11 == 0 && src->LocalPlayer_Matrix._22 == 0 && src->LocalPlayer_Matrix._33 == 0 && src->LocalPlayer_Matrix._44 == 0)
-            || !std::isfinite(src->LocalPlayer_Matrix._11) || !std::isfinite(src->LocalPlayer_Matrix._22)
-            || !std::isfinite(src->LocalPlayer_Matrix._33) || !std::isfinite(src->LocalPlayer_Matrix._44)) {
-            static int c4=0; if(c4<3){LOG("Do_Cheat SKIP: LocalPlayer_Matrix is zero/NaN (_11=%.2f _22=%.2f _33=%.2f _44=%.2f)", src->LocalPlayer_Matrix._11, src->LocalPlayer_Matrix._22, src->LocalPlayer_Matrix._33, src->LocalPlayer_Matrix._44);c4++;}
+        // Read camera matrix FRESH in the render thread — eliminates swimming/lag
+        // (SHA source approach: read matrix right before WorldToScreen)
+        if (!ReadFrameCameraMatrix()) {
+            static int c4=0; if(c4<3){LOG("Do_Cheat SKIP: ReadFrameCameraMatrix failed");c4++;}
             return;
         }
         Matrix4x4 frameMatrix = src->GetMatrixSnapshot();
-        // Validate the snapshot too
-        if ((frameMatrix._11 == 0 && frameMatrix._22 == 0 && frameMatrix._33 == 0 && frameMatrix._44 == 0)
-            || !std::isfinite(frameMatrix._11) || !std::isfinite(frameMatrix._22)
-            || !std::isfinite(frameMatrix._33) || !std::isfinite(frameMatrix._44)) {
-            frameMatrix = src->LocalPlayer_Matrix; // fallback to last-known-good
-        }
         if (!lpStillStable()) { static int c5=0; if(c5<3){LOG("Do_Cheat SKIP: lpStillStable failed after matrix check");c5++;} return; }
         static bool firstRun = true;
         if (firstRun) { LOG("Do_Cheat RUNNING — first frame (all gates passed)"); firstRun = false; }
@@ -391,6 +383,11 @@ namespace Xheat {
             char debugCamText[64] = {};
             sprintf_s(debugCamText, "DEBUG CAM EXIT IN: %.0fs", remaining);
             ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)screenHeight - 45), timerColor, debugCamText);
+        }
+
+        // Aimbot runs in render thread (like SHA source) — uses validated LocalPlayer, no race conditions
+        if (!SETTINGS::BattleMode || BATTLE::Aimbot) {
+            aim->do_aimbot();
         }
 
     }

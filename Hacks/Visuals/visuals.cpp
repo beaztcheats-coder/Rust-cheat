@@ -147,6 +147,16 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
         }
     }
 
+    // Bone position correction — shift skeleton to match current predicted position
+    // Bones are cached (50-200ms old), but headPos is fresh. Shift bones by the offset.
+    if (skelValid && !cached.boneAnchorPos.Empty()) {
+        Vector3 boneOffset = headPos - cached.boneAnchorPos;
+        for (int bi = 0; bi < 15; ++bi) {
+            if (!bones[bi].Empty())
+                bones[bi] = bones[bi] + boneOffset;
+        }
+    }
+
     ImGui::PushFont(VisualFont);
 
     Vector2 headScreen = WorldToScreen(headPos, frameMatrix);

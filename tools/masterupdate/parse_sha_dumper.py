@@ -129,8 +129,8 @@ FINGERPRINT_PATTERNS = {
 FALLBACK_DECRYPT_OPS = {
     "base_networkable_0": [("rol", 0x16), ("sub", 0x512FB7E6), ("xor", 0x3C25B628), ("add", 0x606330A1)],
     "base_networkable_1": [("rol", 0x12), ("xor", 0xE54E9BFF), ("rol", 0x8), ("xor", 0xCECB4770)],
-    "cl_active_item": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
-    "decrypt_fov": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("sub", 0x3BA7A498)],
+    "cl_active_item": [("rol", 0x1E), ("add", 0x69D5BDEE), ("rol", 0x10), ("xor", 0x60869282)],
+    "decrypt_fov": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
     "player_inventory": [("rol", 0x8), ("add", 0x18E53C82), ("rol", 0x1)],
     "player_eyes": [("sub", 0x6FB58358), ("xor", 0x6DC93C8F), ("rol", 0x15), ("add", 0x4E3D6061)],
 }

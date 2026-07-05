@@ -28,6 +28,7 @@ uint64_t g_LocalPlayerTeam = 0;
 std::mutex g_LocalPlayerDataMutex;
 std::atomic<int> g_BnStableCycles{ 0 };
 std::atomic<uint64_t> g_CacheHeartbeatMs{ 0 };
+std::atomic<int> g_CacheLastEntity{ 0 };
 std::atomic<uint32_t> g_CacheThreadEpoch{ 0 };
 std::atomic<uintptr_t> g_LocalPlayerAddr{ 0 };
 std::atomic<uint64_t> g_LocalPlayerGeneration{ 1 };
@@ -56,6 +57,8 @@ void cache::do_Cache() {
     };
 
     while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
         if (MISC::ShutdownRequested) {
             LOG("CACHE: ShutdownRequested — exiting do_Cache");
             return;
@@ -346,9 +349,10 @@ void cache::do_Cache() {
         auto cycleStart = GetTickCount64();
 
         for (auto i = 0; i < entity_size; i++) {
-            // Shutdown check + heartbeat every 50 entities (was 500 — too slow, caused BSOD)
+            // Shutdown check + heartbeat every 50 entities
             if (i > 0 && (i % 50) == 0) {
                 g_CacheHeartbeatMs.store(GetTickCount64(), std::memory_order_release);
+                g_CacheLastEntity.store(i, std::memory_order_relaxed);
                 if (MISC::ShutdownRequested) { LOG("CACHE: aborting at entity %d/%d (shutdown)", i, (int)entity_size); break; }
             }
 
@@ -367,8 +371,6 @@ void cache::do_Cache() {
             if (!objectClass) continue;
 
             // Cache prefab name by objectClass pointer — avoids re-reading 128 bytes
-            // for thousands of identical world objects every cycle.
-            // TTL: re-read after 10 cycles to handle Il2Cpp address reuse
             struct PrefabCacheEntry { std::string name; uint64_t cycle; };
             static std::unordered_map<uintptr_t, PrefabCacheEntry> s_prefabNameCache;
             std::string buff;
@@ -379,7 +381,9 @@ void cache::do_Cache() {
                 } else {
                     uintptr_t namePtr = read<uintptr_t>(objectClass + 0x50);
                     if (!namePtr || !is_valid(namePtr)) continue;
-                    buff = read<monostr>(namePtr).buffer;
+                    monostr ms = read<monostr>(namePtr);
+                    ms.buffer[127] = '\0';
+                    buff = ms.buffer;
                     buff = std::string(buff.c_str());
                     if (buff.empty()) continue;
                     if (s_prefabNameCache.size() > 2000) s_prefabNameCache.clear();
@@ -526,7 +530,9 @@ void cache::do_Cache() {
                     if (klass && is_valid(klass)) {
                         uintptr_t classNamePtr = read<uintptr_t>(klass + 0x10);
                         if (classNamePtr && is_valid(classNamePtr)) {
-                            std::string className = read<monostr>(classNamePtr).buffer;
+                            monostr cms = read<monostr>(classNamePtr);
+                            cms.buffer[127] = '\0';
+                            std::string className = cms.buffer;
                             if (className.find("BasePlayer") != std::string::npos) {
                                 isPlayer = true;
                                 static int fallbackCount = 0;
@@ -601,7 +607,7 @@ void cache::do_Cache() {
                     }
                 }
 
-                // Name / held item: lower LOD for distant players
+                // Name / held item: lower LOD for distant players (stable source strategy)
                 if (Distance <= 100.f || (Distance <= 300.f && (cacheCycleCount % 2) == 0)) {
                     ec.name = Player->GetName();
                     if (Distance <= 100.f || (Distance <= 200.f && (cacheCycleCount % 4) == 0)) {
@@ -611,7 +617,7 @@ void cache::do_Cache() {
                 }
                 ec.skeletonValid = false;
 
-                // Inventory is the most expensive block after skeletons; only read it for close players
+                // Inventory scan: close players only, every 4th cycle, only if ESP toggles active
                 if (Distance <= 100.f && (ESP::hotbar_text || ESP::Clothing || ESP::ItemList || ESP::AmmoBar) && (cacheCycleCount % 4) == 0) {
                     auto belt = Player->Get_Hotbar_list();
                     for (size_t i = 0; i < belt.size() && i < 6; i++) {
@@ -737,8 +743,6 @@ void cache::do_Cache() {
                 tempAnimalList.push_back(Animal);
             }
             else {
-                // AABB occluder collection disabled — ESP uses game visibility flags now
-
                 // WORLD PREFAB: skip entirely if no world ESP toggle is active
                 if (!WORLD::AnyEspEnabled()) continue;
 
@@ -1021,7 +1025,9 @@ void cache::do_Cache() {
                                     uintptr_t namePtr = read<uintptr_t>(cls0 + 0x50);
                                     LOG_HEX("  namePtr (+0x50)", namePtr);
                                     if (namePtr) {
-                                        std::string rawName = read<monostr>(namePtr).buffer;
+                                        monostr dms = read<monostr>(namePtr);
+                                        dms.buffer[127] = '\0';
+                                        std::string rawName = dms.buffer;
                                         LOG("  rawName: '%s' (len=%d)", rawName.c_str(), (int)rawName.length());
                                     }
                                 }
@@ -1142,11 +1148,11 @@ void cache::do_Cache() {
         }
 
         ULONGLONG elapsed = GetTickCount64() - cycleStart;
-        constexpr ULONGLONG kCacheTargetMs = 250;
+        constexpr ULONGLONG kCacheTargetMs = 100;
         if (elapsed < kCacheTargetMs)
             std::this_thread::sleep_for(std::chrono::milliseconds(kCacheTargetMs - (DWORD)elapsed));
         else
-            std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
@@ -1156,6 +1162,8 @@ void cache::do_PositionRefresh() {
     static bool posLog = false;
 
     while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
         if (threadEpoch != g_FastRefreshEpoch.load(std::memory_order_acquire)) {
             LOG("POS: epoch change detected, exiting old worker (epoch=%u)", threadEpoch);
             return;
@@ -1220,6 +1228,9 @@ void cache::do_PositionRefresh() {
             g_LocalPlayerTeam = cachedTeam;
         }
 
+        // Camera matrix is now read FRESH in the render thread (ReadFrameCameraMatrix in Cheat.hpp)
+        // Position thread only reads player positions + velocities — saves 7 IOCTLs per cycle
+
         // Player position refresh (only when other players exist)
         std::vector<Rust::BaseEntity*> playerList;
         {
@@ -1231,13 +1242,14 @@ void cache::do_PositionRefresh() {
             continue;
         }
 
-        // Per-player: ONLY root position + velocity (cheap: 8 IOCTLs each)
+        // Per-player: root position + velocity (stable source approach)
         for (auto* Player : playerList) {
             if (!Player || !is_valid((uintptr_t)Player)) continue;
 
             auto pos = Player->Get_ObjectPosition();
             if (pos.Empty()) continue;
 
+            // Read velocity for prediction (within range)
             Vector3 vel;
             if (localPos.DistTo(pos) <= 300.f)
                 vel = Player->GetVelocity();
@@ -1280,16 +1292,15 @@ void cache::do_PositionRefresh() {
             }
         }
 
-        ULONGLONG elapsed = GetTickCount64() - posCycleStart;
-        constexpr ULONGLONG kPosTargetMs = 8;
-        if (elapsed < kPosTargetMs)
-            std::this_thread::sleep_for(std::chrono::milliseconds(kPosTargetMs - (DWORD)elapsed));
-        else
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        // 1ms sleep at start of each iteration is sufficient — no conditional sleep needed
     }
 }
 
-// Skeleton + feet refresh — slower (~68ms for 10 close players), updates bones + head/feet
+// Skeleton refresh — reads 15 bones per player with per-player TTL caching
+// Close players (≤20m): refreshed every 50ms (aimbot precision)
+// Medium players (20-100m): refreshed every 100ms
+// Far players (100-300m): refreshed every 200ms
+// Each iteration only reads players whose cache has expired — staggered load
 void cache::do_SkeletonRefresh() {
     const uint32_t threadEpoch = g_SkeletonEpoch.load(std::memory_order_acquire);
     static bool skelLog = false;
@@ -1302,7 +1313,18 @@ void cache::do_SkeletonRefresh() {
         BoneList::r_upperarm, BoneList::r_forearm, BoneList::r_hand
     };
 
+    // Per-player bone cache
+    struct BoneCache {
+        Vector3 bones[15] = {};
+        uint64_t lastReadMs = 0;
+        bool valid = false;
+    };
+    static std::unordered_map<uintptr_t, BoneCache> s_boneCache;
+    static int s_cleanupTick = 0;
+
     while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
         if (threadEpoch != g_SkeletonEpoch.load(std::memory_order_acquire)) {
             LOG("SKEL: epoch change detected, exiting old worker (epoch=%u)", threadEpoch);
             return;
@@ -1325,40 +1347,28 @@ void cache::do_SkeletonRefresh() {
             }
         }
 
-        if (!src->LocalPlayer || !is_valid((uintptr_t)src->LocalPlayer)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            continue;
-        }
-        if (g_BnStableCycles.load(std::memory_order_relaxed) < 3) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(25));
-            continue;
-        }
+        if (!src->LocalPlayer || !is_valid((uintptr_t)src->LocalPlayer)) continue;
+        if (g_BnStableCycles.load(std::memory_order_relaxed) < 3) continue;
 
         std::vector<Rust::BaseEntity*> playerList;
         {
             std::lock_guard<std::mutex> lk(entity_mutex);
             playerList = entity_List;
         }
-        if (playerList.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            continue;
-        }
+        if (playerList.empty()) continue;
 
         Vector3 localPos;
         {
             std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex);
             localPos = g_LocalPlayerPos;
         }
-        if (localPos.Empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
-        }
+        if (localPos.Empty()) continue;
 
-        constexpr float kFullSkeletonDist = 20.f;
-        constexpr float kPartialSkeletonDist = 300.f;
+        uint64_t now = GetTickCount64();
 
-        struct DistPlayer { Rust::BaseEntity* p; float d; };
-        std::vector<DistPlayer> closePlayers;
+        // Find players whose bone cache has expired — only read those
+        struct PendingRead { Rust::BaseEntity* p; float dist; uint64_t cacheAge; };
+        std::vector<PendingRead> pending;
         {
             std::lock_guard<std::mutex> lk(g_EspCacheMutex);
             for (auto* Player : playerList) {
@@ -1366,124 +1376,87 @@ void cache::do_SkeletonRefresh() {
                 auto it = g_EspCache.find((uintptr_t)Player);
                 if (it == g_EspCache.end() || it->second.headPos.Empty()) continue;
                 float d = localPos.DistTo(it->second.headPos);
-                if (d <= kPartialSkeletonDist) closePlayers.push_back({ Player, d });
+                if (d > 300.f) continue;
+
+                auto bcIt = s_boneCache.find((uintptr_t)Player);
+                uint64_t cacheAge = (bcIt != s_boneCache.end()) ? (now - bcIt->second.lastReadMs) : 999999;
+
+                // TTL based on distance — closer players get fresher bones
+                uint64_t ttl;
+                if (d <= 20.f) ttl = 50;        // close: 50ms (aimbot precision)
+                else if (d <= 100.f) ttl = 100; // medium: 100ms
+                else ttl = 200;                  // far: 200ms
+
+                if (cacheAge >= ttl) {
+                    pending.push_back({ Player, d, cacheAge });
+                }
             }
         }
-        if (closePlayers.size() > 1) {
-            std::sort(closePlayers.begin(), closePlayers.end(), [](const DistPlayer& a, const DistPlayer& b) {
-                return a.d < b.d;
-            });
-        }
+
+        if (pending.empty()) continue;
+
+        // Sort by cache age (oldest first) then by distance (closest first)
+        std::sort(pending.begin(), pending.end(), [](const PendingRead& a, const PendingRead& b) {
+            if (a.cacheAge != b.cacheAge) return a.cacheAge > b.cacheAge;
+            return a.dist < b.dist;
+        });
 
         auto skelCycleStart = GetTickCount64();
         int skelCount = 0;
-        for (const auto& dp : closePlayers) {
-            auto* Player = dp.p;
-            float dist = dp.d;
+        constexpr int kMaxPerIteration = 5;  // prevents IOCTL burst when all caches expire
+
+        for (const auto& pr : pending) {
+            if (skelCount >= kMaxPerIteration) break;
+            auto* Player = pr.p;
 
             uintptr_t btf = Player->Get_BoneTransforms();
             if (!btf) continue;
 
-            Vector3 fastBones[15] = {};
-            bool fastSkelValid = false;
-
+            BoneCache bc;
             int validBones = 0;
-            if (dist <= kFullSkeletonDist) {
-                for (int b = 0; b < 15; b++) {
-                    auto t = Player->Get_Transformation_Fast(skelBones[b], btf);
-                    if (!t) continue;
-                    Vector3 bp = t->Get_Position();
-                    if (bp.Empty()) continue;
-                    fastBones[b] = bp;
-                    validBones++;
-                }
-            } else {
-                // 9 key bones: head, neck, spine1, r_hip, r_knee, r_foot, l_hip, l_knee, l_foot
-                // Forms a connected upper-body + legs skeleton (7 drawable lines)
-                static const int keyIdx[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
-                for (int k = 0; k < 9; k++) {
-                    int b = keyIdx[k];
-                    auto t = Player->Get_Transformation_Fast(skelBones[b], btf);
-                    if (!t) continue;
-                    Vector3 bp = t->Get_Position();
-                    if (bp.Empty()) continue;
-                    fastBones[b] = bp;
-                    validBones++;
-                }
+            for (int b = 0; b < 15; b++) {
+                auto t = Player->Get_Transformation_Fast(skelBones[b], btf);
+                if (!t) continue;
+                Vector3 bp = t->Get_Position();
+                if (bp.Empty()) continue;
+                bc.bones[b] = bp;
+                validBones++;
             }
-            fastSkelValid = (validBones >= 4);
+            bc.lastReadMs = GetTickCount64();
+            bc.valid = (validBones >= 4);
+            s_boneCache[(uintptr_t)Player] = bc;
             skelCount++;
 
-            // Per-bone interpolation on the skeleton thread — smooths between reads
-            // so the render thread gets pre-stabilized bones (no 15 lerps/player on render thread)
-            {
-                struct SkelInterpState { Vector3 bones[15]; uint64_t tick; };
-                static std::unordered_map<uintptr_t, SkelInterpState> prevBones;
-                static int cleanupTick = 0;
-
-                if (fastSkelValid) {
-                    // Read player velocity from cache for adaptive alpha
-                    float speedSq = 0.0f;
-                    {
-                        std::lock_guard<std::mutex> lk(g_EspCacheMutex);
-                        auto cit = g_EspCache.find((uintptr_t)Player);
-                        if (cit != g_EspCache.end()) {
-                            auto& v = cit->second.velocity;
-                            speedSq = v.x*v.x + v.y*v.y + v.z*v.z;
-                        }
-                    }
-                    // Adaptive alpha: fast-moving players get near-zero smoothing (prevents lag)
-                    // stationary players get moderate smoothing (prevents jitter)
-                    float alpha = (speedSq > 9.0f) ? 0.92f : 0.80f;  // 3 m/s threshold
-
-                    auto pit = prevBones.find((uintptr_t)Player);
-                    if (pit != prevBones.end()) {
-                        for (int b = 0; b < 15; b++) {
-                            if (fastBones[b].Empty()) continue;
-                            if (pit->second.bones[b].Empty()) continue;
-                            // Skip absurd teleports
-                            float d = fastBones[b].DistTo(pit->second.bones[b]);
-                            if (d > 5.0f) continue;
-                            fastBones[b] = pit->second.bones[b] * (1.0f - alpha) + fastBones[b] * alpha;
-                        }
-                    }
-                    SkelInterpState st{};
-                    for (int b = 0; b < 15; b++) st.bones[b] = fastBones[b];
-                    st.tick = GetTickCount64();
-                    prevBones[(uintptr_t)Player] = st;
-                }
-
-                // Periodic cleanup of stale entries
-                if (++cleanupTick >= 200) {
-                    cleanupTick = 0;
-                    uint64_t now = GetTickCount64();
-                    for (auto it2 = prevBones.begin(); it2 != prevBones.end(); ) {
-                        if (now - it2->second.tick > 5000) it2 = prevBones.erase(it2);
-                        else ++it2;
-                    }
-                }
-            }
-
-            {
+            if (bc.valid) {
                 std::lock_guard<std::mutex> lk(g_EspCacheMutex);
                 auto it = g_EspCache.find((uintptr_t)Player);
                 if (it != g_EspCache.end()) {
-                    // Only write skeleton data — never overwrite headPos/feetPos,
-                    // those stay locked to the real-time position thread.
-                    if (fastSkelValid) {
-                        for (int b = 0; b < 15; b++)
-                            it->second.bones[b] = fastBones[b];
-                        it->second.skeletonValid = true;
-                        it->second.skeletonTick = GetTickCount64();
-                        if (!fastBones[2].Empty())
-                            it->second.spine1Pos = fastBones[2];
-                    }
+                    for (int b = 0; b < 15; b++)
+                        it->second.bones[b] = bc.bones[b];
+                    it->second.boneAnchorPos = it->second.headPos;
+                    it->second.skeletonValid = true;
+                    it->second.skeletonTick = bc.lastReadMs;
+                    if (!bc.bones[2].Empty())
+                        it->second.spine1Pos = bc.bones[2];
                 }
             }
         }
 
+        // Periodic cleanup of stale bone cache entries
+        if (++s_cleanupTick >= 200) {
+            s_cleanupTick = 0;
+            std::unordered_set<uintptr_t> activePlayers;
+            for (auto* p : playerList) activePlayers.insert((uintptr_t)p);
+            for (auto it = s_boneCache.begin(); it != s_boneCache.end(); ) {
+                if (activePlayers.find(it->first) == activePlayers.end() || (now - it->second.lastReadMs > 5000))
+                    it = s_boneCache.erase(it);
+                else
+                    ++it;
+            }
+        }
+
         if (!skelLog) {
-            LOG("SKEL: refresh thread running, close players=%d", skelCount);
+            LOG("SKEL: refresh thread running, read %d/%d players (cache TTL)", skelCount, (int)pending.size());
             skelLog = true;
         }
 
@@ -1491,16 +1464,9 @@ void cache::do_SkeletonRefresh() {
             static int skelCycleLogTick = 0;
             ULONGLONG elapsed = GetTickCount64() - skelCycleStart;
             if ((++skelCycleLogTick % 240) == 0 || elapsed > 100) {
-                LOG("SKEL cycle: %llums players=%d", elapsed, skelCount);
+                LOG("SKEL cycle: %llums read=%d pending=%d", elapsed, skelCount, (int)pending.size());
             }
         }
-
-        ULONGLONG elapsed = GetTickCount64() - skelCycleStart;
-        constexpr ULONGLONG kSkeletonTargetMs = 12;
-        if (elapsed < kSkeletonTargetMs)
-            std::this_thread::sleep_for(std::chrono::milliseconds(kSkeletonTargetMs - (DWORD)elapsed));
-        else
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
 

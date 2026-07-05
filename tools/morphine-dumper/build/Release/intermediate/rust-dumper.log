@@ -1,0 +1,25 @@
+﻿  core.cpp
+C:\Users\iodize\Desktop\rust-dumper\rust-dumper\src\runtime\il2cpp_lib.hpp(1005,37): warning C4018: '>=': signed/unsigned mismatch
+  (compiling source file 'src/core/core.cpp')
+  
+C:\Users\iodize\Desktop\rust-dumper\rust-dumper\src\runtime\il2cpp_lib.hpp(1007,37): warning C4018: '<=': signed/unsigned mismatch
+  (compiling source file 'src/core/core.cpp')
+  
+C:\Users\iodize\Desktop\rust-dumper\rust-dumper\src\runtime\il2cpp_lib.hpp(1470,31): warning C4018: '<': signed/unsigned mismatch
+  (compiling source file 'src/core/core.cpp')
+  
+C:\Users\iodize\Desktop\rust-dumper\rust-dumper\src\runtime\il2cpp_lib.hpp(1484,31): warning C4018: '<': signed/unsigned mismatch
+  (compiling source file 'src/core/core.cpp')
+  
+C:\Users\iodize\Desktop\rust-dumper\rust-dumper\src\runtime\il2cpp_lib.hpp(1711,28): warning C4018: '<': signed/unsigned mismatch
+  (compiling source file 'src/core/core.cpp')
+  
+C:\Users\iodize\Desktop\rust-dumper\rust-dumper\src\runtime\il2cpp_lib.hpp(1895,28): warning C4018: '<': signed/unsigned mismatch
+  (compiling source file 'src/core/core.cpp')
+  
+  Generating code
+  15 of 2112 functions ( 0.7%) were compiled, the rest were copied from previous compilation.
+    3 functions were new in current compilation
+    88 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  rust-dumper.vcxproj -> C:\Users\iodize\Desktop\rust-dumper\build\Release\rust-dumper.dll

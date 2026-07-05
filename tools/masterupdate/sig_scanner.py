@@ -39,11 +39,12 @@ RESULTS_FILE = OUTPUT_DIR / "sig_scan_results.json"
 STATIC_POINTERS = {
     "basenetworkable_pointer": 0x0FD36298,
     "camera_pointer": 0x0FD0A5C0,
-    "Il2cppGetHandle": 0x10266600,
+    "Il2cppGetHandle": 0x101CA4E0,
     "TOD_Sky_TypeInfo": 0x0FCEBC70,
     "EffectNetwork_Pointer": 0xE3790F8,
     "Class_SingletonComponent_UI_LoadingScreen": 0x0FD11958,
     "Class_SingletonComponent_MixerSnapshotManager__c": 0x0FD37CF0,
+    "ConVar_Graphics": 0x0FD05BC0,
 }
 
 # Context bytes for signature uniqueness
@@ -512,11 +513,14 @@ def merge_into_master(sig_results):
         master["offsets"] = {}
     if "static_pointers" not in master["offsets"]:
         master["offsets"]["static_pointers"] = {}
+    if "klass_rvas" not in master:
+        master["klass_rvas"] = {}
 
     merged = 0
     for name, info in sig_results.items():
         rva = info.get("rva", 0)
         if rva > 0:
+            # Merge into offsets.static_pointers (for offsets_dump.hpp + verification)
             existing = master["offsets"]["static_pointers"].get(name, {})
             existing_source = existing.get("source", "")
             # Only overwrite if no existing source or existing is not sha-dumper
@@ -533,6 +537,12 @@ def merge_into_master(sig_results):
                     merged += 1
                 else:
                     print(f"  [XVAL] {name}: sig=0x{rva:X} vs sha-dumper=0x{existing.get('rva', 0):X} — MISMATCH")
+
+            # Also merge into klass_rvas (for compare_and_patch.py)
+            # Use the project_name as key — compare_and_patch.py uses name_mappings.get(name, name) fallback
+            if name not in master["klass_rvas"] or master["klass_rvas"].get(name, 0) == 0:
+                master["klass_rvas"][name] = rva
+                print(f"  [MERGE] klass_rvas[{name}] = 0x{rva:X} (from sig_scan)")
 
     with open(MASTER_JSON, "w", encoding="utf-8") as f:
         json.dump(master, f, indent=2)

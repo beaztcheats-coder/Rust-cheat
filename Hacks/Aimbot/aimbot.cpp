@@ -99,14 +99,18 @@ static int GetBestBone(Rust::BaseEntity* player)
         float bestDist = FLT_MAX;
 
         Vector3 cachedBones[15] = {};
+        Vector3 cachedHead;
         bool hasCache = false;
         bool isCrouching = false;
         {
             std::lock_guard<std::mutex> lk(g_EspCacheMutex);
             auto cd = g_EspCache.find((uintptr_t)player);
-            if (cd != g_EspCache.end() && cd->second.skeletonValid) {
-                hasCache = true;
-                for (int bi = 0; bi < 15; ++bi) cachedBones[bi] = cd->second.bones[bi];
+            if (cd != g_EspCache.end()) {
+                cachedHead = cd->second.headPos;
+                if (cd->second.skeletonValid) {
+                    hasCache = true;
+                    for (int bi = 0; bi < 15; ++bi) cachedBones[bi] = cd->second.bones[bi];
+                }
                 isCrouching = cd->second.isCrouching;
             }
         }
@@ -116,7 +120,8 @@ static int GetBestBone(Rust::BaseEntity* player)
             if (hasCache && cacheIdx[i] >= 0) {
                 pos = cachedBones[cacheIdx[i]];
             } else {
-                pos = player->Get_ObjectPosition();
+                // Use cached headPos — NO live IOCTL reads through entity pointers
+                pos = cachedHead;
                 if (bonePool[i] == 53) pos.y += isCrouching ? 1.05f : 1.65f;
                 else if (bonePool[i] == 52) pos.y += isCrouching ? 0.90f : 1.50f;
                 else if (bonePool[i] == 20) pos.y += isCrouching ? 0.65f : 1.20f;
@@ -148,7 +153,15 @@ static int GetBestBone(Rust::BaseEntity* player)
 
 static Vector3 GetPredictedTargetPos(Rust::BaseEntity* player, int bone)
 {
-    Vector3 rootPos = player->Get_ObjectPosition();
+    // Use ONLY cached data — NO live IOCTL reads through potentially stale entity pointers
+    Vector3 rootPos;
+    {
+        std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+        auto cd = g_EspCache.find((uintptr_t)player);
+        if (cd != g_EspCache.end()) {
+            rootPos = cd->second.headPos;
+        }
+    }
     if (rootPos.Empty()) return Vector3();
 
     // Try cached skeleton bones first (no IOCTL calls)
@@ -430,12 +443,7 @@ void aimbot::do_aimbot()
 
         // Get target position with prediction (handles velocity + gravity comp)
         auto targetPos = GetPredictedTargetPos(BestEntity, bone);
-        // Override with SSE bone position if cache was stale (more accurate)
-        if (targetPos.Empty()) {
-            auto tr = BestEntity->Get_Transformation((BoneList)bone);
-            if (tr) targetPos = tr->Get_Position();
-        }
-        if (targetPos.Empty()) return;
+        if (targetPos.Empty()) return; // no live IOCTL fallback — cache only
 
         // Get LOCAL player position — from globals (zero IOCTLs, written by fast thread)
         Vector3 localPos;
@@ -444,8 +452,11 @@ void aimbot::do_aimbot()
             localPos = g_LocalNeckPos;
         }
         if (localPos.Empty()) {
-            auto localNeck = src->LocalPlayer->Get_Transformation(BoneList::neck);
-            if (localNeck) localPos = localNeck->Get_Position();
+            // Fallback: use g_LocalPlayerPos + neck offset — NO live IOCTL reads
+            Vector3 lpPos;
+            { std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex); lpPos = g_LocalPlayerPos; }
+            if (!lpPos.Empty()) localPos = lpPos;
+            localPos.y += 1.5f; // approximate neck height
         }
         if (localPos.Empty()) return;
         auto angle = CalcAngle(localPos, targetPos);

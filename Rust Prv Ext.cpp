@@ -112,7 +112,7 @@ static void StartCacheWorker(const char* reason)
             }
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
-            LOG("CRASH in cache worker thread! Exception code: 0x%X", GetExceptionCode());
+            LOG("CRASH in cache worker thread! Exception code: 0x%X (last entity=%d)", GetExceptionCode(), g_CacheLastEntity.load(std::memory_order_relaxed));
             Sleep(250);
         }
     }).detach();
@@ -131,7 +131,7 @@ static void StartFastRefreshWorker(const char* reason)
             }
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
-            LOG("CRASH in position refresh thread! Exception code: 0x%X", GetExceptionCode());
+            LOG("CRASH in position refresh thread! Exception code: 0x%X (last entity=%d)", GetExceptionCode(), g_CacheLastEntity.load(std::memory_order_relaxed));
             Sleep(250);
         }
     }).detach();
@@ -150,7 +150,7 @@ static void StartSkeletonWorker(const char* reason)
             }
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
-            LOG("CRASH in skeleton refresh thread! Exception code: 0x%X", GetExceptionCode());
+            LOG("CRASH in skeleton refresh thread! Exception code: 0x%X (last entity=%d)", GetExceptionCode(), g_CacheLastEntity.load(std::memory_order_relaxed));
             Sleep(250);
         }
     }).detach();
@@ -227,15 +227,13 @@ void MainThreadImpl()
 {
     timeBeginPeriod(1);
 
-    // RAW DIAGNOSTIC: write to %TEMP% IMMEDIATELY — guaranteed writable
+    // RAW DIAGNOSTIC: write to C:\cheat_debug.log IMMEDIATELY — fixed path always findable
     {
-        char tempPath[MAX_PATH];
-        GetTempPathA(MAX_PATH, tempPath);
-        strcat_s(tempPath, "cheat_debug.log");
-        HANDLE hDiag = CreateFileA(tempPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        const char* diagPath = "C:\\cheat_debug.log";
+        HANDLE hDiag = CreateFileA(diagPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (hDiag != INVALID_HANDLE_VALUE) {
             std::string dllDir = RuntimePaths::DllDirectory();
-            std::string msg = "[BOOT] DLL loaded. DllDir=" + dllDir + " TempLog=" + std::string(tempPath) + "\r\n";
+            std::string msg = "[BOOT] DLL loaded. DllDir=" + dllDir + " LogPath=" + diagPath + "\r\n";
             DWORD written;
             WriteFile(hDiag, msg.c_str(), (DWORD)msg.size(), &written, NULL);
             CloseHandle(hDiag);
@@ -288,17 +286,24 @@ void MainThreadImpl()
                 if (GetModuleFileNameA(self, dllPath, MAX_PATH)) {
                     std::string lower(dllPath);
                     for (char& c : lower) c = (char)tolower((unsigned char)c);
+                    printf("[LOG] DLL: %s\n", dllPath);
                     if (lower.find("_debug") != std::string::npos) {
                         g_UpdateLoggingEnabled = true;
-                        // Create marker file so logging persists across reinjections
-                        HANDLE hMarker = CreateFileA("C:\\rust_debug_enabled.txt", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-                        if (hMarker != INVALID_HANDLE_VALUE) { DWORD w; WriteFile(hMarker, "1", 1, &w, NULL); CloseHandle(hMarker); }
+                        printf("[LOG] Debug DLL detected - logging ENABLED\n");
+                    } else {
+                        printf("[LOG] Production DLL - logging disabled\n");
                     }
                 }
             }
         }
-        // For debug DLLs: force logging on (runtime check, not compile-time)
-        Logger::Get().Init(RuntimePaths::DefaultLogPath());
+        // For debug DLLs: force log path to C:\cheat_debug.log
+        if (g_UpdateLoggingEnabled) {
+            const char* debugLogPath = "C:\\cheat_debug.log";
+            printf("[LOG] Log path: %s\n", debugLogPath);
+            Logger::Get().Init(debugLogPath);
+        } else {
+            Logger::Get().Init(RuntimePaths::DefaultLogPath());
+        }
         LOG("DLL injected, MainThread started");
         LOG("Build: %s %s", __DATE__, __TIME__);
         LOG("Logging: %s", g_UpdateLoggingEnabled ? "ENABLED" : "disabled");
@@ -464,7 +469,10 @@ void MainThreadImpl()
             // Log decrypt constants for diagnostics
             LOG("DecryptCfg: nk_rol=0x%X nk_sub=0x%X nk_xor=0x%X nk_add=0x%X", OffsetManager::DecryptCfg.nk_rol, OffsetManager::DecryptCfg.nk_sub, OffsetManager::DecryptCfg.nk_xor, OffsetManager::DecryptCfg.nk_add);
             LOG("DecryptCfg: nk2_rol=0x%X nk2_xor=0x%X nk2_rol_2=0x%X nk2_xor_2=0x%X", OffsetManager::DecryptCfg.nk2_rol, OffsetManager::DecryptCfg.nk2_xor, OffsetManager::DecryptCfg.nk2_rol_2, OffsetManager::DecryptCfg.nk2_xor_2);
-            LOG("DecryptCfg: fov_xor=0x%X fov_add=0x%X fov_sub=0x%X", OffsetManager::DecryptCfg.fov_xor, OffsetManager::DecryptCfg.fov_add, OffsetManager::DecryptCfg.fov_sub);
+            LOG("DecryptCfg: cla_sub=0x%X cla_rol=0x%X cla_xor=0x%X cla_add=0x%X", OffsetManager::DecryptCfg.cla_sub, OffsetManager::DecryptCfg.cla_rol, OffsetManager::DecryptCfg.cla_xor, OffsetManager::DecryptCfg.cla_add);
+            LOG("DecryptCfg: inv_rol=0x%X inv_add=0x%X inv_rol_2=0x%X", OffsetManager::DecryptCfg.inv_rol, OffsetManager::DecryptCfg.inv_add, OffsetManager::DecryptCfg.inv_rol_2);
+            LOG("DecryptCfg: ey_sub=0x%X ey_xor=0x%X ey_rol=0x%X ey_add=0x%X", OffsetManager::DecryptCfg.ey_sub, OffsetManager::DecryptCfg.ey_xor, OffsetManager::DecryptCfg.ey_rol, OffsetManager::DecryptCfg.ey_add);
+            LOG("DecryptCfg: fov_xor=0x%X fov_add=0x%X fov_rol=0x%X fov_sub=0x%X", OffsetManager::DecryptCfg.fov_xor, OffsetManager::DecryptCfg.fov_add, OffsetManager::DecryptCfg.fov_rol, OffsetManager::DecryptCfg.fov_sub);
             LOG("Offsets: bn_ptr=0x%I64X cam_ptr=0x%I64X wrapper=0x%I64X entity=0x%I64X",
                 offsets::basenetworkable_pointer, offsets::camera_pointer,
                 offsets::BaseNetworkable::wrapper_class, offsets::BaseNetworkable::entity);
@@ -567,6 +575,7 @@ void MainThreadImpl()
             __try {
                 uint64_t miscCycle = 0;
                 while (!MISC::ShutdownRequested) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     if (src && src->LocalPlayer && is_valid((uintptr_t)src->LocalPlayer)
                         && g_BnStableCycles.load(std::memory_order_relaxed) >= 3) {
                         hx->do_misc();
@@ -592,35 +601,8 @@ void MainThreadImpl()
             }
         }).detach();
 
-        std::thread([]() {
-            __try {
-                uint64_t aimCycle = 0;
-                while (!MISC::ShutdownRequested) {
-                    if (src && src->LocalPlayer && is_valid((uintptr_t)src->LocalPlayer)
-                        && g_BnStableCycles.load(std::memory_order_relaxed) >= 3
-                        && (!SETTINGS::BattleMode || BATTLE::Aimbot)) {
-                        aim->do_aimbot();
-                    }
-                    if ((++aimCycle % 20) == 0 && Drv) {
-                        static int aimProcMiss = 0;
-                        if (!Drv->find_process(L"RustClient.exe")) {
-                            if (++aimProcMiss >= 3) {
-                                LOG("AIMBOT: RustClient.exe no longer running — shutting down to prevent BSOD");
-                                g_process_dead.store(true, std::memory_order_relaxed);
-                                MISC::ShutdownRequested = true;
-                                break;
-                            }
-                        } else {
-                            aimProcMiss = 0;
-                        }
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-                }
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER) {
-                LOG("CRASH in aimbot thread! Exception code: 0x%X", GetExceptionCode());
-            }
-        }).detach();
+        // Aimbot now runs in the render thread (Do_Cheat) — no separate thread needed
+        // This eliminates the race condition between aimbot and cache threads
 
         Overlay* Draw = new Overlay;
         Draw->DrawOverlay();
