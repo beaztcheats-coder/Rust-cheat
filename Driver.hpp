@@ -9,9 +9,15 @@
 #include <winternl.h>
 #include <mutex>
 #include "globals.h"
+#include "Logger.hpp"
 
 inline std::atomic<bool> g_process_dead{ false };
 inline std::atomic<bool> g_shutting_down{ false };
+
+// Render thread bypasses IOCTL mutex — prevents ESP sticking/menu lag on slow PCs.
+// Render thread does ~12 IOCTLs/frame (camera + aimbot), negligible concurrent load.
+// All other threads (cache/position/skeleton/misc) still use the mutex.
+thread_local bool g_render_thread = false;
 
 
 #define IOCTL_DISPATCH CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6B4F92A3, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -142,6 +148,11 @@ public:
     uintptr_t process_cr3;
     uintptr_t m_game_assembly = 0;
 
+    // IOCTL serialization — prevents concurrent driver access from multiple threads
+    // Without this, 5 threads call DeviceIoControl() simultaneously, causing race
+    // conditions in the kernel driver's IOCTL handler -> BSOD
+    std::mutex ioctl_mutex;
+
     // IOCTL failure tracking — prevents BSOD from stale CR3 after game closes
     std::atomic<int> ioctl_fail_count{ 0 };
     static constexpr int IOCTL_FAIL_LIMIT = 500;        // block reads when fail count exceeds this
@@ -187,6 +198,10 @@ public:
         if (g_process_dead.load(std::memory_order_relaxed)) return false;
         if (g_shutting_down.load(std::memory_order_relaxed)) return false;
         DWORD bytesReturned = 0;
+        // No mutex — driver handles concurrent IOCTLs internally.
+        // Mutex was causing 20+ second freezes on slow PCs (40K IOCTLs/cycle serialized).
+        // SHA source (Timeless Rust) uses no mutex and never BSODs.
+        // Process-death watchdog + ioctl_blocked flag still protect against stale CR3.
         BOOL status = DeviceIoControl(hDriver, IOCTL_DISPATCH, request, sizeof(REQUEST_DATA), request, sizeof(REQUEST_DATA), &bytesReturned, nullptr);
         return status && bytesReturned == sizeof(REQUEST_DATA);
     }
@@ -275,7 +290,7 @@ public:
         req.ReadWriteMemoryData.Buffer = (ULONG64)buffer;
         req.ReadWriteMemoryData.Size = size;
         req.ReadWriteMemoryData.isWrite = false;
-        req.ReadWriteMemoryData.noncachedread = true;
+        req.ReadWriteMemoryData.noncachedread = false;
 
         if (SendIoctl(&req))
         {
@@ -294,6 +309,28 @@ public:
             }
         }
         return false;
+    }
+
+    // Minimal read for PE scanning — bypasses all fail-counting/blocking logic
+    // Uses noncachedread=false (MmCopyVirtualMemory) — safe for all reads.
+    // ReadMemory_ACE/WriteMemory_ACE also use noncachedread=false — MmCopyVirtualMemory
+    // handles freed/invalid pages gracefully (returns false instead of BSOD).
+    // Previous noncachedread=true (direct physical read) caused BSODs on stale pointers.
+    bool ReadMemory_Raw(PVOID address, PVOID buffer, uint32_t size)
+    {
+        if (hDriver == INVALID_HANDLE_VALUE) return false;
+        REQUEST_DATA req{};
+        req.SecurityCode1 = SECURITY_CODE1;
+        req.SecurityCode2 = SECURITY_CODE2;
+        req.Command = RequestId::ReadWriteMemory;
+        req.ReadWriteMemoryData.Address = (ULONG64)address;
+        req.ReadWriteMemoryData.Buffer = (ULONG64)buffer;
+        req.ReadWriteMemoryData.Size = size;
+        req.ReadWriteMemoryData.isWrite = false;
+        req.ReadWriteMemoryData.noncachedread = false;
+        DWORD bytesReturned = 0;
+        return DeviceIoControl(hDriver, IOCTL_DISPATCH, &req, sizeof(REQUEST_DATA), &req, sizeof(REQUEST_DATA), &bytesReturned, nullptr)
+            && bytesReturned == sizeof(REQUEST_DATA);
     }
 
     bool WriteMemory_ACE(PVOID address, PVOID buffer, uint32_t size)
@@ -318,7 +355,7 @@ public:
         req.ReadWriteMemoryData.Buffer = (ULONG64)buffer;
         req.ReadWriteMemoryData.Size = size;
         req.ReadWriteMemoryData.isWrite = true;
-        req.ReadWriteMemoryData.noncachedread = true;
+        req.ReadWriteMemoryData.noncachedread = false;
 
         if (SendIoctl(&req))
         {
@@ -467,34 +504,175 @@ public:
         return false;
     }
 
-    inline std::uintptr_t get_module(const wchar_t* name) {
-        const auto handle = OpenProcess(PROCESS_QUERY_INFORMATION, 0, processid);
-        auto current = 0ull;
-        auto mbi = MEMORY_BASIC_INFORMATION();
-        while (VirtualQueryEx(handle, reinterpret_cast<void*>(current), &mbi, sizeof(MEMORY_BASIC_INFORMATION))) {
-            if (mbi.Type == MEM_MAPPED || mbi.Type == MEM_IMAGE) {
-                const auto buffer = malloc(1024);
-                auto bytes = std::size_t();
-                const static auto ntdll = GetModuleHandle((L"ntdll"));
-                const static auto nt_query_virtual_memory_fn =
-                    reinterpret_cast<NTSTATUS(__stdcall*)(HANDLE, void*, std::int32_t, void*, std::size_t, std::size_t*)> (
-                        GetProcAddress(ntdll, ("NtQueryVirtualMemory")));
+    inline std::uintptr_t get_module(const wchar_t* name, uintptr_t skipAddr = 0) {
+        // Original proven approach: OpenProcess + VirtualQueryEx + NtQueryVirtualMemory
+        // This is the EXACT method from the stable version that works 100%.
+        // Do NOT add CreateToolhelp32Snapshot — it triggers EAC detection which
+        // then blocks all subsequent OpenProcess/NtQueryVirtualMemory calls.
+        // Method 1: OpenProcess + VirtualQueryEx + NtQueryVirtualMemory (usermode)
+        // Falls through to PE scan if OpenProcess fails or module not found
+        {
+            const auto handle = OpenProcess(PROCESS_QUERY_INFORMATION, 0, processid);
+            if (handle) {
+                auto current = 0ull;
+                auto mbi = MEMORY_BASIC_INFORMATION();
+                while (VirtualQueryEx(handle, reinterpret_cast<void*>(current), &mbi, sizeof(MEMORY_BASIC_INFORMATION))) {
+                    if (mbi.Type == MEM_MAPPED || mbi.Type == MEM_IMAGE) {
+                        const auto buffer = malloc(1024);
+                        if (!buffer) goto skip;
+                        auto bytes = std::size_t();
+                        const static auto ntdll = GetModuleHandle(L"ntdll");
+                        const static auto nt_query_virtual_memory_fn =
+                            reinterpret_cast<NTSTATUS(__stdcall*)(HANDLE, void*, std::int32_t, void*, std::size_t, std::size_t*)> (
+                                GetProcAddress(ntdll, "NtQueryVirtualMemory"));
 
-                if (nt_query_virtual_memory_fn(handle, mbi.BaseAddress, 2, buffer, 1024, &bytes) != 0 ||
-                    !wcsstr(static_cast<UNICODE_STRING*>(buffer)->Buffer, name) ||
-                    wcsstr(static_cast<UNICODE_STRING*>(buffer)->Buffer, (L".mui"))) {
-                    free(buffer);
-                    goto skip;
+                        if (!nt_query_virtual_memory_fn ||
+                            nt_query_virtual_memory_fn(handle, mbi.BaseAddress, 2, buffer, 1024, &bytes) != 0 ||
+                            !wcsstr(static_cast<UNICODE_STRING*>(buffer)->Buffer, name) ||
+                            wcsstr(static_cast<UNICODE_STRING*>(buffer)->Buffer, L".mui")) {
+                            free(buffer);
+                            goto skip;
+                        }
+                        free(buffer);
+                        CloseHandle(handle);
+                        return reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
+                    }
+                skip:
+                    current = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
                 }
-                free(buffer);
                 CloseHandle(handle);
-
-                return reinterpret_cast<std::uintptr_t>(mbi.BaseAddress);
             }
-        skip:
-            current = reinterpret_cast<std::uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+            // Fall through to PE scan — runs regardless of OpenProcess result
         }
-        CloseHandle(handle);
+
+        // PE scan fallback — uses ReadMemory_Raw (noncachedread=false)
+        // Binary search approach: 1GB coarse scan → 64KB fine scan in hit region
+        {
+            constexpr uint32_t GA_TIMESTAMP = 0x6A4CF525;
+            // When skipAddr is set (searching for UnityPlayer), use lower size threshold
+            // UnityPlayer.dll is ~50-100MB, GameAssembly.dll is ~268MB
+            uint32_t sizeThreshold = skipAddr ? 0x1000000 : 0x10000000;
+            LOG("PE scan: skipAddr=0x%llX sizeThreshold=0x%X", (unsigned long long)skipAddr, sizeThreshold);
+
+            // Diagnostic: test if ReadMemory_Raw works at all
+            uint16_t testMZ = 0;
+            bool driverWorks = ReadMemory_Raw((PVOID)process_base, &testMZ, 2) && testMZ == 0x5A4D;
+            LOG("PE scan: driverWorks=%d process_base=0x%llX", driverWorks ? 1 : 0, (unsigned long long)process_base);
+
+            // Scan the ENTIRE system DLL load region: 0x7FF000000000 - 0x7FFF00000000
+            // Step 1: Coarse scan at 1GB intervals to find approximate location (16 reads)
+            uintptr_t coarseStart = 0x7FF000000000ULL;
+            uintptr_t coarseEnd   = 0x7FFF00000000ULL;
+            uintptr_t hitRegion = 0;
+            int coarseMZcount = 0;
+
+            for (uintptr_t addr = coarseStart; addr < coarseEnd; addr += 0x40000000ULL) {
+                uint16_t dosSig = 0;
+                if (!ReadMemory_Raw((PVOID)addr, &dosSig, 2)) continue;
+                if (dosSig != 0x5A4D) continue;
+                if (skipAddr && addr == skipAddr) continue;
+                coarseMZcount++;
+                uint32_t peOff = 0;
+                ReadMemory_Raw((PVOID)(addr + 0x3C), &peOff, 4);
+                if (peOff == 0 || peOff > 0x400) continue;
+                uint32_t peSig = 0;
+                ReadMemory_Raw((PVOID)(addr + peOff), &peSig, 4);
+                if (peSig != 0x00004550) continue;
+                uint32_t ts = 0;
+                ReadMemory_Raw((PVOID)(addr + peOff + 4), &ts, 4);
+                uint32_t sizeOfImage = 0;
+                ReadMemory_Raw((PVOID)(addr + peOff + 0x50), &sizeOfImage, 4);
+                LOG("PE scan coarse: addr=0x%llX ts=0x%X size=0x%X", (unsigned long long)addr, ts, sizeOfImage);
+                if (!skipAddr && ts == GA_TIMESTAMP) return addr;
+                // Check size — GameAssembly is ~268MB, UnityPlayer is ~50-100MB
+                if (sizeOfImage > sizeThreshold) { hitRegion = addr; break; }
+            }
+            LOG("PE scan: coarseMZcount=%d hitRegion=0x%llX", coarseMZcount, (unsigned long long)hitRegion);
+
+            // Step 2: Fine scan at 64KB intervals in a ±512MB window around hit
+            // If no coarse hit, scan ±8GB from process_base
+            uintptr_t fineStart, fineEnd;
+            if (hitRegion) {
+                fineStart = hitRegion > 0x20000000ULL ? hitRegion - 0x20000000ULL : coarseStart;
+                fineEnd = hitRegion + 0x20000000ULL;
+            } else {
+                fineStart = process_base + 0x80000000ULL;  // +2GB
+                fineEnd = process_base + 0x380000000ULL;    // +14GB
+            }
+            LOG("PE scan: fine scan 0x%llX-0x%llX", (unsigned long long)fineStart, (unsigned long long)fineEnd);
+
+            for (uintptr_t addr = fineStart; addr < fineEnd; addr += 0x10000ULL) {
+                uint16_t dosSig = 0;
+                if (!ReadMemory_Raw((PVOID)addr, &dosSig, 2)) continue;
+                if (dosSig != 0x5A4D) continue;
+                if (skipAddr && addr == skipAddr) continue;
+                uint32_t peOff = 0;
+                ReadMemory_Raw((PVOID)(addr + 0x3C), &peOff, 4);
+                if (peOff == 0 || peOff > 0x400) continue;
+                uint32_t peSig = 0;
+                ReadMemory_Raw((PVOID)(addr + peOff), &peSig, 4);
+                if (peSig != 0x00004550) continue;
+                uint32_t ts = 0;
+                ReadMemory_Raw((PVOID)(addr + peOff + 4), &ts, 4);
+                if (!skipAddr && ts == GA_TIMESTAMP) { LOG("PE scan: fine found by timestamp at 0x%llX", (unsigned long long)addr); return addr; }
+                uint32_t sizeOfImage = 0;
+                ReadMemory_Raw((PVOID)(addr + peOff + 0x50), &sizeOfImage, 4);
+                if (sizeOfImage > sizeThreshold) { LOG("PE scan: fine found by size at 0x%llX (size=0x%X)", (unsigned long long)addr, sizeOfImage); return addr; }
+            }
+            LOG("PE scan: fine scan failed");
+
+            // Step 3: If still not found and driver works, scan wider from process_base
+            if (driverWorks) {
+                uintptr_t wideStart = process_base;
+                uintptr_t wideEnd = process_base + 0x800000000ULL; // +32GB
+                LOG("PE scan: wide scan 0x%llX-0x%llX", (unsigned long long)wideStart, (unsigned long long)wideEnd);
+                for (uintptr_t addr = wideStart; addr < wideEnd; addr += 0x10000ULL) {
+                    uint16_t dosSig = 0;
+                    if (!ReadMemory_Raw((PVOID)addr, &dosSig, 2)) continue;
+                    if (dosSig != 0x5A4D) continue;
+                    if (skipAddr && addr == skipAddr) continue;
+                    uint32_t peOff = 0;
+                    ReadMemory_Raw((PVOID)(addr + 0x3C), &peOff, 4);
+                    if (peOff == 0 || peOff > 0x400) continue;
+                    uint32_t peSig = 0;
+                    ReadMemory_Raw((PVOID)(addr + peOff), &peSig, 4);
+                    if (peSig != 0x00004550) continue;
+                    uint32_t ts = 0;
+                    ReadMemory_Raw((PVOID)(addr + peOff + 4), &ts, 4);
+                    if (!skipAddr && ts == GA_TIMESTAMP) { LOG("PE scan: wide found by timestamp at 0x%llX", (unsigned long long)addr); return addr; }
+                    uint32_t sizeOfImage = 0;
+                    ReadMemory_Raw((PVOID)(addr + peOff + 0x50), &sizeOfImage, 4);
+                    if (sizeOfImage > sizeThreshold) { LOG("PE scan: wide found by size at 0x%llX (size=0x%X)", (unsigned long long)addr, sizeOfImage); return addr; }
+                }
+                LOG("PE scan: wide scan failed");
+
+                // Step 4: Finer scan at 4KB intervals from process_base to +4GB
+                // Catches cases where GameAssembly.dll is loaded at unusual alignment
+                uintptr_t finerStart = process_base;
+                uintptr_t finerEnd = process_base + 0x100000000ULL; // +4GB
+                LOG("PE scan: finer scan 0x%llX-0x%llX", (unsigned long long)finerStart, (unsigned long long)finerEnd);
+                for (uintptr_t addr = finerStart; addr < finerEnd; addr += 0x1000ULL) {
+                    uint16_t dosSig = 0;
+                    if (!ReadMemory_Raw((PVOID)addr, &dosSig, 2)) continue;
+                    if (dosSig != 0x5A4D) continue;
+                    if (skipAddr && addr == skipAddr) continue;
+                    uint32_t peOff = 0;
+                    ReadMemory_Raw((PVOID)(addr + 0x3C), &peOff, 4);
+                    if (peOff == 0 || peOff > 0x400) continue;
+                    uint32_t peSig = 0;
+                    ReadMemory_Raw((PVOID)(addr + peOff), &peSig, 4);
+                    if (peSig != 0x00004550) continue;
+                    uint32_t sizeOfImage = 0;
+                    ReadMemory_Raw((PVOID)(addr + peOff + 0x50), &sizeOfImage, 4);
+                    if (sizeOfImage > sizeThreshold) { LOG("PE scan: finer found by size at 0x%llX (size=0x%X)", (unsigned long long)addr, sizeOfImage); return addr; }
+                }
+                LOG("PE scan: finer scan failed — module NOT FOUND");
+            } else {
+                LOG("PE scan: driverWorks=false, skipping wide/finer scans");
+            }
+        }
+
+        LOG("PE scan: all steps exhausted, returning 0");
         return 0ull;
     }
 

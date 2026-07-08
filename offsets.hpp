@@ -5,14 +5,14 @@
 #include <vector>
 
 namespace offsets {
-	inline uint64_t basenetworkable_pointer = 0x0FD36298; // validict build 24037537
-	inline uint64_t camera_pointer = 0x0FD0A5C0;           // validict build 24037537
-	inline uint64_t Il2cppGetHandle = 0x10266600;          // sha-dumper build 24037537 (updated)
-	inline uint64_t TOD_Sky_TypeInfo = 0x0FCEBC70;         // validict build 24037537
-	inline uint64_t Class_TOD_Sky_Static = 0x0FCEBC70;    // validict build 24037537 (same as TypeInfo)
-	inline uint64_t EffectNetwork_Pointer = 0xE3790F8;   // verify
-	inline uint64_t Class_SingletonComponent_UI_LoadingScreen = 0x0FD11958; // sha-dumper build 24037537 (updated)
-	inline uint64_t Class_SingletonComponent_MixerSnapshotManager__c = 0xFD37CF0; // validict build 24037537
+	inline uint64_t basenetworkable_pointer = 0x0FC72970; // morphine build 24091435
+	inline uint64_t camera_pointer = 0x0FC68100;           // morphine build 24091435 (MainCamera)
+	inline uint64_t Il2cppGetHandle = 0x10132020;           // morphine build 24091435 (gc_handles::array_rva)
+	inline uint64_t TOD_Sky_TypeInfo = 0x0FD0A5D0;         // morphine build 24091435
+	inline uint64_t Class_TOD_Sky_Static = 0x0FD0A5D0;    // morphine build 24091435 (same as TypeInfo)
+	inline uint64_t EffectNetwork_Pointer = 0xFCABFC0;   // morphine build 24091435 (type_info)
+	inline uint64_t Class_SingletonComponent_UI_LoadingScreen = 0xFC7D388; // morphine build 24091435
+	inline uint64_t Class_SingletonComponent_MixerSnapshotManager__c = 0xFD0D1D0; // morphine build 24091435
 	// Diagnostic camera scan TypeInfo RVAs (only used when kCacheVerboseLogs is on)
 	inline uint64_t cam_typeinfo_singleton = 0xE2D5CC8;    // SingletonComponent<MainCamera>
 	inline uint64_t cam_typeinfo_camera_c = 0xE2C3EC8;      // Camera_c
@@ -38,15 +38,15 @@ namespace offsets {
 		inline uint64_t  static_fields = 0xB8;
 		inline uint64_t  wrapper_class = 0x8;
 		inline uint64_t  parent_static_fields = 0x10;
-		inline uint64_t  entity = 0x20;        // validict build 24037537 — entities offset in parent_class
-		inline uint64_t  children = 0x28;        // validict build 24037537
+		inline uint64_t  entity = 0x20;         // morphine build 24091435 — entities offset in parent_class
+		inline uint64_t  children = 0x70;      // morphine build 24091435
 		inline uint64_t  encrypted_handle = 0x18;
 	}
 
   namespace BaseCamera
   {
   	inline uint64_t  static_fields = 0xB8;   // Il2CppClass::static_fields
-  	inline uint64_t  wrapper_class = 0x28;   // validict build 24037537 — camera instance offset in static_fields
+  	inline uint64_t  wrapper_class = 0x38;   // morphine build 24091435 — camera_object/instance offset in static_fields
   	inline uint64_t  entity = 0x10;          // UC dump: native Camera deref from IL2CPP wrapper
   	inline uint64_t  viewMatrix = 0x2FC;     // fefe4444 #24841 + diagnostic confirmed (-0.4139)
   	inline uint64_t  projectionMatrix = 0x18C; // old UC dump — verify with diagnostic
@@ -75,7 +75,7 @@ namespace offsets {
 
  	namespace TOD_Sky_Static
  	{
-  		inline uint64_t instances = 0x18; // validict build 24037537
+  		inline uint64_t instances = 0x18; // morphine desktop dump build 24069519
  	}
 
 	namespace TOD_AmbientParameters
@@ -102,25 +102,25 @@ namespace BaseCombatEntity {
 	}
 
 namespace BasePlayer {
-	inline uint64_t PlayerEyes = 0x3E8;        // validict build 24037537
-	inline uint64_t PlayerInventory = 0x2F0;   // validict build 24037537
-	inline uint64_t PlayerInput = 0x518;       // validict build 24037537
-	inline uint64_t PlayerModel = 0x500;       // validict build 24037537
+	inline uint64_t PlayerEyes = 0x490;        // morphine build 24091435
+	inline uint64_t PlayerInventory = 0x3a0;   // morphine build 24091435
+	inline uint64_t PlayerInput = 0x338;       // morphine build 24091435
+	inline uint64_t PlayerModel = 0x3d8;       // morphine build 24091435
 	inline uint64_t ModelTransform = 0x1A8;
-	inline uint64_t PlayerFlags = 0x6B8;       // validict build 24037537 (unchanged)
-	inline uint64_t ClActiveItem = 0x568;      // validict build 24037537 (unchanged)
-	inline uint64_t BaseMovement = 0x788;      // validict build 24037537
-	inline uint64_t DisplayName = 0x6E0;       // validict build 24037537
-	inline uint64_t ModelState = 0x490;  // validict: modelState
-	inline uint64_t Mounted = 0x588;           // validict build 24037537
-	inline uint64_t BeltDirect = 0x2B8;
-	inline uint64_t CurrentTeam = 0x538;       // validict build 24037537 (unchanged)
-	inline uint64_t WeaponMoveSpeedScale = 0x798; // validict build 24037537 (unchanged)
-	inline uint64_t ClothingBlocksAiming = 0x79C; // validict build 24037537 (unchanged)
-	inline uint64_t SteamID = 0x538;
-	inline uint64_t PlayerRigidbody = 0x478;   // validict build 24037537
-	inline uint64_t Frozen = 0x388;            // validict build 24037537 (unchanged)
-	inline uint64_t CurrentGesture = 0x300;    // validict build 24037537
+	inline uint64_t PlayerFlags = 0x6B8;       // morphine build 24091435 (unchanged)
+	inline uint64_t ClActiveItem = 0x568;      // morphine build 24091435 (unchanged)
+	inline uint64_t BaseMovement = 0x5b8;      // morphine build 24091435
+	inline uint64_t DisplayName = 0x2e8;       // morphine build 24091435
+	inline uint64_t ModelState = 0x518;  // morphine build 24091435 (verify)
+	inline uint64_t Mounted = 0x5c0;           // morphine build 24091435
+	inline uint64_t BeltDirect = 0x7b8;        // morphine build 24091435
+	inline uint64_t CurrentTeam = 0x538;       // morphine build 24091435 (unchanged)
+	inline uint64_t WeaponMoveSpeedScale = 0x798; // morphine build 24091435 (unchanged)
+	inline uint64_t ClothingBlocksAiming = 0x79C; // morphine build 24091435 (unchanged)
+	inline uint64_t SteamID = 0x558;           // morphine build 24091435 (verify)
+	inline uint64_t PlayerRigidbody = 0x520;   // morphine build 24091435
+	inline uint64_t Frozen = 0x388;            // morphine build 24091435 (unchanged)
+	inline uint64_t CurrentGesture = 0x3f0;    // morphine build 24091435
   }
 
 // Morphine: base_player_flags — used for admin/sleeping/wounded checks
@@ -143,7 +143,7 @@ namespace unity_string {
 
   namespace ModelState
   {
-      constexpr uint64_t flags = 0x44;          // validict: model_state.flags
+      constexpr uint64_t flags = 0x0;            // morphine build 24087225 model_state.flags
       constexpr uint64_t Flying    = 0x40;      // bit 6: freecam flying mode
       constexpr uint64_t OnGround  = 0x04;      // bit 2
       constexpr uint64_t Sleeping  = 0x08;      // bit 3
@@ -153,44 +153,44 @@ namespace unity_string {
 
   namespace PlayerInventory
   {
-      inline uint64_t Belt = 0x30;        // validict: containerBelt
-      inline uint64_t Wear = 0x60;        // validict: containerWear
-      inline uint64_t Main = 0x28;        // validict: containerMain
-      inline uint64_t loot = 0x48;        // validict: loot
-      constexpr uint64_t BeltFallback1 = 0x60;  // containerWear fallback
-      constexpr uint64_t BeltFallback2 = 0x28;  // containerMain fallback
+      inline uint64_t Belt = 0x58;        // morphine build 24091435 containerBelt
+      inline uint64_t Wear = 0x78;        // morphine build 24091435 containerWear
+      inline uint64_t Main = 0x30;        // morphine build 24091435 containerMain
+      inline uint64_t loot = 0x48;        // morphine build 24091435 loot
+      constexpr uint64_t BeltFallback1 = 0x78;  // containerWear fallback
+      constexpr uint64_t BeltFallback2 = 0x30;  // containerMain fallback
   }
 
   namespace ItemContainer
   {
-      constexpr uint64_t ItemList = 0x18; // validict build 24037537 item_list
+      constexpr uint64_t ItemList = 0x60; // morphine build 24091435 item_list
       constexpr uint64_t ItemListFallback = 0x10; // Fallback when primary fails
   }
 
-   	namespace PlayerModel
+    namespace PlayerModel
    	{
-    	inline uint64_t SkinnedMultiMesh = 0x398; // validict build 24037537 skinned_mesh
-     		inline uint64_t is_npc = 0x00000389;           // validict build 24037537 isNpc
-    		inline uint64_t position = 0x000002F8;         // validict: player_model.position
-     		inline uint64_t velocity = 0x00000368;         // validict: player_model.newVelocity
-    		inline uint64_t visible = 0x000000C4;           // Morphine live dump visibility
-    		inline uint64_t boneTransforms = 0x00000098;    // Morphine build 23824285
-    		inline uint64_t rootBone = 0x00000098;          // Morphine build 23824285
-    		inline uint64_t headBone = 0x000000F8;          // Morphine build 23824285
-    		inline uint64_t eyeBone = 0x00000120;          // Morphine build 23824285
+    	inline uint64_t SkinnedMultiMesh = 0x420; // morphine build 24091435 _multiMesh
+       		inline uint64_t is_npc = 0x00000490;           // morphine build 24091435 isNpc
+      		inline uint64_t position = 0x000002F8;         // morphine build 24087225 player_model.position
+      		inline uint64_t velocity = 0x0000031C;         // morphine build 24087225 player_model.newVelocity
+      		inline uint64_t visible = 0x000000C4;           // morphine build 24087225 visibility
+      		inline uint64_t boneTransforms = 0x00000098;    // morphine build 24087225
+      		inline uint64_t rootBone = 0x00000098;          // morphine build 24087225
+      		inline uint64_t headBone = 0x000000F8;          // morphine build 24087225 (verify)
+      		inline uint64_t eyeBone = 0x00000120;          // morphine build 24087225 (verify)
    	}
 
- 	namespace SkinnedMultiMesh
- 	{
-  		constexpr uint64_t RendererList = 0x58; // validict build 24037537
- 	}
+  	namespace SkinnedMultiMesh
+  	{
+   		constexpr uint64_t RendererList = 0x50; // morphine build 24069519
+  	}
 
     namespace Item
     {
-        constexpr uint64_t ItemDefinition = 0xA0;       // validict build 24037537 itemdefinition
-        constexpr uint64_t ItemId = 0x60;               // validict build 24037537 uid
-        constexpr uint64_t HeldEntity_1 = 0x48;         // validict: held_entity
-        constexpr uint64_t Amount = 0xE0;               // validict build 24037537 amount
+        constexpr uint64_t ItemDefinition = 0xA8;       // morphine build 24091435 itemdefinition
+        constexpr uint64_t ItemId = 0xB8;               // morphine build 24091435 uid
+        constexpr uint64_t HeldEntity_1 = 0xA8;         // morphine build 24091435 held_entity
+        constexpr uint64_t Amount = 0x24;               // morphine build 24091435 amount
         constexpr uint64_t ItemIdFallback1 = 0x38;
         constexpr uint64_t ItemIdFallback2 = 0x70;
     }
@@ -206,8 +206,8 @@ namespace unity_string {
 
   namespace HeldEntity
   {
-      constexpr uint64_t ownerItemUID = 0x000002D0;        // Morphine/pastebin build 23824285
-      constexpr uint64_t viewModel = 0x00000240;           // validict build 24037537
+      constexpr uint64_t ownerItemUID = 0x000002D0;        // morphine build 24069519 (unchanged)
+       constexpr uint64_t viewModel = 0x000002C8;           // morphine build 24091435
   }
 
   namespace Model
@@ -236,14 +236,14 @@ namespace unity_string {
       constexpr uint64_t is_reloading = 0x3D0;           // validict build 24037537
       constexpr uint64_t StancePenalty = 0x418;    // validict build 24037537
       constexpr uint64_t AimCone = 0x00000400;
-      constexpr uint64_t HipAimCone = 0x00000404;
+      constexpr uint64_t HipAimCone = 0x00000404;  // morphine desktop dump build 24069519
       constexpr uint64_t AimconePenalty = 0x408;
       constexpr uint64_t AimconePenaltyPerShot = 0x408; // validict build 24037537
       constexpr uint64_t HasADS = 0x41C;    // validict build 24037537
       constexpr uint64_t aimSway = 0x000003E8;              // validict build 24037537 (unchanged)
       constexpr uint64_t aimSwaySpeed = 0x000003EC;         // validict build 24037537 (unchanged)
       constexpr uint64_t primaryMagazine = 0x000003C8;
-      constexpr uint64_t SightAimConeScale = 0x434;    // validict build 24037537
+        constexpr uint64_t SightAimConeScale = 0x45C;    // morphine build 24087225
       constexpr uint64_t isBurstWeapon = 0x427;    // validict build 24037537
       constexpr uint64_t canChangeFireModes = 0x428; // validict build 24037537
       constexpr uint64_t internalBurstFireRateScale = 0x430; // validict build 24037537
@@ -256,8 +256,8 @@ namespace unity_string {
       constexpr uint64_t magazine = 0x3A8;
       constexpr uint64_t aim_sway = 0x3C8;
       constexpr uint64_t aim_sway_speed = 0x3CC;
-      constexpr uint64_t sight_aim_cone_scale = 0x414;  // Morphine (was 0x43C — fixed)
-      constexpr uint64_t hip_aim_cone_scale = 0x3E4;   // Morphine (was 0x444 — fixed)
+       constexpr uint64_t sight_aim_cone_scale = 0x45C;  // morphine build 24087225
+       constexpr uint64_t hip_aim_cone_scale = 0x464;   // morphine build 24087225
       constexpr uint64_t string_hold_duration_max = 0x4C0; // validict build 24037537
   }
 
@@ -282,11 +282,11 @@ namespace unity_string {
   {
       constexpr uint64_t flags = 0x1B0;
       constexpr uint64_t model = 0x1A8;         // BaseEntity.model (Model)
-      constexpr uint64_t positionLerp = 0xA0;   // pastebin build 23824285
+      constexpr uint64_t positionLerp = 0x1c8;    // morphine build 24087225
       constexpr uint64_t bounds = 0x17C;         // Unity Bounds {center(12) + extents(12)} — 24 bytes
-      constexpr uint64_t isVisible = 0x158;      // BaseEntity.isVisible (Unity occlusion culling flag)
-      constexpr uint64_t isAnimatorVisible = 0x159; // BaseEntity.isAnimatorVisible
-      constexpr uint64_t isShadowVisible = 0x15A;    // BaseEntity.isShadowVisible
+      constexpr uint64_t isVisible = 0x150;      // BaseEntity.isVisible — confirmed working build 24037537
+      constexpr uint64_t isAnimatorVisible = 0x151; // BaseEntity.isAnimatorVisible (always 1)
+      constexpr uint64_t isShadowVisible = 0x152;    // BaseEntity.isShadowVisible (matches isVisible)
       // Position chain offsets used by Get_ObjectPosition() — object → transform hierarchy
       constexpr uint64_t objRef = 0x10;          // entity → UnityEngine.Object
       constexpr uint64_t posChain0 = 0x20;       // Object → GameObject/Transform
@@ -298,9 +298,9 @@ namespace unity_string {
 
   namespace FOV
   {
-      inline uint64_t ConVar_Graphics = 0xFD05BC0;  // validict build 24037537
+      inline uint64_t ConVar_Graphics = 0xFCF2C10;  // morphine build 24091435
       constexpr uint64_t fovField = 0x560;
-      constexpr uint64_t fovWrite = 0x144;            // validict build 24037537 convar_graphics::fov
+      constexpr uint64_t fovWrite = 0x110;           // morphine build 24091435 convar_graphics::fov
       constexpr uint64_t cameraFovBypass = 0x170;
 	}
 
@@ -319,20 +319,20 @@ namespace unity_string {
 
   namespace ItemMagazine
   {
-       constexpr uint64_t contents = 0x1C; // validict: item_magazine.contents
+       constexpr uint64_t contents = 0x1c; // morphine build 24087225
   }
 
   namespace EffectNetwork
   {
-      constexpr uint64_t static_fields = 0xB8;  // Morphine updated — now resolved
-      constexpr uint64_t instance = 0x18;        // Morphine updated — now resolved
-      constexpr uint64_t hitPosition = 0x00000040;
+      constexpr uint64_t static_fields = 0xB8;  // morphine build 24087225
+      constexpr uint64_t instance = 0x8;        // morphine build 24087225
+       constexpr uint64_t hitPosition = 0x90;    // morphine build 24091435
   }
 
   namespace convar_admin
   {
-      constexpr uint64_t convar_admin = 0x0FD9A3B0; // validict build 24037537
-      constexpr uint64_t playerIds = 0x20;          // Morphine updated — now resolved
+       constexpr uint64_t convar_admin = 0xFC816A8; // morphine build 24091435
+      constexpr uint64_t playerIds = 0x20;          // morphine build 24087225
   }
 
   namespace TOD_AmbientParameters
@@ -381,9 +381,9 @@ namespace unity_string {
 	inline bool VisCheck = false;
 	inline int VisGhostMs = 0;
 	inline bool VisGhost = false;
-	inline int VisMode = 1;            // 0=Flag, 1=Hybrid, 2=Strict
-	inline int VisSamples = 5;         // history samples used by hybrid/strict
-	inline int VisHoldMs = 150;        // keep visible for this long after brief occlusion
+	inline int VisMode = 0;            // 0=Raw (no std::unordered_map — safe for manually mapped DLL)
+	inline int VisSamples = 3;         // 3 samples = max 200ms response (was 8 = 600ms)
+	inline int VisHoldMs = 0;          // no sticky visible — instant transition
 	inline float OccluderDist = 200.f; // max distance to read occluder AABBs
 	inline bool TeamID = false;
 	inline int SnaplineMode = 0;
@@ -423,6 +423,7 @@ namespace unity_string {
 	inline bool Clothing = false;
 	inline bool ItemList = false;
 	inline bool AmmoBar = false;
+	inline bool PlayerInventoryPanel = false;
 
 		namespace color {
 			inline ImColor Box = { 220,220,220,255 };
@@ -438,9 +439,9 @@ namespace unity_string {
 		inline ImColor Team = { 100,160,255,255 };
 			inline ImColor OFFArrowColor = { 200,200,220,255 };
 			inline ImColor Visible = { 255,59,59,255 };
-			inline ImColor Invisible = { 221,230,243,255 };
+			inline ImColor Invisible = { 120,120,140,255 };
 			inline ImColor SkeletonVisible = { 255,59,59,255 };
-			inline ImColor SkeletonInvisible = { 221,230,243,255 };
+			inline ImColor SkeletonInvisible = { 120,120,140,255 };
 			inline ImColor HealthBar = { 0,255,0,255 };
 			inline ImColor Ghost = { 100,100,110,180 };
 			inline ImColor Teammate = { 0,200,100,255 };

@@ -3205,7 +3205,10 @@ static std::uint64_t method_field_offset_by_name_contains(
 		if ( !ascii_contains_i( name, a ) || ( b && !ascii_contains_i( name, b ) ) )
 			continue;
 		if ( auto off = single_field_offset_referenced_by_method( method ) )
+		{
+			std::printf( "[morphine-dumper] HEURISTIC WARN: method_field_offset_by_name_contains(\"%s\") returned 0x%zX (disasm guess — verify in all_cheat_classes_dump.txt)\n", a, (size_t)off );
 			return off;
+		}
 	}
 
 	return 0;
@@ -5285,23 +5288,6 @@ void c_core::resolve_cl_active_item_decryption( )
 	m_cl_active_item_fn_addr = best->fn_addr;
 	m_cl_active_item_offset = best->field_offset;
 	m_cl_active_item_constants = best->constants;
-
-	// VALIDATION: cl_active_item decrypt should start with SUB in recent Rust builds.
-	// The dumper sometimes finds a DECOY function due to IL2CPP obfuscation.
-	// If the first op is NOT SUB, override with known-good constants.
-	// When the game updates: run CLA_TRYALL diagnostic in the cheat to verify.
-	if ( m_cl_active_item_constants.valid && m_cl_active_item_constants.op_count >= 3 &&
-		m_cl_active_item_constants.ops[ 0 ].type != c_decryption::op_t::op_sub )
-	{
-		std::printf( "[morphine-dumper] cl_active_item: WARNING - dumper found decoy (first op=%s, expected SUB)\n",
-			c_decryption::op_name( m_cl_active_item_constants.ops[ 0 ].type ) );
-		std::printf( "[morphine-dumper] cl_active_item: overriding with known-good constants (SUB/ROL2/XOR/ADD)\n" );
-		m_cl_active_item_constants.ops[ 0 ] = { c_decryption::op_t::op_sub, 0x1D2981D5 };
-		m_cl_active_item_constants.ops[ 1 ] = { c_decryption::op_t::op_rol, 0x2 };
-		m_cl_active_item_constants.ops[ 2 ] = { c_decryption::op_t::op_xor, 0x8DA4E5D3 };
-		m_cl_active_item_constants.ops[ 3 ] = { c_decryption::op_t::op_add, 0x6189597E };
-		m_cl_active_item_constants.op_count = 4;
-	}
 
 	std::printf( "[morphine-dumper] cl_active_item: extracted %d ops from rva 0x%llX field=0x%llX (%zu candidates)\n",
 		m_cl_active_item_constants.op_count,
@@ -8346,6 +8332,8 @@ static std::uint64_t first_wrapper_field_after( il2cpp::il2cpp_class_t* klass, s
 				best = off;
 		}
 	}
+	if ( best )
+		std::printf( "[morphine-dumper] HEURISTIC WARN: first_wrapper_field_after returned 0x%zX (positional guess — verify in all_cheat_classes_dump.txt)\n", (size_t)best );
 	return best;
 }
 
@@ -8650,7 +8638,12 @@ static std::uint64_t field_offset_by_model_state_shape_between( il2cpp::il2cpp_c
 static std::uint64_t field_offset_by_type_class( il2cpp::il2cpp_class_t* klass, il2cpp::il2cpp_class_t* type_class )
 {
 	auto fields = fields_by_type_class( klass, type_class );
-	return fields.empty( ) ? 0 : fields.front( )->offset( klass );
+	if ( fields.empty( ) )
+		return 0;
+	auto off = fields.front( )->offset( klass );
+	if ( off )
+		std::printf( "[morphine-dumper] HEURISTIC WARN: field_offset_by_type_class returned 0x%zX (type match — verify in all_cheat_classes_dump.txt)\n", (size_t)off );
+	return off;
 }
 
 static std::uint64_t field_offset_by_type_class_between( il2cpp::il2cpp_class_t* klass, il2cpp::il2cpp_class_t* type_class, std::uint64_t min_offset, std::uint64_t max_offset )
@@ -11141,6 +11134,11 @@ void c_core::write_decryptions( c_writer& w )
 			m_bn.decrypt_0_addr - c_runtime::game_base( ),
 			m_bn.decrypt_0,
 			m_bn.hv_offset );
+		w.write_encrypt_fn(
+			"client_entities",
+			m_bn.decrypt_0_addr - c_runtime::game_base( ),
+			m_bn.decrypt_0,
+			m_bn.hv_offset );
 	}
 	if ( m_bn.decrypt_1.valid )
 	{
@@ -11149,26 +11147,49 @@ void c_core::write_decryptions( c_writer& w )
 			m_bn.decrypt_1_addr - c_runtime::game_base( ),
 			m_bn.decrypt_1,
 			m_bn.hv_offset );
+		w.write_encrypt_fn(
+			"entity_list",
+			m_bn.decrypt_1_addr - c_runtime::game_base( ),
+			m_bn.decrypt_1,
+			m_bn.hv_offset );
 	}
 	if ( m_cl_active_item_constants.valid )
+	{
 		w.write_direct_decryption_fn(
 			"cl_active_item",
 			m_cl_active_item_fn_addr - c_runtime::game_base( ),
 			m_cl_active_item_constants );
+		w.write_direct_encrypt_fn(
+			"cl_active_item",
+			m_cl_active_item_fn_addr - c_runtime::game_base( ),
+			m_cl_active_item_constants );
+	}
 	else
 		w.write_decryption_unresolved( "cl_active_item" );
 	if ( m_player_inventory_constants.valid )
+	{
 		w.write_direct_decryption_fn(
 			"player_inventory",
 			m_player_inventory_fn_addr - c_runtime::game_base( ),
 			m_player_inventory_constants );
+		w.write_direct_encrypt_fn(
+			"player_inventory",
+			m_player_inventory_fn_addr - c_runtime::game_base( ),
+			m_player_inventory_constants );
+	}
 	else
 		w.write_decryption_unresolved( "player_inventory" );
 	if ( m_player_eyes_constants.valid )
+	{
 		w.write_direct_decryption_fn(
 			"player_eyes",
 			m_player_eyes_fn_addr - c_runtime::game_base( ),
 			m_player_eyes_constants );
+		w.write_direct_encrypt_fn(
+			"player_eyes",
+			m_player_eyes_fn_addr - c_runtime::game_base( ),
+			m_player_eyes_constants );
+	}
 	else
 		w.write_decryption_unresolved( "player_eyes" );
 
@@ -11279,6 +11300,188 @@ static void write_item_magazine( c_writer& w )
 	w.struct_end( );
 }
 
+// Dump ALL fields (including inherited) of a class to a diagnostic file.
+// This finds visibility-related fields that name-based search misses.
+static void dump_class_all_fields( const char* class_name, FILE* f )
+{
+	if ( !f || !class_name )
+		return;
+
+	auto klass = c_runtime::find_class( class_name );
+	if ( !klass )
+		klass = find_named_class( class_name );
+	if ( !klass )
+	{
+		fprintf( f, "=== %s: CLASS NOT FOUND ===\n\n", class_name );
+		return;
+	}
+
+	fprintf( f, "=== %s ===\n", class_name );
+
+	int depth = 0;
+	for ( auto cur = klass; cur && depth < 10; cur = cur->parent( ), depth++ )
+	{
+		auto parent_name = cur->name( ) ? cur->name( ) : "?";
+		fprintf( f, "  [class: %s]\n", parent_name );
+
+		void* iter = nullptr;
+		int field_count = 0;
+		while ( auto field = cur->fields( &iter ) )
+		{
+			auto fname = field->name( ) ? field->name( ) : "?";
+			auto foffset = field->offset( );
+			auto ftype = field->type( ) ? field->type( ) : nullptr;
+			const char* type_name = ftype ? ftype->name( ) : "?";
+			fprintf( f, "    +0x%04zX  %-30s  %s\n", (size_t)foffset, type_name, fname );
+			field_count++;
+		}
+		if ( field_count == 0 )
+			fprintf( f, "    (no fields)\n" );
+	}
+	fprintf( f, "\n" );
+}
+
+// Dump all visibility-related classes to a diagnostic file on the Desktop
+static void dump_visibility_classes( const char* output_path, const char* build_id )
+{
+	char vis_path[MAX_PATH]{};
+	std::strncpy( vis_path, output_path, MAX_PATH - 1 );
+	auto slash = std::strrchr( vis_path, '\\' );
+	if ( slash )
+		std::snprintf( slash + 1, MAX_PATH - (slash - vis_path + 1), "visibility_classes_dump.txt" );
+	else
+		std::snprintf( vis_path, MAX_PATH, "visibility_classes_dump.txt" );
+
+	FILE* f = nullptr;
+	fopen_s( &f, vis_path, "w" );
+	if ( !f )
+	{
+		std::printf( "[morphine-dumper] failed to open visibility dump file: %s\n", vis_path );
+		return;
+	}
+
+	fprintf( f, "=== Visibility Classes Field Dump ===\n" );
+	fprintf( f, "Build: %s\n\n", build_id ? build_id : "unknown" );
+
+	const char* classes[] = {
+		"BaseEntity",
+		"BasePlayer",
+		"PlayerModel",
+		"Skinnable",
+		"SkinnedMultiMesh",
+		"Renderer",
+		"SkinnedMeshRenderer"
+	};
+
+	for ( int i = 0; i < 7; i++ )
+	{
+		dump_class_all_fields( classes[i], f );
+	}
+
+	fclose( f );
+	std::printf( "[morphine-dumper] visibility classes dumped to %s\n", vis_path );
+}
+
+// Dump ALL classes used by the cheat — complete field layout with names, types, offsets.
+// This is the ground truth for identifying fields when name-based lookup fails.
+// Output: all_cheat_classes_dump.txt (next to the main output file)
+static void dump_all_cheat_classes( const char* output_path, const char* build_id )
+{
+	char dump_path[MAX_PATH]{};
+	std::strncpy( dump_path, output_path, MAX_PATH - 1 );
+	auto slash = std::strrchr( dump_path, '\\' );
+	if ( slash )
+		std::snprintf( slash + 1, MAX_PATH - (slash - dump_path + 1), "all_cheat_classes_dump.txt" );
+	else
+		std::snprintf( dump_path, MAX_PATH, "all_cheat_classes_dump.txt" );
+
+	FILE* f = nullptr;
+	fopen_s( &f, dump_path, "w" );
+	if ( !f )
+	{
+		std::printf( "[morphine-dumper] failed to open cheat classes dump file: %s\n", dump_path );
+		return;
+	}
+
+	fprintf( f, "=== Complete Cheat Classes Field Dump ===\n" );
+	fprintf( f, "Build: %s\n", build_id ? build_id : "unknown" );
+	fprintf( f, "Purpose: Ground truth for all field offsets. Use this to verify/identify fields.\n" );
+	fprintf( f, "Format: +offset  type  name  (per class, with inheritance chain)\n\n" );
+
+	// Every class the cheat reads from — ordered by importance
+	const char* classes[] = {
+		// Core entity hierarchy
+		"BaseNetworkable",
+		"BaseEntity",
+		"BaseCombatEntity",
+		"BasePlayer",
+		"BaseNpc",
+		// Player components
+		"PlayerEyes",
+		"PlayerInput",
+		"PlayerModel",
+		"PlayerInventory",
+		"ModelState",
+		"BaseMovement",
+		"PlayerWalkMovement",
+		"BaseEntityEffectAudioVisual",
+		// Items & inventory
+		"Item",
+		"ItemDefinition",
+		"ItemContainer",
+		"HeldEntity",
+		"AttackEntity",
+		"BaseMelee",
+		"BaseProjectile",
+		"FlintStrikeWeapon",
+		"ItemModProjectile",
+		"ItemMagazine",
+		"ServerProjectile",
+		"RecoilProperties",
+		// Rendering & visibility
+		"Model",
+		"Skinnable",
+		"SkinnedMultiMesh",
+		"Renderer",
+		"SkinnedMeshRenderer",
+		// View models
+		"BaseViewModel",
+		"ViewModel",
+		// World entities
+		"WorldItem",
+		"AutoTurret",
+		"PlayerCorpse",
+		"LootableCorpse",
+		"HackableLockedCrate",
+		"Signage",
+		"BuildingBlock",
+		"BuildingPrivlidge",
+		"DroppedItemContainer",
+		"OreResourceEntity",
+		"CollectibleEntity",
+		// Environment
+		"TOD_Sky",
+		// Console & convars
+		"ConsoleSystem",
+		"ConVar_Graphics",
+		"ConVar_Admin",
+		// Effects
+		"EffectNetwork",
+	};
+
+	constexpr int num_classes = sizeof(classes) / sizeof(classes[0]);
+	int found = 0;
+	for ( int i = 0; i < num_classes; i++ )
+	{
+		dump_class_all_fields( classes[i], f );
+		found++;
+	}
+
+	fprintf( f, "\n=== Summary: %d/%d classes found ===\n", found, num_classes );
+	fclose( f );
+	std::printf( "[morphine-dumper] ALL cheat classes (%d) dumped to %s\n", found, dump_path );
+}
+
 static void write_base_entity_visibility( c_writer& w )
 {
 	auto klass = c_runtime::find_class( "BaseEntity" );
@@ -11295,6 +11498,12 @@ static void write_base_entity_visibility( c_writer& w )
 	if ( !is_shadow_visible )
 		is_shadow_visible = field_offset_by_name_contains( klass, "shadow", "visible" );
 
+	// Unity engine native visibility flags — not Il2Cpp managed fields, so field_offset_by_name
+	// can't find them. Use known engine layout offsets (Unity 6, confirmed build 24069519).
+	if ( !is_visible ) is_visible = 0x150;
+	if ( !is_animator_visible ) is_animator_visible = 0x151;
+	if ( !is_shadow_visible ) is_shadow_visible = 0x152;
+
 	w.struct_begin( "base_entity_visibility" );
 	w.struct_field( "isVisible", is_visible );
 	w.struct_field( "isAnimatorVisible", is_animator_visible );
@@ -11302,6 +11511,64 @@ static void write_base_entity_visibility( c_writer& w )
 	w.struct_end( );
 }
 
+static void write_json_output( c_writer& w, const char* output_path, const char* build_id )
+{
+	char json_path[ MAX_PATH ]{ };
+	std::strncpy( json_path, output_path, MAX_PATH - 1 );
+	auto dot = std::strrchr( json_path, '.' );
+	if ( dot )
+		std::snprintf( dot, MAX_PATH - ( dot - json_path ), ".json" );
+	else
+		std::snprintf( json_path + std::strlen( json_path ), MAX_PATH - std::strlen( json_path ), ".json" );
+	w.flush_json( json_path, build_id, c_runtime::game_base( ), c_runtime::image_size( ) );
+	std::printf( "[morphine-dumper] JSON output: %s\n", json_path );
+}
+
+static void dump_all_classes_to_json( c_writer& w )
+{
+	std::printf( "[morphine-dumper] enumerating ALL assembly classes for JSON...\n" );
+	auto domain = il2cpp::il2cpp_domain_t::get( );
+	if ( !domain ) return;
+	size_t assembly_count = 0;
+	auto assemblies = domain->get_assemblies( &assembly_count );
+	if ( !assemblies ) return;
+	int total_classes = 0;
+	int total_fields = 0;
+	for ( size_t i = 0; i < assembly_count; i++ )
+	{
+		auto image = assemblies[ i ] ? assemblies[ i ]->image( ) : nullptr;
+		if ( !image ) continue;
+		auto class_count = image->class_count( );
+		for ( size_t j = 0; j < class_count; j++ )
+		{
+			auto klass = image->get_class( j );
+			if ( !klass ) continue;
+			auto name = klass->name( );
+			if ( !name || !name[ 0 ] ) continue;
+			auto ns = klass->namespaze( );
+
+			char full_name[ 256 ]{};
+			if ( ns && ns[ 0 ] )
+				std::snprintf( full_name, sizeof( full_name ), "%s.%s", ns, name );
+			else
+				std::snprintf( full_name, sizeof( full_name ), "%s", name );
+
+			total_classes++;
+
+			void* iter = nullptr;
+			while ( auto* field = klass->fields( &iter ) )
+			{
+				if ( !field ) break;
+				const char* fname = field->name( );
+				if ( !fname || !fname[ 0 ] ) continue;
+				size_t foffset = field->offset( );
+				w.add_json_class_field( full_name, fname, foffset );
+				total_fields++;
+			}
+		}
+	}
+	std::printf( "[morphine-dumper] JSON all_classes: %d classes, %d fields\n", total_classes, total_fields );
+}
 
 bool c_core::run( const char* output_path, bool do_materials )
 {
@@ -11335,9 +11602,15 @@ bool c_core::run( const char* output_path, bool do_materials )
 		std::printf( "[morphine-dumper] bn chain: base=0x%llX entities=0x%X parent_sf=0x%X wrapper=0x%X\n",
 			m_bn.base_networkable_rva, m_bn.entities, m_bn.parent_static_fields, m_bn.wrapper_class_ptr );
 
-	if ( resolve_camera_chain( ) )
-		std::printf( "[morphine-dumper] camera: main=0x%llX object=0x%X\n",
-			m_camera.main_camera_c, m_camera.camera_object );
+	// Camera chain — wrapped in SEH to prevent crash from stopping the dump
+	__try {
+		if ( resolve_camera_chain( ) )
+			std::printf( "[morphine-dumper] camera: main=0x%llX object=0x%X\n",
+				m_camera.main_camera_c, m_camera.camera_object );
+	}
+	__except ( EXCEPTION_EXECUTE_HANDLER ) {
+		std::printf( "[morphine-dumper] camera chain: CRASH skipped (continuing with other offsets)\n" );
+	}
 
 	verify_bn_chain( );
 	std::printf( "[morphine-dumper] bn chain verified: base=0x%llX entities=0x%X parent_sf=0x%X wrapper=0x%X\n",
@@ -11383,7 +11656,11 @@ bool c_core::run( const char* output_path, bool do_materials )
 		std::printf( "[morphine-dumper] fov encryption: rva=0x%llX (%d ops)\n",
 			m_fov_fn_addr - c_runtime::game_base( ), m_fov_constants.op_count );
 
-	verify_all( );
+	// Verify all — wrapped in SEH to prevent crash from stopping the dump
+	__try { verify_all( ); }
+	__except ( EXCEPTION_EXECUTE_HANDLER ) {
+		std::printf( "[morphine-dumper] verify_all: CRASH skipped (continuing)\n" );
+	}
 
 	c_writer w;
 	if ( !w.open( output_path ) )
@@ -11445,35 +11722,121 @@ bool c_core::run( const char* output_path, bool do_materials )
 	w.blank_line( );
 	write_decryptions( w );
 
+	// Enumerate ALL assembly classes and add to JSON
+	dump_all_classes_to_json( w );
+
+	// Write JSON output alongside the .h file
+	write_json_output( w, output_path, m_build_id.c_str() );
+
 	w.close( );
 
-	if ( do_materials )
-	{
-		char mat_path[ MAX_PATH ]{ };
-		std::strncpy( mat_path, output_path, MAX_PATH - 1 );
-		auto slash = std::strrchr( mat_path, '\\' );
-		if ( slash )
-			std::snprintf( slash + 1, MAX_PATH - ( slash - mat_path + 1 ), "materials.h" );
-		else
-			std::snprintf( mat_path, MAX_PATH, "materials.h" );
+	// === Dump ALL fields of visibility-related classes ===
+	// Finds visibility flags that name-based search misses (BaseEntity, PlayerModel, Skinnable, etc.)
+	dump_visibility_classes( output_path, m_build_id.c_str() );
 
-		std::printf( "[morphine-dumper] materials output: %s\n", mat_path );
-		c_materials::dump( mat_path );
+	// === Dump ALL fields of ALL cheat classes ===
+	// Complete ground truth for every class the cheat reads from.
+	// Use this file to verify offsets and identify obfuscated fields by type/position.
+	dump_all_cheat_classes( output_path, m_build_id.c_str() );
+
+	// === Dump all classes containing "Map" in their name ===
+	// Runs BEFORE materials/PhysX dumps — those can crash and prevent this from running
+	{
+		const char* search_terms[] = { "Map", "Minimap", "Radar", "Compass", "MapMarker", "MapNode" };
+		int num_terms = sizeof(search_terms) / sizeof(search_terms[0]);
+
+		char map_path[MAX_PATH]{};
+		std::strncpy(map_path, output_path, MAX_PATH - 1);
+		auto slash = std::strrchr(map_path, '\\');
+		if (slash)
+			std::snprintf(slash + 1, MAX_PATH - (slash - map_path + 1), "map_classes_dump.txt");
+		else
+			std::snprintf(map_path, MAX_PATH, "map_classes_dump.txt");
+
+		FILE* mf = nullptr;
+		fopen_s(&mf, map_path, "w");
+		if (mf) {
+			fprintf(mf, "=== Map/UI Class Dump ===\n");
+			fprintf(mf, "Build: %s\n\n", m_build_id.c_str());
+		}
+
+		std::printf("[morphine-dumper] scanning for Map/UI classes...\n");
+
+		auto domain = il2cpp::il2cpp_domain_t::get();
+		if (domain) {
+			size_t assembly_count = 0;
+			auto assemblies = domain->get_assemblies(&assembly_count);
+			if (assemblies) {
+				int total_found = 0;
+				for (size_t i = 0; i < assembly_count; i++) {
+					auto image = assemblies[i] ? assemblies[i]->image() : nullptr;
+					if (!image) continue;
+					auto class_count = image->class_count();
+					for (size_t j = 0; j < class_count; j++) {
+						auto klass = image->get_class(j);
+						if (!klass) continue;
+						auto name = klass->name();
+						if (!name) continue;
+						auto ns = klass->namespaze();
+
+						bool match = false;
+						for (int t = 0; t < num_terms; t++) {
+							if (ascii_contains_i(name, search_terms[t]) ||
+								(ns && ascii_contains_i(ns, search_terms[t]))) {
+								match = true;
+								break;
+							}
+						}
+						if (!match) continue;
+
+						total_found++;
+						std::printf("[map-dump] %s%s%s\n",
+							ns ? ns : "", ns ? "." : "", name);
+
+						if (mf) {
+							fprintf(mf, "\n--- %s%s%s ---\n",
+								ns ? ns : "", ns ? "." : "", name);
+						}
+
+						void* iter = nullptr;
+						while (auto* field = klass->fields(&iter)) {
+							if (!field) break;
+							const char* fname = field->name();
+							if (!fname) continue;
+							size_t foffset = field->offset();
+
+							std::printf("  +0x%04llX  %s\n",
+								(unsigned long long)foffset, fname);
+							if (mf) {
+								fprintf(mf, "  +0x%04llX  %s\n",
+									(unsigned long long)foffset, fname);
+							}
+						}
+					}
+				}
+				std::printf("[morphine-dumper] found %d Map/UI classes\n", total_found);
+				if (mf) {
+					fprintf(mf, "\n\nTotal classes found: %d\n", total_found);
+				}
+			}
+		}
+
+		if (mf) {
+			fclose(mf);
+			std::printf("[morphine-dumper] map classes dump: %s\n", map_path);
+		}
 	}
 
-	// Dump PhysX collision mesh for VisCheck
-	{
-		char tri_path[ MAX_PATH ]{ };
-		std::strncpy( tri_path, output_path, MAX_PATH - 1 );
-		auto slash = std::strrchr( tri_path, '\\' );
-		if ( slash )
-			std::snprintf( slash + 1, MAX_PATH - ( slash - tri_path + 1 ), "rust_mesh.tri" );
-		else
-			std::snprintf( tri_path, MAX_PATH, "rust_mesh.tri" );
+	// Materials dump — DISABLED: crashes on Unity material iteration
+	// if ( do_materials )
+	// {
+	// 	c_materials::dump( mat_path );
+	// }
 
-		std::printf( "[morphine-dumper] physx mesh output: %s\n", tri_path );
-		c_physx_dumper::dump_mesh( tri_path );
-	}
+	// PhysX mesh dump — DISABLED: crashes on PhysX memory access
+	// c_physx_dumper::dump_mesh( tri_path );
+
+	std::printf( "[morphine-dumper] materials + physx mesh dumps SKIPPED (prevents crash)\n" );
 
 	return true;
 }

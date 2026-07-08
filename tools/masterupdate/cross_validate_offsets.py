@@ -205,7 +205,7 @@ def main():
     frida_data = load_json(FRIDA_JSON)
     if not frida_data or not frida_data.get("offsets"):
         print("[WARN] No Frida data available (frida_validation.json not found).")
-        print("[WARN] Run auto_update.bat with Rust in-game to generate Frida dump.")
+        print("[WARN] Run getnewoffsets.bat with Rust in-game to generate Frida dump.")
         return 0
 
     frida_classes = len(frida_data.get("offsets", {}))

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate a complete opencode master prompt for post-update feature restoration.
 
-This runs after auto_update.bat. It reads the current source + pipeline outputs and
+This runs after getnewoffsets.bat. It reads the current source + pipeline outputs and
 produces output/opencode_update_prompt.txt -- a single ready-to-paste prompt that tells
 opencode exactly which files to READ (with full paths), what the pipeline already fixed
 automatically, what still needs manual work, and how to verify.
@@ -49,7 +49,7 @@ def find_lines(text, labeled_patterns):
 
 
 def mapped_namespace_names(cfg):
-    """Namespaces that auto_update patches automatically (from config)."""
+    """Namespaces that getnewoffsets patches automatically (from config)."""
     names = set()
     for entry in cfg.get("namespace_field_mappings", {}).values():
         ns = entry.get("namespace")
@@ -497,7 +497,7 @@ def main():
         a(f"   Package: include rust_mesh.tri alongside DLL in distribution.")
     else:
         a(f"8. VisCheck: NO mesh data available — uses PlayerModel._visible fallback (~60% accuracy).")
-        a(f"   To enable raycast VisCheck, run auto_update.bat with Rust in-game on a server.")
+        a(f"   To enable raycast VisCheck, run getnewoffsets.bat with Rust in-game on a server.")
     a("")
 
     # --- Section: safety ---

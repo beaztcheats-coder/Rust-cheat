@@ -7,7 +7,7 @@ Automated update system for Rust offsets, decryptions, and encryptions. Fetches 
 ### After a Rust game update:
 
 ```
-1. Run auto_update.bat    → fetches Morphine + injects sha-dumper + generates patches
+1. Run getnewoffsets.bat  → fetches Morphine + injects sha-dumper + generates patches
 2. Check output/diff_report.txt for changes
 3. Either:
    a. Run update_now.bat  → auto-applies all patches + builds DLL
@@ -21,7 +21,7 @@ Automated update system for Rust offsets, decryptions, and encryptions. Fetches 
 
 | Script | Purpose |
 |--------|---------|
-| `auto_update.bat` | 7-step pipeline: fetch Morphine → parse → sha-dumper → merge → compare → generate prompt → summary |
+| `getnewoffsets.bat` | 14-step pipeline: Morphine prompt → Il2CppInspector → sig_scanner → sha-dumper inject+parse → capstone decrypts → Frida validation → Frida decrypt scan → Frida offset patches → hash mapping → compare_and_patch → verification report → offsets dump → cross-validate → analyze_handle → generate super_prompt + opencode_update_prompt |
 | `update_now.bat` | Applies generated patches + builds cheat DLL. Auto-restores backup on build failure. |
 | `validate_prerequisites.bat` | Checks Python, MSBuild, and Rust installation |
 

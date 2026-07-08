@@ -496,7 +496,11 @@ inline Vector2 WorldToScreen(const Vector3& entity_position, Matrix4x4 view_matr
 
 	float w = trans_vec.Dot(entity_position) + view_matrix._44;
 
-	if (w < 0.1f) return Vector2(-1, -1);
+	// Clamp w to near-zero instead of returning invalid — matches SHA source.
+	// Prevents ESP from vanishing/popping during fast camera turns.
+	// Entities behind camera project to extreme screen positions (pinned to edges).
+	if (w <= 0.f)
+		w = 0.0001f;
 
 	float y = up_vec.Dot(entity_position) + view_matrix._42;
 	float x = right_vec.Dot(entity_position) + view_matrix._41;

@@ -66,6 +66,7 @@ namespace Config {
             return false;
         }
 
+        SaveInt(h, "Config.Version", 2);
         SaveBool(h, "ESP.Box", ESP::Box);
         SaveBool(h, "ESP.Enabled", ESP::ESPEnabled);
         SaveBool(h, "ESP.CornerBox", ESP::CornerBox);
@@ -101,6 +102,7 @@ namespace Config {
         SaveBool(h, "ESP.Clothing", ESP::Clothing);
         SaveBool(h, "ESP.ItemList", ESP::ItemList);
         SaveBool(h, "ESP.AmmoBar", ESP::AmmoBar);
+        SaveBool(h, "ESP.PlayerInventoryPanel", ESP::PlayerInventoryPanel);
         SaveBool(h, "ESP.MovementTrails", ESP::MovementTrails);
         SaveBool(h, "ESP.BulletTracers", ESP::BulletTracers);
         SaveBool(h, "ESP.ShowVisibility", ESP::ShowVisibility);
@@ -638,6 +640,7 @@ namespace Config {
         LOAD_BOOL("ESP.Clothing", ESP::Clothing);
         LOAD_BOOL("ESP.ItemList", ESP::ItemList);
         LOAD_BOOL("ESP.AmmoBar", ESP::AmmoBar);
+        LOAD_BOOL("ESP.PlayerInventoryPanel", ESP::PlayerInventoryPanel);
         LOAD_BOOL("ESP.MovementTrails", ESP::MovementTrails);
         LOAD_BOOL("ESP.BulletTracers", ESP::BulletTracers);
         LOAD_BOOL("ESP.ShowVisibility", ESP::ShowVisibility);
@@ -1080,10 +1083,11 @@ namespace Config {
     }
 
     inline void ApplyLegitDefaults() {
+        ESP::ESPEnabled = true;
         ESP::Box = true; ESP::CornerBox = false; ESP::FilledBox = false;
         ESP::Name = true; ESP::Distance = true; ESP::HealthBar = true;
         ESP::Weapon = false; ESP::Skeleton = false; ESP::HeadCircle = false;
-        ESP::SnapLines = false; ESP::OFFArrows = false; ESP::VisCheck = false;
+        ESP::SnapLines = false; ESP::OFFArrows = false;         ESP::VisCheck = true;
         ESP::TeamID = true; ESP::hotbar_text = false;
         ESP::AmmoBar = false; ESP::ReloadBar = false;
         ESP::RemoveSleepers = true; ESP::RemoveWounded = true;
@@ -1107,18 +1111,19 @@ namespace Config {
     }
 
     inline bool Load() {
+        ApplyLegitDefaults();
+
         HANDLE h = CreateFileA(GetDefaultConfigPath(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
         if (h == INVALID_HANDLE_VALUE) {
-            ApplyLegitDefaults();
             SetStatus("No config found — defaults loaded");
             return false;
         }
 
         DWORD fileSize = GetFileSize(h, NULL);
-        if (fileSize == 0 || fileSize > 1024 * 64) { CloseHandle(h); ApplyLegitDefaults(); SetStatus("Config invalid — defaults loaded"); return false; }
+        if (fileSize == 0 || fileSize > 1024 * 64) { CloseHandle(h); SetStatus("Config invalid — defaults loaded"); return false; }
 
         char* data = (char*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, fileSize + 1);
-        if (!data) { CloseHandle(h); ApplyLegitDefaults(); SetStatus("Load failed: memory error"); return false; }
+        if (!data) { CloseHandle(h); SetStatus("Load failed: memory error"); return false; }
 
         DWORD bytesRead;
         ReadFile(h, data, fileSize, &bytesRead, NULL);
@@ -1134,6 +1139,12 @@ namespace Config {
             }
         }
         HeapFree(GetProcessHeap(), 0, data);
+
+        if (ESP::draw_distance < 1.f) ESP::draw_distance = 200.f;
+        if (WORLD::draw_distance < 1.f) WORLD::draw_distance = 250.f;
+        if (NPC_ESP::draw_distance < 1.f) NPC_ESP::draw_distance = 200.f;
+        if (ANIMAL_ESP::draw_distance < 1.f) ANIMAL_ESP::draw_distance = 150.f;
+
         SetStatus("Config loaded");
         return true;
     }

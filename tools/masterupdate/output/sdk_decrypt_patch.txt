@@ -1,0 +1,251 @@
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: unknown
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+namespace decrypt {
+
+    // ============================================================
+    // Runtime pointer validation
+    // ============================================================
+
+    inline bool IsValidPointer(uint64_t p)
+    {
+        if (!p) return false;
+        if (p & 0x7) return false;                 // basic 8-byte alignment
+        if (p < 0x10000) return false;             // reject null/small values
+        return true;
+    }
+
+    inline bool IsInModuleRange(uint64_t p)
+    {
+        // Fast range check against loaded module bases.
+        // Falls back to true if bases are not initialized yet.
+        if (!GameAssembly && !UnityPlayer) return true;
+        uint64_t ga_end = GameAssembly ? GameAssembly + 0x40000000 : 0; // ~1GB generous
+        uint64_t up_end = UnityPlayer ? UnityPlayer + 0x20000000 : 0;
+        if (GameAssembly && p >= GameAssembly && p <= ga_end) return true;
+        if (UnityPlayer && p >= UnityPlayer && p <= up_end) return true;
+        return false;
+    }
+
+    // ============================================================
+    // Il2Cpp GCHandle resolver
+    // Derived from il2cpp_gchandle_get_target disassembly.
+    // ============================================================
+
+    inline uint64_t Il2cppGetHandle(uint64_t handle_ptr)
+    {
+        if (!handle_ptr) return 0;
+
+        uint64_t page_base = handle_ptr & 0xFFFFFFFFFFFFE000ULL;
+        if (!page_base) return 0;
+
+        uint8_t type = read<uint8_t>(page_base + 0x20);
+        if (type >= 4) return 0;
+
+        int64_t slot = (int64_t)(handle_ptr - page_base - 0x28) >> 3;
+        if (slot < 0) return 0;
+
+        uint32_t size = read<uint32_t>(page_base + 0x1C);
+        if ((uint32_t)slot >= size) return 0;
+
+        uint64_t bitmap_ptr = read<uint64_t>(page_base + 0x10);
+        if (!bitmap_ptr) return 0;
+
+        uint32_t bitmask = read<uint32_t>(bitmap_ptr + 4 * ((uint32_t)slot >> 5));
+        if (!((bitmask >> (slot & 0x1F)) & 1)) return 0;
+
+        uint64_t entry = read<uint64_t>(page_base + 8 * ((uint32_t)slot + 5));
+
+        if (type > 1)
+            return entry;
+
+        // type 0/1: real helper returns 0 for empty slots instead of ~0
+        if (!entry) return 0;
+        return ~entry;
+    }
+
+    // ============================================================
+    // Type-aware read helpers
+    // Use these for fields classified by the updater.
+    // ============================================================
+
+    inline uint64_t ReadObjectPtr(uint64_t address)
+    {
+        uint64_t handle = read<uint64_t>(address);
+        if (!IsValidPointer(handle)) return 0;
+        return Il2cppGetHandle(handle);
+    }
+
+    inline uint64_t ReadRawPtr(uint64_t address)
+    {
+        uint64_t p = read<uint64_t>(address);
+        return IsValidPointer(p) ? p : 0;
+    }
+
+    inline uint64_t ReadTaggedPtr(uint64_t address, uint64_t (*decrypt_fn)(uint64_t))
+    {
+        uint64_t encoded = read<uint64_t>(address);
+        if (!encoded) return 0;
+        uint64_t decoded = decrypt_fn(encoded);
+        return IsValidPointer(decoded) ? decoded : 0;
+    }
+
+    inline uint64_t ReadObjectTagged(uint64_t address, uint64_t (*decrypt_fn)(uint64_t))
+    {
+        uint64_t encoded = read<uint64_t>(address);
+        if (!encoded) return 0;
+        uint64_t decoded = decrypt_fn(encoded);
+        if (!decoded) return 0;
+        return Il2cppGetHandle(decoded);
+    }
+
+    // ============================================================
+    // Handle resolver — preserved across updates (not Morphine-generated)
+    // ============================================================
+
+    inline uint64_t resolve_possible_handle(uint64_t value)
+    {
+        if (!value) return 0;
+        if (value & 1)
+            return Il2cppGetHandle(value);
+        // If not 8-byte aligned, it might be a disguised GCHandle — try Il2cppGetHandle
+        if (value & 0x7) {
+            uint64_t resolved = Il2cppGetHandle(value);
+            if (resolved && (resolved & 0x7) == 0 && resolved > 0x10000)
+                return resolved;
+        }
+        // Aligned value: check if pointer-to-pointer
+        if ((value & 0x7) == 0 && value < 0x7FFFFFFFFFFF) {
+            uint64_t deref = read<uint64_t>(value);
+            if (deref && deref < 0x7FFFFFFFFFFF && (deref & 0x7) == 0 && deref != value)
+                return deref;
+        }
+        return value;
+    }
+
+    // WARNING: client_entities not found in any data source
+
+    // WARNING: entity_list not found in any data source
+
+    // PRESERVED: base_networkable_0 — Using last known good values (not found in sha-dumper)
+    inline uintptr_t networkable_key(uint64_t a1)
+    {
+        uint64_t value = read<uint64_t>(a1 + 0x18);
+        if (!value) return 0;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.nk_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk_rol)); // ROL
+            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.nk_xor; // XOR
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk_add; // ADD
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        uintptr_t resolved = Il2cppGetHandle(value);
+        if (resolved) return resolved;
+        return (value & 0x7) == 0 ? value : 0;
+    }
+
+    // PRESERVED: base_networkable_1 — Using last known good values (not found in sha-dumper)
+    inline uintptr_t networkable_key2(uint64_t a1)
+    {
+        uint64_t value = read<uint64_t>(a1 + 0x18);
+        if (!value) return 0;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = x + OffsetManager::DecryptCfg.nk2_add; // ADD
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.nk2_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.nk2_rol)); // ROL
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk2_add_2; // ADD
+            uint32_t v4 = v3 ^ OffsetManager::DecryptCfg.nk2_xor; // XOR
+            *data = v4;
+            data++;
+            --count;
+        } while (count);
+        uintptr_t resolved = Il2cppGetHandle(value);
+        if (resolved) return resolved;
+        return (value & 0x7) == 0 ? value : 0;
+    }
+
+    // PRESERVED: cl_active_item — Using last known good values (not found in sha-dumper)
+    inline uint64_t decrypt_ClActiveItem(uint64_t raw_value)
+    {
+        if (!raw_value) return 0;
+        uint64_t value = raw_value;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.cla_rol) | (x >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
+            uint32_t v2 = v1 + OffsetManager::DecryptCfg.cla_add; // ADD
+            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.cla_rol_2) | (v2 >> (32 - OffsetManager::DecryptCfg.cla_rol_2)); // ROL
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        return value;
+    }
+
+    // PRESERVED: player_inventory — Using last known good values (not found in sha-dumper)
+    inline uint64_t decrypt_inventory_pointer(uint64_t raw_value)
+    {
+        if (!raw_value) return 0;
+        uint64_t value = raw_value;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = x + OffsetManager::DecryptCfg.inv_add; // ADD
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.inv_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.inv_rol)); // ROL
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.inv_add_2; // ADD
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        return value;
+    }
+
+    // PRESERVED: player_eyes — Using last known good values (not found in sha-dumper)
+    inline uint64_t decrypt_eyes(uint64_t raw_value)
+    {
+        if (!raw_value) return 0;
+        uint64_t value = raw_value;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.ey_rol) | (x >> (32 - OffsetManager::DecryptCfg.ey_rol)); // ROL
+            uint32_t v2 = v1 + OffsetManager::DecryptCfg.ey_add; // ADD
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.ey_xor; // XOR
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        return value;
+    }
+
+    // PRESERVED: decrypt_fov — Using last known good values (not found in sha-dumper)
+    inline uint32_t decrypt_fov(uint32_t val) {
+        val += OffsetManager::DecryptCfg.fov_add;
+        val = (val << OffsetManager::DecryptCfg.fov_rol) | (val >> (32 - OffsetManager::DecryptCfg.fov_rol));
+        val -= OffsetManager::DecryptCfg.fov_sub;
+        val ^= OffsetManager::DecryptCfg.fov_xor;
+        return val;
+    }
+
+    // encrypt_fov — reverse of decrypt_fov, preserved across updates
+    inline uint32_t encrypt_fov(uint32_t val) {
+        val ^= OffsetManager::DecryptCfg.fov_xor;
+        val += OffsetManager::DecryptCfg.fov_sub;
+        val = (val >> OffsetManager::DecryptCfg.fov_rol) | (val << (32 - OffsetManager::DecryptCfg.fov_rol));
+        val -= OffsetManager::DecryptCfg.fov_add;
+        return val;
+    }
+
+} // namespace decrypt

@@ -10,7 +10,7 @@
 #include "../Cache/cache.hpp"
 
 extern std::unordered_map<uintptr_t, EspCacheData> g_EspCache;
-extern std::mutex g_EspCacheMutex;
+extern std::shared_mutex g_EspCacheMutex;
 extern std::unordered_map<uintptr_t, std::vector<Vector3>> g_Trails;
 extern std::mutex g_TrailsMutex;
 
@@ -107,7 +107,12 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
 
     // Velocity-based position prediction (vs old fixed 0.3/0.7 lerp)
     {
-        static std::unordered_map<uintptr_t, Vector3> prevHead, prevFeet;
+        static std::unordered_map<uintptr_t, Vector3>* pPrevHead = nullptr;
+        static std::unordered_map<uintptr_t, Vector3>* pPrevFeet = nullptr;
+        if (!pPrevHead) pPrevHead = new std::unordered_map<uintptr_t, Vector3>();
+        if (!pPrevFeet) pPrevFeet = new std::unordered_map<uintptr_t, Vector3>();
+        auto& prevHead = *pPrevHead;
+        auto& prevFeet = *pPrevFeet;
         static int cleanupTick = 0;
 
         uint64_t now = GetTickCount64();
@@ -316,13 +321,13 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
     }
 
     // Use cached inventory from slow thread (zero IOCTLs in render loop)
-    struct CachedInv { std::string belt[6]; std::string wear[5]; int ammo = -1; };
+    struct CachedInv { char belt[6][64] = {}; char wear[5][64] = {}; int ammo = -1; };
     CachedInv ex;
-    for (int i = 0; i < 6; i++) ex.belt[i] = cached.belt[i];
-    for (int i = 0; i < 5; i++) ex.wear[i] = cached.wear[i];
+    for (int i = 0; i < 6; i++) cacheSetStr(ex.belt[i], cached.belt[i]);
+    for (int i = 0; i < 5; i++) cacheSetStr(ex.wear[i], cached.wear[i]);
     ex.ammo = cached.ammo;
     bool hasBelt = false;
-    for (int i = 0; i < 6; i++) if (!ex.belt[i].empty()) { hasBelt = true; break; }
+    for (int i = 0; i < 6; i++) if (!cacheStrEmpty(ex.belt[i])) { hasBelt = true; break; }
 
     if (ESP::hotbar_text && hasBelt) {
         if (ESP::HotbarIcons) {
@@ -331,22 +336,22 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
             float iconSpacing = 2.0f;
             float totalW = 0;
             int iconCount = 0;
-            for (int i = 0; i < 6; ++i) if (!ex.belt[i].empty()) iconCount++;
+            for (int i = 0; i < 6; ++i) if (!cacheStrEmpty(ex.belt[i])) iconCount++;
             if (iconCount > 0) {
                 totalW = iconCount * (iconSize + iconSpacing) - iconSpacing;
                 float startX = headScreen.x - totalW * 0.5f;
                 auto* dl = ImGui::GetBackgroundDrawList();
                 for (int i = 0; i < 6; ++i) {
-                    if (ex.belt[i].empty()) continue;
-                    ID3D11ShaderResourceView* icon = g_ItemIcons.Get(ex.belt[i]);
+                    if (cacheStrEmpty(ex.belt[i])) continue;
+                    ID3D11ShaderResourceView* icon = g_ItemIcons.Get(std::string(ex.belt[i]));
                     if (icon) {
                         ImVec2 pos1(startX, bottomY);
                         ImVec2 pos2(startX + iconSize, bottomY + iconSize);
                         dl->AddImage((ImTextureID)icon, pos1, pos2);
                     } else {
                         // Fallback to text
-                        ImVec2 sz = CalcEspTextSize(ex.belt[i].c_str());
-                        DrawEspText(startX, bottomY, ESP::color::Weapon, ex.belt[i].c_str());
+                        ImVec2 sz = CalcEspTextSize(ex.belt[i]);
+                        DrawEspText(startX, bottomY, ESP::color::Weapon, ex.belt[i]);
                     }
                     startX += iconSize + iconSpacing;
                 }
@@ -354,19 +359,19 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
             }
         } else {
             for (int i = 0; i < 6; ++i) {
-                if (!ex.belt[i].empty()) DrawBottomLine(ex.belt[i], ESP::color::Weapon);
+                if (!cacheStrEmpty(ex.belt[i])) DrawBottomLine(std::string(ex.belt[i]), ESP::color::Weapon);
             }
         }
     }
     bool hasWear = false;
-    for (int i = 0; i < 5; i++) if (!ex.wear[i].empty()) { hasWear = true; break; }
+    for (int i = 0; i < 5; i++) if (!cacheStrEmpty(ex.wear[i])) { hasWear = true; break; }
     if (ESP::Clothing && hasWear) {
         DrawBottomLine(TR("-- Wear --"), ESP::color::Distance);
-        for (int i = 0; i < 5; ++i) if (!ex.wear[i].empty()) DrawBottomLine(ex.wear[i], ESP::color::Name);
+        for (int i = 0; i < 5; ++i) if (!cacheStrEmpty(ex.wear[i])) DrawBottomLine(std::string(ex.wear[i]), ESP::color::Name);
     }
     if (ESP::ItemList && hasBelt) {
         DrawBottomLine(TR("-- Belt --"), ESP::color::Distance);
-        for (int i = 0; i < 6; ++i) if (!ex.belt[i].empty()) DrawBottomLine(ex.belt[i], ESP::color::Weapon);
+        for (int i = 0; i < 6; ++i) if (!cacheStrEmpty(ex.belt[i])) DrawBottomLine(std::string(ex.belt[i]), ESP::color::Weapon);
     }
     if (ESP::AmmoBar && ex.ammo >= 0) {
         DrawBottomLine(TR("Ammo: ") + std::to_string(ex.ammo), ESP::color::Distance);

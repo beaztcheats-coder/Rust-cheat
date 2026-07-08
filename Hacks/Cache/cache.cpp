@@ -15,7 +15,7 @@
 #pragma comment(lib, "d3d11.lib")
 
 std::unordered_map<uintptr_t, EspCacheData> g_EspCache;
-std::mutex g_EspCacheMutex;
+std::shared_mutex g_EspCacheMutex;
 std::unordered_map<uintptr_t, std::vector<Vector3>> g_Trails;
 std::mutex g_TrailsMutex;
 std::unordered_map<uintptr_t, GhostData> g_GhostCache;
@@ -29,9 +29,12 @@ std::mutex g_LocalPlayerDataMutex;
 std::atomic<int> g_BnStableCycles{ 0 };
 std::atomic<uint64_t> g_CacheHeartbeatMs{ 0 };
 std::atomic<int> g_CacheLastEntity{ 0 };
+std::atomic<int> g_CacheStep{ 0 };
+
 std::atomic<uint32_t> g_CacheThreadEpoch{ 0 };
 std::atomic<uintptr_t> g_LocalPlayerAddr{ 0 };
 std::atomic<uint64_t> g_LocalPlayerGeneration{ 1 };
+std::atomic<uintptr_t> g_LocalPlayerEyesPtr{ 0 };
 std::atomic<uint64_t> g_FastRefreshHeartbeatMs{ 0 };
 std::atomic<uint32_t> g_FastRefreshEpoch{ 0 };
 std::atomic<uint64_t> g_SkeletonHeartbeatMs{ 0 };
@@ -46,6 +49,10 @@ void cache::do_Cache() {
     static bool first_log = true;
     static int failCount = 0;
     const uint32_t threadEpoch = g_CacheThreadEpoch.load(std::memory_order_acquire);
+
+    struct PrefabNameCacheEntry { uintptr_t key; char name[128]; uint64_t cycle; };
+    static PrefabNameCacheEntry s_prefabNameCache[256];
+    static int s_prefabNameCacheCount = 0;
 
     auto publishLocalPlayer = [&](Rust::BaseEntity* lp) {
         uintptr_t newAddr = (uintptr_t)lp;
@@ -75,7 +82,11 @@ void cache::do_Cache() {
         if (!vischeckInit) {
             vischeckInit = true;
             vischeck::g_UnityPlayerBase = UnityPlayer;
-            vischeck::InitVisCheck();
+            if (ESP::VisMode > 0) {
+                vischeck::InitVisCheck();
+            } else {
+                LOG("VisCheck: VisMode=0 (raw flag), skipping mesh data load");
+            }
         }
 
         // === Process-death detection: if BN chain keeps failing, check if Rust is still alive ===
@@ -113,9 +124,10 @@ void cache::do_Cache() {
                 prefab_List.clear();
             }
             {
-                std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+                std::unique_lock<std::shared_mutex> lk(g_EspCacheMutex);
                 g_EspCache.clear();
             }
+            s_prefabNameCacheCount = 0;
         };
 
         uint64_t basenetworkable = read<uint64_t>(GameAssembly + offsets::basenetworkable_pointer);
@@ -191,6 +203,14 @@ void cache::do_Cache() {
             if (++failCount == 1) LOG("BN chain FAIL: entity_size unreasonable (%u)", entity_size);
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
+        }
+        // Cap entity iteration to prevent excessive IOCTL cycles.
+        // 8000 covers all entities on any server (players + animals + NPCs + nearby items).
+        if (entity_size > 8000) {
+            static int capWarnTick = 0;
+            if ((++capWarnTick % 30) == 0)
+                LOG("CACHE: entity_size=%u, capping at 8000", entity_size);
+            entity_size = 8000;
         }
 
         // Stability check: if entity_size dropped >40% from last successful cycle, skip walk
@@ -329,7 +349,7 @@ void cache::do_Cache() {
             localPos = localPlayer->Get_ObjectPosition(); // verified working chain
             // One-time diagnostic: compare PlayerEyes vs transform-chain position
             static bool posDiag = false;
-            if (!posDiag && !localPos.Empty()) {
+            if (kCacheVerboseLogs && !posDiag && !localPos.Empty()) {
                 uint64_t eyes_raw = read<uint64_t>((uintptr_t)localPlayer + offsets::BasePlayer::PlayerEyes);
                 LOG("POS_DIAG: Get_ObjectPosition=(%.1f,%.1f,%.1f) eyes_raw=0x%I64X",
                     localPos.x, localPos.y, localPos.z, eyes_raw);
@@ -348,36 +368,84 @@ void cache::do_Cache() {
 
         auto cycleStart = GetTickCount64();
 
+        // Compute max draw distance for early entity culling
+        // Entities beyond ALL draw distances are skipped before classification — saves 5+ IOCTLs each
+        float maxDrawDist = 0;
+        if (ESP::ESPEnabled) maxDrawDist = std::max(maxDrawDist, (float)ESP::draw_distance);
+        if (NPC_ESP::Enabled) maxDrawDist = std::max(maxDrawDist, (float)NPC_ESP::draw_distance);
+        if (ANIMAL_ESP::Enabled) maxDrawDist = std::max(maxDrawDist, (float)ANIMAL_ESP::draw_distance);
+        if (WORLD::AnyEspEnabled()) maxDrawDist = std::max(maxDrawDist, WORLD::draw_distance);
+        if (maxDrawDist < 1.f) maxDrawDist = 1.f; // safety — always allow at least 1m
+
+        g_CacheStep.store(10, std::memory_order_relaxed);
         for (auto i = 0; i < entity_size; i++) {
-            // Shutdown check + heartbeat every 50 entities
             if (i > 0 && (i % 50) == 0) {
                 g_CacheHeartbeatMs.store(GetTickCount64(), std::memory_order_release);
                 g_CacheLastEntity.store(i, std::memory_order_relaxed);
                 if (MISC::ShutdownRequested) { LOG("CACHE: aborting at entity %d/%d (shutdown)", i, (int)entity_size); break; }
+                if ((i % 500) == 0 && Drv && !Drv->IsProcessAlive()) {
+                    LOG("CACHE: RustClient.exe died mid-loop at entity %d — aborting to prevent BSOD", i);
+                    g_process_dead.store(true, std::memory_order_relaxed);
+                    Drv->ioctl_blocked.store(true, std::memory_order_relaxed);
+                    MISC::ShutdownRequested = true;
+                    break;
+                }
             }
 
+            g_CacheStep.store(20, std::memory_order_relaxed);
             uintptr_t entity_ptr_raw = read<uintptr_t>((uint64_t)entity_array + 0x20 + (i * 0x8));
             if (!entity_ptr_raw) continue;
             
-            // Entity pointers from buffer list are already valid GCHandles or pointers
-            // Do NOT apply networkable_key - that reads from entity_ptr+0x18 (wrong memory)
-            uintptr_t entity = (entity_ptr_raw & 1) ? decrypt::Il2cppGetHandle(entity_ptr_raw) : entity_ptr_raw;
+            g_CacheStep.store(30, std::memory_order_relaxed);
+            uintptr_t entity;
+            if (entity_ptr_raw & 1) {
+                __try {
+                    entity = decrypt::Il2cppGetHandle(entity_ptr_raw);
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER) {
+                    entity = 0;
+                }
+            } else {
+                entity = entity_ptr_raw;
+            }
             if (!is_valid(entity)) continue;
 
+            g_CacheStep.store(40, std::memory_order_relaxed);
+            {
+                uintptr_t lerp = read<uint64_t>(entity + offsets::BaseEntity::positionLerp);
+                if (lerp && is_valid(lerp)) {
+                    uintptr_t interp = read<uint64_t>(lerp + offsets::BaseEntity::posChain0);
+                    if (interp && is_valid(interp)) {
+                        Vector3 earlyPos = read<Vector3>(interp + offsets::BaseEntity::posFinal);
+                        if (!earlyPos.Zero() && !localPos.Empty()) {
+                            float earlyDist = localPos.DistTo(earlyPos);
+                            if (earlyDist > maxDrawDist) continue;
+                        }
+                    }
+                }
+            }
+
+            g_CacheStep.store(50, std::memory_order_relaxed);
             uintptr_t object = read<uintptr_t>(entity + 0x10);
-            if (!object) continue;
+            if (!object || !is_valid(object)) continue;
 
+            g_CacheStep.store(60, std::memory_order_relaxed);
             uintptr_t objectClass = read<uintptr_t>(object + 0x20);
-            if (!objectClass) continue;
+            if (!objectClass || !is_valid(objectClass)) continue;
 
-            // Cache prefab name by objectClass pointer — avoids re-reading 128 bytes
-            struct PrefabCacheEntry { std::string name; uint64_t cycle; };
-            static std::unordered_map<uintptr_t, PrefabCacheEntry> s_prefabNameCache;
+            g_CacheStep.store(70, std::memory_order_relaxed);
+
             std::string buff;
             {
-                auto pn = s_prefabNameCache.find(objectClass);
-                if (pn != s_prefabNameCache.end() && (cacheCycleCount - pn->second.cycle) < 10) {
-                    buff = pn->second.name;
+                const char* cachedName = nullptr;
+                for (int j = 0; j < s_prefabNameCacheCount; j++) {
+                    if (s_prefabNameCache[j].key == objectClass && (cacheCycleCount - s_prefabNameCache[j].cycle) < 10) {
+                        cachedName = s_prefabNameCache[j].name;
+                        break;
+                    }
+                }
+                if (cachedName) {
+                    buff = cachedName;
                 } else {
                     uintptr_t namePtr = read<uintptr_t>(objectClass + 0x50);
                     if (!namePtr || !is_valid(namePtr)) continue;
@@ -386,8 +454,12 @@ void cache::do_Cache() {
                     buff = ms.buffer;
                     buff = std::string(buff.c_str());
                     if (buff.empty()) continue;
-                    if (s_prefabNameCache.size() > 2000) s_prefabNameCache.clear();
-                    s_prefabNameCache[objectClass] = { buff, cacheCycleCount };
+                    if (s_prefabNameCacheCount < 256) {
+                        s_prefabNameCache[s_prefabNameCacheCount].key = objectClass;
+                        strncpy_s(s_prefabNameCache[s_prefabNameCacheCount].name, 128, buff.c_str(), 127);
+                        s_prefabNameCache[s_prefabNameCacheCount].cycle = cacheCycleCount;
+                        s_prefabNameCacheCount++;
+                    }
                 }
             }
             if (buff.empty()) continue;
@@ -476,7 +548,7 @@ void cache::do_Cache() {
             {
                 static int unmatchedCount = 0;
                 static std::unordered_set<std::string> unmatchedLogged;
-                if (unmatchedCount < 200 && unmatchedLogged.find(buff) == unmatchedLogged.end()) {
+                if (kCacheVerboseLogs && unmatchedCount < 200 && unmatchedLogged.find(buff) == unmatchedLogged.end()) {
                     if (!isNPC && !isPlayer) {
                         unmatchedLogged.insert(buff);
                         LOG("CACHE UNMATCHED[%d]: '%s'", unmatchedCount, buff.c_str());
@@ -548,6 +620,7 @@ void cache::do_Cache() {
             }
 
             if (isPlayer) {
+                g_CacheStep.store(100, std::memory_order_relaxed);
                 classifiedPlayers++;
                 if (samplePlayer.empty()) samplePlayer = low;
                 Rust::BaseEntity* Player = (Rust::BaseEntity*)entity;
@@ -561,10 +634,33 @@ void cache::do_Cache() {
                 float Distance = localPos.DistTo(pos);
                 if (Distance > ESP::draw_distance) continue;
 
-                // Single PlayerFlags read replaces IsSleeping / Is_Wounded calls
-                int pFlags = read<int>((uintptr_t)Player + offsets::BasePlayer::PlayerFlags);
-                bool isDead = Player->IsDead();
-                if (isDead) continue;
+                // UC block read: read 0x424 bytes from Lifestate(0x298) to PlayerFlags(0x6B8)+4 in ONE IOCTL
+                // Replaces 4 individual reads: PlayerFlags, combat block, CurrentTeam, ModelState ptr
+                uint8_t playerBuf[0x424] = {};
+                uintptr_t readBase = (uintptr_t)Player + offsets::BaseCombatEntity::Lifestate;
+                if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(readBase), playerBuf, 0x424)))
+                    if (Drv && !Drv->ioctl_blocked.load(std::memory_order_relaxed) && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed))
+                        Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(readBase), playerBuf, 0x424);
+                int lifestate = *(int*)(playerBuf + 0x0);           // 0x298 - 0x298
+                float health = *(float*)(playerBuf + 0xC);          // 0x2A4 - 0x298
+                float maxHealth = *(float*)(playerBuf + 0x10);      // 0x2A8 - 0x298
+                uintptr_t msPtr = *(uintptr_t*)(playerBuf + 0x280); // 0x518 - 0x298 (ModelState)
+                uint64_t teamId = *(uint64_t*)(playerBuf + 0x2A0);  // 0x538 - 0x298 (CurrentTeam)
+                int pFlags = *(int*)(playerBuf + 0x420);             // 0x6B8 - 0x298 (PlayerFlags)
+                bool isDead = (lifestate == 1);
+
+                // Dead players — show as corpse ESP (the dead body on the ground before it becomes a body bag)
+                if (isDead) {
+                    if (WORLD::BodyBag && Distance <= WORLD::draw_corpse) {
+                        Rust::PrefabData data;
+                        data.Position = pos;
+                        data.Color = WORLD::color::BodyBag_Color;
+                        std::string pname = Player->GetName();
+                        data.name = (pname.empty() || pname == "?") ? "Dead Player" : ("Dead [" + pname + "]");
+                        tempPrefabList.push_back(data);
+                    }
+                    continue;
+                }
                 if ((pFlags & (int)offsets::base_player_flags::Sleeping) != 0 && ESP::RemoveSleepers) continue;
                 if ((pFlags & (int)offsets::base_player_flags::Wounded) != 0 && ESP::RemoveWounded) continue;
 
@@ -573,11 +669,14 @@ void cache::do_Cache() {
                 ec.isDead = isDead;
                 ec.isSleeping = (pFlags & (int)offsets::base_player_flags::Sleeping) != 0;
                 ec.isWounded = (pFlags & (int)offsets::base_player_flags::Wounded) != 0;
-                ec.health = read<float>((uintptr_t)Player + offsets::BaseCombatEntity::Health);
-                ec.maxHealth = read<float>((uintptr_t)Player + offsets::BaseCombatEntity::MaxHealth);
-                ec.teamId = read<uint64_t>((uintptr_t)Player + offsets::BasePlayer::CurrentTeam);
+                ec.health = health;
+                ec.maxHealth = maxHealth;
+                ec.teamId = teamId;
 
-                if (Distance <= 400.f || (cacheCycleCount % 2) == 0) {
+                if (!ESP::VisCheck) {
+                    ec.isVisibleRaw = true;
+                    ec.isVisible = true;
+                } else if (Distance <= 400.f || (cacheCycleCount % 2) == 0) {
                     ec.isVisibleRaw = Player->IsVisibleRawFlag();
                     ec.isVisible = Player->IsVisibleFiltered(ec.isVisibleRaw);
                 } else {
@@ -586,9 +685,8 @@ void cache::do_Cache() {
                 }
 
                 {
-                    uintptr_t ms = read<uintptr_t>((uintptr_t)Player + offsets::BasePlayer::ModelState);
-                    if (ms && is_valid(ms)) {
-                        int msFlags = read<int>(ms + offsets::ModelState::flags);
+                    if (msPtr && is_valid(msPtr)) {
+                        int msFlags = read<int>(msPtr + offsets::ModelState::flags);
                         ec.isCrouching = (msFlags & offsets::ModelState::Ducked) != 0;
                         ec.isGrounded = (msFlags & offsets::ModelState::OnGround) != 0;
                     }
@@ -598,7 +696,7 @@ void cache::do_Cache() {
                 ec.headPos = pos;
 
                 // BVH raycast overrides isVisible (but NOT isVisibleRaw, which stays as the game's flag for VisibleStrict)
-                if (ESP::VisCheck && vischeck::g_VisCheckLoaded && Distance <= 400.f) {
+                if (ESP::VisCheck && ESP::VisMode > 0 && vischeck::g_VisCheckLoaded && Distance <= 400.f) {
                     Vector3 camPos;
                     { std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex); camPos = g_CameraWorldPos; }
                     if (!camPos.Empty()) {
@@ -607,21 +705,21 @@ void cache::do_Cache() {
                     }
                 }
 
-                // Name / held item: lower LOD for distant players (stable source strategy)
+                // Name / held item: lower LOD for distant players (matches stable version)
                 if (Distance <= 100.f || (Distance <= 300.f && (cacheCycleCount % 2) == 0)) {
-                    ec.name = Player->GetName();
+                    { auto n = Player->GetName(); cacheSetStr(ec.name, n.c_str()); }
                     if (Distance <= 100.f || (Distance <= 200.f && (cacheCycleCount % 4) == 0)) {
                         auto* h = Player->Get_HeldItem();
-                        ec.weaponName = h ? h->get_item_name() : "";
+                        if (h) { auto wn = h->get_item_name(); cacheSetStr(ec.weaponName, wn.c_str()); }
                     }
                 }
                 ec.skeletonValid = false;
 
                 // Inventory scan: close players only, every 4th cycle, only if ESP toggles active
-                if (Distance <= 100.f && (ESP::hotbar_text || ESP::Clothing || ESP::ItemList || ESP::AmmoBar) && (cacheCycleCount % 4) == 0) {
+                if (Distance <= 100.f && (ESP::hotbar_text || ESP::Clothing || ESP::ItemList || ESP::AmmoBar || ESP::PlayerInventoryPanel) && (cacheCycleCount % 4) == 0) {
                     auto belt = Player->Get_Hotbar_list();
                     for (size_t i = 0; i < belt.size() && i < 6; i++) {
-                        if (belt[i]) ec.belt[i] = belt[i]->get_item_name();
+                        if (belt[i]) { auto bn = belt[i]->get_item_name(); cacheSetStr(ec.belt[i], bn.c_str()); }
                     }
                     uintptr_t inv = Player->ResolvePlayerInventory();
                     if (inv && is_valid(inv)) {
@@ -638,7 +736,7 @@ void cache::do_Cache() {
                                     uintptr_t item = read<uintptr_t>(wearArr + 0x20 + (i * 8));
                                     if (!item || !is_valid(item)) continue;
                                     auto* wi = (Rust::BaseEntity::HeldItem*)item;
-                                    ec.wear[i] = wi->get_item_name();
+                                    { auto wn = wi->get_item_name(); cacheSetStr(ec.wear[i], wn.c_str()); }
                                 }
                                 break;
                             }
@@ -715,7 +813,7 @@ void cache::do_Cache() {
                 }
                 if (NPC_ESP::HeldItem) {
                     auto* held = NPC->Get_HeldItem();
-                    if (held) ec.weaponName = held->get_item_name();
+                    if (held) { auto wn = held->get_item_name(); cacheSetStr(ec.weaponName, wn.c_str()); }
                 }
                 tempEspCache[(uintptr_t)entity] = ec;
                 tempNpcList.push_back(NPC);
@@ -736,7 +834,7 @@ void cache::do_Cache() {
                 aec.headPos = pos;
                 aec.feetPos = pos;
                 aec.cacheTick = GetTickCount64();
-                aec.animalType = animalType;
+                cacheSetStr32(aec.animalType, animalType.c_str());
                 aec.isDead = animalDead;
                 aec.health = read<float>((uintptr_t)Animal + offsets::BaseCombatEntity::Health);
                 aec.maxHealth = read<float>((uintptr_t)Animal + offsets::BaseCombatEntity::MaxHealth);
@@ -746,7 +844,10 @@ void cache::do_Cache() {
                 // WORLD PREFAB: skip entirely if no world ESP toggle is active
                 if (!WORLD::AnyEspEnabled()) continue;
 
-                Vector3 EntityPosition = ((Rust::BaseEntity*)entity)->Get_ObjectPosition();
+                // Fast 3-IOCTL position via PositionLerp (falls back to 6-IOCTL full chain)
+                Rust::BaseEntity* worldEnt = (Rust::BaseEntity*)entity;
+                auto fastPos = worldEnt->Get_ObjectPosition_Fast();
+                auto EntityPosition = fastPos.Empty() ? worldEnt->Get_ObjectPosition() : fastPos;
                 if (EntityPosition.Zero()) continue;
 
                 float distance = localPos.DistTo(EntityPosition);
@@ -800,7 +901,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Hemp_Color;
                     tempPrefabList.push_back(data);
                 }
-                if ( WORLD::Stash && low.find("small_stash_deployed.prefab") != std::string::npos )
+                if ( WORLD::Stash && stashOk && low.find("small_stash_deployed.prefab") != std::string::npos )
                 {
                     Rust::PrefabData data;
                     data.name = TR("Stash");
@@ -808,7 +909,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Stash_Color;
                     tempPrefabList.push_back(data);
                 }
-                if (WORLD::Metal && low.find("metal-ore.prefab") != std::string::npos )
+                if (WORLD::Metal && metalOk && low.find("metal-ore.prefab") != std::string::npos )
                 {
                     Rust::PrefabData data;
                     data.name = TR("Metal Ore");
@@ -816,7 +917,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Metal_Color;
                     tempPrefabList.push_back(data);
                 }
-                if (WORLD::Stone && low.find("stone-ore.prefab") != std::string::npos)
+                if (WORLD::Stone && stoneOk && low.find("stone-ore.prefab") != std::string::npos)
                 {
                     Rust::PrefabData data;
                     data.name = TR("Stone Ore");
@@ -824,7 +925,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Stone_Color;
                     tempPrefabList.push_back(data);
                 }
-                if (WORLD::Sulfer && low.find("sulfur-ore.prefab") != std::string::npos )
+                if (WORLD::Sulfer && sulfurOk && low.find("sulfur-ore.prefab") != std::string::npos )
                 {
                     Rust::PrefabData data;
                     data.name = TR("Sulfer Ore");
@@ -832,12 +933,24 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Sulfer_Color;
                     tempPrefabList.push_back(data);
                 }
-                if (WORLD::BodyBag && low.find("player_corpse.prefab") != std::string::npos )
+                if (WORLD::BodyBag && corpseOk && (low.find("player_corpse") != std::string::npos || low.find("lootable_corpse") != std::string::npos || low.find("npc_corpse") != std::string::npos))
                 {
                     Rust::PrefabData data;
-                    data.name = TR("Corpse");
                     data.Position = EntityPosition;
                     data.Color = WORLD::color::BodyBag_Color;
+                    
+                    // Try to read player name from LootableCorpse._playerName (0x310)
+                    std::string corpseName = TR("Corpse");
+                    if (entity && is_valid((uintptr_t)entity)) {
+                        uintptr_t nameStrPtr = read<uintptr_t>((uintptr_t)entity + 0x310);
+                        if (nameStrPtr && is_valid(nameStrPtr)) {
+                            std::string pname = read_wstr(nameStrPtr + offsets::unity_string::first_char);
+                            if (!pname.empty() && pname != "?") {
+                                corpseName = std::string("Corpse [") + pname + "]";
+                            }
+                        }
+                    }
+                    data.name = corpseName;
                     tempPrefabList.push_back(data);
                 }
                 if (WORLD::Turret && trapOk && low.find("autoturret_deployed") != std::string::npos )
@@ -864,7 +977,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::MiniCopter_Color;
                     tempPrefabList.push_back(data);
                 }
-                if (WORLD::Backpack && low.find("item_drop_backpack.prefab") != std::string::npos)
+                if (WORLD::Backpack && backpackOk && low.find("item_drop_backpack.prefab") != std::string::npos)
                 {
                     Rust::PrefabData data;
                     data.name = TR("Backpack");
@@ -872,7 +985,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Backpack_Color;
                     tempPrefabList.push_back(data);
                 }
-                if (WORLD::BradlyAPC && low.find("bradleyapc.prefab") != std::string::npos)
+                if (WORLD::BradlyAPC && bradleyOk && low.find("bradleyapc.prefab") != std::string::npos)
                 {
                     Rust::PrefabData data;
                     data.name = TR("Bradley APC");
@@ -1096,7 +1209,7 @@ void cache::do_Cache() {
 
         // Merge slow data into g_EspCache — preserve fast-thread fields (bones, headPos, etc.)
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            std::unique_lock<std::shared_mutex> lk(g_EspCacheMutex);
             // Build a set of entities in the new cache for stale-entry removal
             std::unordered_set<uintptr_t> newKeys;
             for (auto& [k, v] : tempEspCache) {
@@ -1104,9 +1217,9 @@ void cache::do_Cache() {
                 auto it = g_EspCache.find(k);
                 if (it != g_EspCache.end()) {
                     // Merge: update slow fields, keep fast fields
-                    if (!v.name.empty()) it->second.name = v.name;
-                    if (!v.weaponName.empty()) it->second.weaponName = v.weaponName;
-                    it->second.animalType = v.animalType;
+                    if (!cacheStrEmpty(v.name)) cacheSetStr(it->second.name, v.name);
+                    if (!cacheStrEmpty(v.weaponName)) cacheSetStr(it->second.weaponName, v.weaponName);
+                    cacheSetStr32(it->second.animalType, v.animalType);
                     it->second.isDead = v.isDead;
                     it->second.isSleeping = v.isSleeping;
                     it->second.isWounded = v.isWounded;
@@ -1117,8 +1230,8 @@ void cache::do_Cache() {
                     it->second.health = v.health;
                     it->second.maxHealth = v.maxHealth;
                     it->second.teamId = v.teamId;
-                    for (int i = 0; i < 6; i++) if (!v.belt[i].empty()) it->second.belt[i] = v.belt[i];
-                    for (int i = 0; i < 5; i++) if (!v.wear[i].empty()) it->second.wear[i] = v.wear[i];
+                    for (int i = 0; i < 6; i++) if (!cacheStrEmpty(v.belt[i])) cacheSetStr(it->second.belt[i], v.belt[i]);
+                    for (int i = 0; i < 5; i++) if (!cacheStrEmpty(v.wear[i])) cacheSetStr(it->second.wear[i], v.wear[i]);
                     it->second.ammo = v.ammo;
                     it->second.invTick = v.invTick;
                     // Update bones for NPCs/animals (slow cache reads fresh bones for them).
@@ -1129,9 +1242,15 @@ void cache::do_Cache() {
                         it->second.skeletonValid = true;
                         it->second.skeletonTick = v.skeletonTick ? v.skeletonTick : GetTickCount64();
                     }
-                    // Only update headPos from slow cache if the fast position thread hasn't set one yet
-                    if (it->second.cacheTick == 0 || v.headPos.Empty()) {
+                    // Update position from slow cache if entity is new, or if slow cache has a fresher position.
+                    // For players, the fast position thread sets a more recent cacheTick, so this won't overwrite.
+                    // For animals/NPCs, the fast thread never updates them, so their cacheTick stays old
+                    // and the slow cache will update positions every cycle.
+                    if (it->second.cacheTick == 0 || v.cacheTick > it->second.cacheTick) {
                         it->second.headPos = v.headPos;
+                        it->second.feetPos = v.feetPos;
+                        it->second.cacheTick = v.cacheTick;
+                        if (!v.velocity.Empty()) it->second.velocity = v.velocity;
                     }
                 } else {
                     // New entity — insert with slow data
@@ -1187,12 +1306,26 @@ void cache::do_PositionRefresh() {
         }
 
         if (!src->LocalPlayer || !is_valid((uintptr_t)src->LocalPlayer)) {
+            g_LocalPlayerEyesPtr.store(0, std::memory_order_relaxed);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
         }
         if (g_BnStableCycles.load(std::memory_order_relaxed) < 3) {
             std::this_thread::sleep_for(std::chrono::milliseconds(25));
             continue;
+        }
+
+        // Cache LocalPlayer's PlayerEyes pointer when generation changes
+        // This eliminates 708-IOCTL GetComponentByName() call every frame in silent aim
+        {
+            static uint64_t lastEyesGen = 0;
+            uint64_t curGen = g_LocalPlayerGeneration.load(std::memory_order_acquire);
+            if (curGen != lastEyesGen) {
+                lastEyesGen = curGen;
+                uintptr_t eyes = src->LocalPlayer->GetPlayerEyes();
+                g_LocalPlayerEyesPtr.store(eyes, std::memory_order_relaxed);
+                if (eyes) LOG("POS: cached LocalPlayer PlayerEyes=0x%I64X (gen=%llu)", eyes, curGen);
+            }
         }
 
         auto posCycleStart = GetTickCount64();
@@ -1242,12 +1375,27 @@ void cache::do_PositionRefresh() {
             continue;
         }
 
-        // Per-player: root position + velocity (stable source approach)
-        for (auto* Player : playerList) {
+        // Per-player: position via modelPtr (fresh read — no cross-cycle cache to avoid static init issues)
+        for (size_t pi = 0; pi < playerList.size(); pi++) {
+            auto* Player = playerList[pi];
             if (!Player || !is_valid((uintptr_t)Player)) continue;
 
-            auto pos = Player->Get_ObjectPosition();
-            if (pos.Empty()) continue;
+            Vector3 pos;
+            uintptr_t modelPtr = read<uintptr_t>((uintptr_t)Player + offsets::BasePlayer::PlayerModel);
+
+            if (modelPtr && is_valid(modelPtr)) {
+                pos = read<Vector3>(modelPtr + offsets::PlayerModel::position);
+                if (pos.Empty()) {
+                    modelPtr = read<uintptr_t>((uintptr_t)Player + offsets::BasePlayer::PlayerModel);
+                    if (modelPtr && is_valid(modelPtr)) {
+                        pos = read<Vector3>(modelPtr + offsets::PlayerModel::position);
+                    }
+                    if (pos.Empty()) continue;
+                }
+            } else {
+                pos = Player->Get_ObjectPosition();
+                if (pos.Empty()) continue;
+            }
 
             // Read velocity for prediction (within range)
             Vector3 vel;
@@ -1259,7 +1407,7 @@ void cache::do_PositionRefresh() {
             Vector3 head = pos;
             head.y += 1.8f;
             {
-                std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+                std::unique_lock<std::shared_mutex> lk(g_EspCacheMutex);
                 auto it = g_EspCache.find((uintptr_t)Player);
                 if (it != g_EspCache.end()) {
                     it->second.headPos = head;
@@ -1284,11 +1432,55 @@ void cache::do_PositionRefresh() {
             posLog = true;
         }
 
+        // NPC position refresh
+        {
+            std::vector<Rust::BaseEntity*> npcList;
+            { std::lock_guard<std::mutex> lk(npc_mutex); npcList = npc_List; }
+            for (auto* NPC : npcList) {
+                if (!NPC || !is_valid((uintptr_t)NPC)) continue;
+                auto fastPos = NPC->Get_ObjectPosition_Fast();
+                auto pos = fastPos.Empty() ? NPC->Get_ObjectPosition() : fastPos;
+                if (pos.Empty()) continue;
+                Vector3 head = pos; head.y += 1.8f;
+                uint64_t now = GetTickCount64();
+                std::unique_lock<std::shared_mutex> lk(g_EspCacheMutex);
+                auto it = g_EspCache.find((uintptr_t)NPC);
+                if (it != g_EspCache.end()) {
+                    it->second.headPos = head;
+                    it->second.feetPos = pos;
+                    it->second.cacheTick = now;
+                }
+            }
+        }
+
+        // Animal position refresh
+        {
+            std::vector<Rust::BaseEntity*> animalList;
+            { std::lock_guard<std::mutex> lk(animal_mutex); animalList = animal_List; }
+            for (auto* Animal : animalList) {
+                if (!Animal || !is_valid((uintptr_t)Animal)) continue;
+                auto fastPos = Animal->Get_ObjectPosition_Fast();
+                auto pos = fastPos.Empty() ? Animal->Get_ObjectPosition() : fastPos;
+                if (pos.Empty()) continue;
+                uint64_t now = GetTickCount64();
+                std::unique_lock<std::shared_mutex> lk(g_EspCacheMutex);
+                auto it = g_EspCache.find((uintptr_t)Animal);
+                if (it != g_EspCache.end()) {
+                    it->second.headPos = pos;
+                    it->second.feetPos = pos;
+                    it->second.cacheTick = now;
+                }
+            }
+        }
+
         {
             static int posCycleLogTick = 0;
             ULONGLONG elapsed = GetTickCount64() - posCycleStart;
             if ((++posCycleLogTick % 240) == 0 || elapsed > 50) {
-                LOG("POS cycle: %llums players=%d", elapsed, (int)playerList.size());
+                int npcC = 0, animalC = 0;
+                { std::lock_guard<std::mutex> lk(npc_mutex); npcC = (int)npc_List.size(); }
+                { std::lock_guard<std::mutex> lk(animal_mutex); animalC = (int)animal_List.size(); }
+                LOG("POS cycle: %llums players=%d npcs=%d animals=%d", elapsed, (int)playerList.size(), npcC, animalC);
             }
         }
 
@@ -1313,13 +1505,23 @@ void cache::do_SkeletonRefresh() {
         BoneList::r_upperarm, BoneList::r_forearm, BoneList::r_hand
     };
 
-    // Per-player bone cache
-    struct BoneCache {
-        Vector3 bones[15] = {};
-        uint64_t lastReadMs = 0;
-        bool valid = false;
+    // Per-player bone cache — array-based (safe for manually mapped DLLs)
+    struct BoneCacheEntry {
+        uintptr_t key;
+        Vector3 bones[15];
+        uint64_t lastReadMs;
+        bool valid;
     };
-    static std::unordered_map<uintptr_t, BoneCache> s_boneCache;
+    struct BoneHandleCacheEntry {
+        uintptr_t key;
+        Rust::BaseEntity::CachedTransformData handles[15];
+        uint64_t lastRefreshMs;
+        bool valid;
+    };
+    static BoneCacheEntry s_boneCacheArr[128];
+    static int s_boneCacheCount = 0;
+    static BoneHandleCacheEntry s_boneHandleCacheArr[128];
+    static int s_boneHandleCacheCount = 0;
     static int s_cleanupTick = 0;
 
     while (true) {
@@ -1370,7 +1572,7 @@ void cache::do_SkeletonRefresh() {
         struct PendingRead { Rust::BaseEntity* p; float dist; uint64_t cacheAge; };
         std::vector<PendingRead> pending;
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
             for (auto* Player : playerList) {
                 if (!Player || !is_valid((uintptr_t)Player)) continue;
                 auto it = g_EspCache.find((uintptr_t)Player);
@@ -1378,8 +1580,13 @@ void cache::do_SkeletonRefresh() {
                 float d = localPos.DistTo(it->second.headPos);
                 if (d > 300.f) continue;
 
-                auto bcIt = s_boneCache.find((uintptr_t)Player);
-                uint64_t cacheAge = (bcIt != s_boneCache.end()) ? (now - bcIt->second.lastReadMs) : 999999;
+                uint64_t cacheAge = 999999;
+                for (int j = 0; j < s_boneCacheCount; j++) {
+                    if (s_boneCacheArr[j].key == (uintptr_t)Player) {
+                        cacheAge = now - s_boneCacheArr[j].lastReadMs;
+                        break;
+                    }
+                }
 
                 // TTL based on distance — closer players get fresher bones
                 uint64_t ttl;
@@ -1412,23 +1619,65 @@ void cache::do_SkeletonRefresh() {
             uintptr_t btf = Player->Get_BoneTransforms();
             if (!btf) continue;
 
-            BoneCache bc;
+            // Refresh bone handles every 200ms (saves 2 IOCTLs per bone per read)
+            BoneHandleCacheEntry* hc = nullptr;
+            for (int j = 0; j < s_boneHandleCacheCount; j++) {
+                if (s_boneHandleCacheArr[j].key == (uintptr_t)Player) { hc = &s_boneHandleCacheArr[j]; break; }
+            }
+            if (!hc && s_boneHandleCacheCount < 128) {
+                hc = &s_boneHandleCacheArr[s_boneHandleCacheCount++];
+                hc->key = (uintptr_t)Player;
+                hc->valid = false;
+            }
+            bool needsHandleRefresh = !hc || !hc->valid || (now - hc->lastRefreshMs >= 200);
+            if (hc && needsHandleRefresh) {
+                hc->valid = false;
+                for (int b = 0; b < 15; b++) {
+                    auto t = Player->Get_Transformation_Fast(skelBones[b], btf);
+                    if (!t) { hc->handles[b] = {}; continue; }
+                    hc->handles[b] = t->Get_Cached_Data();
+                }
+                hc->lastRefreshMs = GetTickCount64();
+                hc->valid = true;
+            }
+
+            BoneCacheEntry bc;
+            bc.key = (uintptr_t)Player;
             int validBones = 0;
             for (int b = 0; b < 15; b++) {
-                auto t = Player->Get_Transformation_Fast(skelBones[b], btf);
-                if (!t) continue;
-                Vector3 bp = t->Get_Position();
+                Vector3 bp;
+                // Fast path: use cached transform handles (skips 2 IOCTLs)
+                if (hc && hc->handles[b].valid()) {
+                    bp = Rust::BaseEntity::Transformation::Get_Position_From_Cache(hc->handles[b]);
+                }
+                // Fallback: full transform chain if cache invalid or returned empty
+                if (bp.Empty()) {
+                    auto t = Player->Get_Transformation_Fast(skelBones[b], btf);
+                    if (!t) continue;
+                    bp = t->Get_Position();
+                }
                 if (bp.Empty()) continue;
                 bc.bones[b] = bp;
                 validBones++;
             }
             bc.lastReadMs = GetTickCount64();
             bc.valid = (validBones >= 4);
-            s_boneCache[(uintptr_t)Player] = bc;
+            // Store in array cache
+            bool bcFound = false;
+            for (int j = 0; j < s_boneCacheCount; j++) {
+                if (s_boneCacheArr[j].key == (uintptr_t)Player) {
+                    s_boneCacheArr[j] = bc;
+                    bcFound = true;
+                    break;
+                }
+            }
+            if (!bcFound && s_boneCacheCount < 128) {
+                s_boneCacheArr[s_boneCacheCount++] = bc;
+            }
             skelCount++;
 
             if (bc.valid) {
-                std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+                std::unique_lock<std::shared_mutex> lk(g_EspCacheMutex);
                 auto it = g_EspCache.find((uintptr_t)Player);
                 if (it != g_EspCache.end()) {
                     for (int b = 0; b < 15; b++)
@@ -1442,17 +1691,12 @@ void cache::do_SkeletonRefresh() {
             }
         }
 
-        // Periodic cleanup of stale bone cache entries
+        // Periodic cleanup of stale bone cache + handle cache entries
         if (++s_cleanupTick >= 200) {
             s_cleanupTick = 0;
-            std::unordered_set<uintptr_t> activePlayers;
-            for (auto* p : playerList) activePlayers.insert((uintptr_t)p);
-            for (auto it = s_boneCache.begin(); it != s_boneCache.end(); ) {
-                if (activePlayers.find(it->first) == activePlayers.end() || (now - it->second.lastReadMs > 5000))
-                    it = s_boneCache.erase(it);
-                else
-                    ++it;
-            }
+            // Simple: just reset arrays if they're getting full
+            if (s_boneCacheCount > 100) s_boneCacheCount = 0;
+            if (s_boneHandleCacheCount > 100) s_boneHandleCacheCount = 0;
         }
 
         if (!skelLog) {

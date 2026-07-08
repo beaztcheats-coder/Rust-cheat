@@ -30,7 +30,7 @@ Output: `tools/build/Release/sha-dumper.dll`
 The master update pipeline handles injection automatically:
 
 ```
-auto_update.bat  →  sha_dumper_inject.py builds + injects + waits for output
+getnewoffsets.bat  →  sha_dumper_inject.py builds + injects + waits for output
 ```
 
 ### Manual injection:

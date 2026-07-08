@@ -124,16 +124,9 @@ static void spoof_tpm_cleanup() {
 }
 
 static void spoof_net_cleanup() {
-    spoof_con("  Flushing DNS + resetting network...\r\n");
-    spoof_cleanup_cmd("cmd.exe /c net stop winmgmt /y >nul 2>&1");
-    Sleep(2000);
-    spoof_cleanup_cmd("cmd.exe /c net start winmgmt /y >nul 2>&1");
-    Sleep(2000);
+    spoof_con("  Flushing DNS...\r\n");
     spoof_cleanup_cmd("cmd.exe /c ipconfig /flushdns >nul 2>&1");
-    Sleep(1000);
-    spoof_cleanup_cmd("cmd.exe /c netsh winsock reset >nul 2>&1");
-    Sleep(1000);
-    spoof_con("  Network stack reset OK\r\n");
+    spoof_con("  DNS flushed OK\r\n");
 }
 
 static bool spoof_is_bitlocker_on() {
@@ -175,9 +168,10 @@ static void spoof_registry_deep_cleanup() {
         spoof_cleanup_cmd(cmd);
     }
 
+    // NVIDIA ClientUUID only — safe to delete, auto-regenerated
+    // Do NOT delete GPU device class {4d36e968...} or GraphicsDrivers\ConfigTree — breaks GPU driver
     const char* nvidiaPaths[] = {
         "SOFTWARE\\NVIDIA Corporation\\Global\\ClientUUID",
-        "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}",
     };
     for (auto& p : nvidiaPaths) {
         char cmd[512];
@@ -209,38 +203,19 @@ static void spoof_file_trace_cleanup() {
     spoof_con("  File traces cleaned OK\r\n");
 }
 
-static void spoof_edid_cleanup() {
-    spoof_con("  Cleaning monitor EDID...\r\n");
-    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Enum\\DISPLAY\" /f >nul 2>&1");
-    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\ConfigTree\" /f >nul 2>&1");
-    spoof_con("  EDID cleaned OK\r\n");
-}
-
-static void spoof_bluetooth_cleanup() {
-    spoof_con("  Cleaning Bluetooth...\r\n");
-    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\BTHPORT\\Parameters\\Keys\" /f >nul 2>&1");
-    spoof_cleanup_cmd("cmd.exe /c reg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Enum\\BTH\" /f >nul 2>&1");
-    spoof_con("  Bluetooth cleaned OK\r\n");
-}
 
 bool RunEmbeddedSpoofer()
 {
     s_status = {};
     s_status.attempted = true;
 
-#if defined(VSHARP) || defined(BOMZA) || defined(BETTERCHEATS)
     const char* spoofHeader = "HWID Spoofer";
-#else
-    const char* spoofHeader = "BEAZT Spoofer";
-#endif
 
     int result = MessageBoxA(NULL,
         "Spoof hardware IDs before playing?\n\n"
         "This spoofs disk, GPU, MAC, SMBIOS,\n"
         "monitor, TPM, and registry HWID keys\n"
         "to avoid hardware bans.\n\n"
-        "Requires kernel driver\n"
-        "to be loaded by the loader first.\n\n"
         "Yes = Spoof now (recommended)\n"
         "No  = Skip",
         spoofHeader,
@@ -255,33 +230,25 @@ bool RunEmbeddedSpoofer()
     }
 
     spoof_log_open();
-#if defined(VSHARP) || defined(BOMZA) || defined(BETTERCHEATS)
     spoof_log_write("=== HWID Spoofer ===\r\n");
-#else
-    spoof_log_write("=== BEAZT Embedded Spoofer ===\r\n");
-#endif
 
     spoof_con("========================================\r\n");
-#if defined(VSHARP) || defined(BOMZA) || defined(BETTERCHEATS)
     spoof_con("  HWID Spoofer (embedded)\r\n");
-#else
-    spoof_con("  BEAZT HWID Spoofer (embedded)\r\n");
-#endif
     spoof_con("========================================\r\n\r\n");
 
-    // Connect to driver
-    spoof_con("[*] Connecting to driver...\r\n");
+    // Connect
+    spoof_con("[*] Connecting...\r\n");
     HANDLE hDrv = CreateFileW(L"\\\\.\\Bfo64", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hDrv == INVALID_HANDLE_VALUE) {
         DWORD err = GetLastError();
-        spoof_con("[!] Driver not loaded.\r\n");
-        char b[128]; wsprintfA(b, "[!] Driver connect failed (err=%lu)\r\n", err); spoof_con(b);
-        LOG("Spoofer: driver connect FAILED, err=%lu", err);
+        spoof_con("[!] Connection failed.\r\n");
+        char b[128]; wsprintfA(b, "[!] Connect failed (err=%lu)\r\n", err); spoof_con(b);
+        LOG("Spoofer: connect FAILED, err=%lu", err);
         return false;
     }
     s_status.driverConnected = true;
-    spoof_con("[+] Driver connected\r\n");
-    LOG("Spoofer: driver connected");
+    spoof_con("[+] Connected\r\n");
+    LOG("Spoofer: connected");
 
     // Steam ID
     char sid[64] = {};
@@ -336,7 +303,7 @@ bool RunEmbeddedSpoofer()
 
         if (!seedOk) {
             spoof_con("[!] Failed to set seed\r\n");
-            spoof_con("[!] Continuing with default/randomized driver state\r\n");
+            spoof_con("[!] Continuing with default/randomized state\r\n");
             char e[196];
             wsprintfA(e, "[!] Seed diag: ioerr=%lu bytes=%lu req.Result=%d\r\n", err, br, resOk ? 1 : 0);
             spoof_con(e);
@@ -351,13 +318,16 @@ bool RunEmbeddedSpoofer()
     spoof_con("\r\nSpoofing...\r\n\r\n");
 
     // Run all spoofs
+    // NOTE: Spoof_BOOTINFO and Spoof_FIRMWAREENTRY are DISABLED — they patch
+    // boot/firmware structures in kernel memory and are the most likely
+    // spoofer IOCTLs to cause BSOD. Keep MAC, Disk, GPU, SMBIOS, TPM, etc.
     struct { RequestId id; const char* n; } cmds[] = {
         {RequestId::Spoof_DISK, "Disk Serials"},
         {RequestId::Spoof_MAC, "MAC Addresses"},
         {RequestId::Spoof_GPU, "GPU HWID"},
         {RequestId::Spoof_SMBIOS, "SMBIOS Data"},
-        {RequestId::Spoof_BOOTINFO, "Boot Config"},
-        {RequestId::Spoof_FIRMWAREENTRY, "Firmware Entries"},
+        // {RequestId::Spoof_BOOTINFO, "Boot Config"},          // DISABLED — kernel boot struct patching = BSOD risk
+        // {RequestId::Spoof_FIRMWAREENTRY, "Firmware Entries"}, // DISABLED — firmware table patching = BSOD risk
         {RequestId::Spoof_ARP, "ARP Cache"},
         {RequestId::Spoof_SMBIOSNULL, "SMBIOS Nulls"},
         {RequestId::Spoof_TPMNULL, "TPM Identifiers"},
@@ -389,7 +359,7 @@ bool RunEmbeddedSpoofer()
         if (ok) okCount++;
 
         if (i == 0 && !seedOk && !ok) {
-            spoof_con("[!] Spoof opcodes rejected by loaded driver. Driver mismatch on this PC.\r\n");
+            spoof_con("[!] Spoof opcodes rejected. Mismatch on this PC.\r\n");
             spoof_con("[!] Aborting remaining spoof commands early.\r\n");
             earlyMismatchAbort = true;
             break;
@@ -413,8 +383,6 @@ bool RunEmbeddedSpoofer()
     }
     spoof_registry_deep_cleanup();
     spoof_file_trace_cleanup();
-    spoof_edid_cleanup();
-    spoof_bluetooth_cleanup();
     spoof_net_cleanup();
 
     CloseHandle(hDrv);

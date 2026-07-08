@@ -2,10 +2,8 @@
 #include "../../Logger.hpp"
 #include "../../Hotkeys.hpp"
 #include "../../OffsetManager.hpp"
-#include <mmsystem.h>
 #include <windows.h>
 #include <chrono>
-#pragma comment(lib, "winmm.lib")
 
 std::mutex misc::s_miscMutex;
 
@@ -24,6 +22,7 @@ static uintptr_t dcLoadingSnapshotBackup = 0;
 static bool debugTimerStarted = false;
 static std::chrono::steady_clock::time_point lastUpdateTime;
 static uintptr_t gTodSkyPtr = 0;
+static ULONGLONG gTodSkySetMs = 0;  // timestamp when gTodSkyPtr was set — for 30s staleness check
 
 static uintptr_t ResolveCameraComponent()
 {
@@ -40,11 +39,11 @@ static void restoreCameraPosition() {
     if (dcCamActive && src && src->LocalPlayer) {
         // Write base position back via camera chain
         uintptr_t camObj = ResolveCameraComponent();
-        if (camObj && is_valid(camObj))
+        if (camObj && is_valid(camObj) && is_valid(camObj + offsets::BaseCamera::world_position))
             write<Vector3>(camObj + offsets::BaseCamera::world_position, dcCamBasePos);
         // Clear Flying flag
         uintptr_t ms = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::ModelState);
-        if (ms && is_valid(ms)) {
+        if (ms && is_valid(ms) && is_valid(ms + offsets::ModelState::flags)) {
             int mf = read<int>(ms + offsets::ModelState::flags);
             write<int>(ms + offsets::ModelState::flags, mf & ~offsets::ModelState::Flying);
         }
@@ -133,7 +132,27 @@ static uintptr_t ResolveTodSkyPtr()
 
     static int tod_diag_count = 0;
 
-    // PRIMARY: Known path — staticFields + instances → List → _items → [0]
+    // PRIMARY: Direct pointer — staticFields + instance may be a direct TOD_Sky pointer
+    {
+        uint64_t directSky = read<uint64_t>(staticFields + offsets::TOD_Sky_Static::instances);
+        if (directSky && is_valid(directSky)) {
+            uint64_t nightTest = read<uint64_t>(directSky + offsets::TOD_Sky::NightParameters);
+            if (nightTest && is_valid(nightTest)) {
+                float am = read<float>(nightTest + offsets::TOD_NightParameters::AmbientMultiplier);
+                if (am >= 0.0f && am <= 10.0f && std::isfinite(am)) {
+                    gTodSkyPtr = (uintptr_t)directSky;
+                    gTodSkySetMs = GetTickCount64();
+                    if (tod_diag_count < 3) {
+                        LOG("TOD_DIAG: found sky via direct pointer at sf+0x%I64X -> sky=0x%I64X", offsets::TOD_Sky_Static::instances, directSky);
+                        tod_diag_count++;
+                    }
+                    return gTodSkyPtr;
+                }
+            }
+        }
+    }
+
+    // FALLBACK 1: List traversal — staticFields + instances → List → _items → [0]
     {
         uint64_t instances = read<uint64_t>(staticFields + offsets::TOD_Sky_Static::instances);
         if (instances && is_valid(instances)) {
@@ -143,7 +162,7 @@ static uintptr_t ResolveTodSkyPtr()
                 if (sky && is_valid(sky)) {
                     gTodSkyPtr = (uintptr_t)sky;
                     if (tod_diag_count < 3) {
-                        LOG("TOD_DIAG: found sky via instances(0x%I64X) -> sky=0x%I64X", offsets::TOD_Sky_Static::instances, sky);
+                        LOG("TOD_DIAG: found sky via list at sf+0x%I64X -> sky=0x%I64X", offsets::TOD_Sky_Static::instances, sky);
                         tod_diag_count++;
                     }
                     return gTodSkyPtr;
@@ -173,7 +192,8 @@ static uintptr_t ResolveTodSkyPtr()
                 if (nightTest && is_valid(nightTest)) {
                     float am = read<float>(nightTest + offsets::TOD_NightParameters::AmbientMultiplier);
                     if (am >= 0.0f && am <= 10.0f && std::isfinite(am)) {
-                        gTodSkyPtr = (uintptr_t)sky;
+                    gTodSkyPtr = (uintptr_t)sky;
+                    gTodSkySetMs = GetTickCount64();
                         if (tod_diag_count < 3) {
                             LOG("TOD_DIAG: found sky via list at sf+0x%I64X -> 0x%I64X", off, sky);
                             tod_diag_count++;
@@ -261,6 +281,11 @@ void misc::do_misc() {
             gTodSkyPtr = 0;
             lastLpGeneration = lpGeneration;
         }
+        // Invalidate cached TOD_Sky after 30 seconds — prevents writes to freed memory
+        // if the game unloads TOD_Sky during server transition without LocalPlayer gen change
+        if (gTodSkyPtr && (GetTickCount64() - gTodSkySetMs) > 30000) {
+            gTodSkyPtr = 0;
+        }
     }
 
     // === PHASE 1: READ-SAFE / IMMEDIATE FEATURES (no LP needed) ===
@@ -305,18 +330,21 @@ void misc::do_misc() {
                 if (saturation > 5.0f) saturation = 5.0f;
 
                 uintptr_t nightParams = read<uintptr_t>(todSky + offsets::TOD_Sky::NightParameters);
-                if (nightParams && is_valid(nightParams)) {
+                if (nightParams && is_valid(nightParams) && is_valid(nightParams + offsets::TOD_NightParameters::AmbientMultiplier)) {
                     write<float>(nightParams + offsets::TOD_NightParameters::AmbientMultiplier, ambientMult);
                     static int bnLog = 0; if (bnLog < 5) { LOG("BRIGHTNIGHT: wrote ambient=%.1f to nightParams=0x%I64X", ambientMult, (uint64_t)nightParams); bnLog++; }
                 }
 
                 uintptr_t ambientParams = read<uintptr_t>(todSky + offsets::TOD_Sky::AmbientParameters);
                 if (ambientParams && is_valid(ambientParams)) {
-                    write<float>(ambientParams + offsets::TOD_AmbientParameters::Saturation, saturation);
-                    write<float>(ambientParams + offsets::TOD_AmbientParameters::UpdateInterval, 0.6f);
+                    if (is_valid(ambientParams + offsets::TOD_AmbientParameters::Saturation))
+                        write<float>(ambientParams + offsets::TOD_AmbientParameters::Saturation, saturation);
+                    if (is_valid(ambientParams + offsets::TOD_AmbientParameters::UpdateInterval))
+                        write<float>(ambientParams + offsets::TOD_AmbientParameters::UpdateInterval, 0.6f);
                 }
                 // Force game to recalculate ambient (reset timer)
-                write<float>(todSky + offsets::TOD_Sky::timeSinceAmbientUpdate, 999.0f);
+                if (is_valid(todSky + offsets::TOD_Sky::timeSinceAmbientUpdate))
+                    write<float>(todSky + offsets::TOD_Sky::timeSinceAmbientUpdate, 999.0f);
             } else {
                 gTodSkyPtr = 0;
                 if (++brightNightFailCount >= 500) {
@@ -334,18 +362,23 @@ void misc::do_misc() {
         if (MISC::Timechanger) {
             uintptr_t todSky = ResolveTodSkyPtr();
             if (todSky && is_valid(todSky)) {
+                float t = (float)MISC::timevalue;
+                if (t < 0.f) t = 0.f;
+                if (t > 24.f) t = 24.f;
+
+                // Try pointer path first (Cycle is a reference type)
                 uintptr_t cycleParams = read<uintptr_t>(todSky + offsets::TOD_Sky::CycleParameters);
                 if (cycleParams && is_valid(cycleParams)) {
-                    float t = (float)MISC::timevalue;
-                    if (t < 0.f) t = 0.f;
-                    if (t > 24.f) t = 24.f;
                     write<float>(cycleParams + 0x10, t);
-                    static int tcLog = 0; if (tcLog < 5) { LOG("TIMECHANGER: wrote time=%.0f to cycleParams=0x%I64X+0x10", t, (uint64_t)cycleParams); tcLog++; }
+                    static int tcLog = 0; if (tcLog < 5) { LOG("TIMECHANGER: wrote time=%.0f via pointer cycleParams=0x%I64X", t, (uint64_t)cycleParams); tcLog++; }
                 } else {
-                    static int tcFail = 0; if (tcFail < 3) { LOG("TIMECHANGER: cycleParams invalid (todSky=0x%I64X+0x%I64X)", (uint64_t)todSky, offsets::TOD_Sky::CycleParameters); tcFail++; }
+                    // Inline struct fallback — Cycle is a value type at todSky + 0x40
+                    // Hour is at cycleStruct + 0x10 = todSky + 0x40 + 0x10 = todSky + 0x50
+                    if (is_valid(todSky + 0x50)) {
+                        write<float>(todSky + 0x50, t);
+                        static int tcLog2 = 0; if (tcLog2 < 5) { LOG("TIMECHANGER: wrote time=%.0f via inline struct todSky+0x50", t); tcLog2++; }
+                    }
                 }
-            } else {
-                static int tcFail2 = 0; if (tcFail2 < 3) { LOG("TIMECHANGER: todSky invalid"); tcFail2++; }
             }
         }
     }
@@ -442,16 +475,22 @@ void misc::do_misc() {
                 }
             } while (false);
 
-            // ModelState.Flying + body freeze — every frame so server can't override
+            // ModelState.Flying + body freeze — throttled to 100ms (was every frame)
+            // to prevent writes to freed memory if player object is stale
             if (miscLpStable()) {
-                uintptr_t ms = read<uintptr_t>(lp + offsets::BasePlayer::ModelState);
-                if (ms && is_valid(ms)) {
-                    int mf = read<int>(ms + offsets::ModelState::flags);
-                    write<int>(ms + offsets::ModelState::flags, mf | offsets::ModelState::Flying);
-                }
-                uintptr_t mov = read<uintptr_t>(lp + offsets::BasePlayer::BaseMovement);
-                if (mov && is_valid(mov)) {
-                    write<Vector3>(mov + offsets::BaseMovement2::target_movement, Vector3{});
+                static ULONGLONG dcMsWriteTick = 0;
+                ULONGLONG msNow = GetTickCount64();
+                if (dcMsWriteTick == 0 || (msNow - dcMsWriteTick >= 100ULL)) {
+                    dcMsWriteTick = msNow;
+                    uintptr_t ms = read<uintptr_t>(lp + offsets::BasePlayer::ModelState);
+                    if (ms && is_valid(ms) && is_valid(ms + offsets::ModelState::flags)) {
+                        int mf = read<int>(ms + offsets::ModelState::flags);
+                        write<int>(ms + offsets::ModelState::flags, mf | offsets::ModelState::Flying);
+                    }
+                    uintptr_t mov = read<uintptr_t>(lp + offsets::BasePlayer::BaseMovement);
+                    if (mov && is_valid(mov) && is_valid(mov + offsets::BaseMovement2::target_movement)) {
+                        write<Vector3>(mov + offsets::BaseMovement2::target_movement, Vector3{});
+                    }
                 }
             }
         }

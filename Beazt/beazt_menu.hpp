@@ -113,7 +113,9 @@ inline bool Switch(const char* id, bool* v) {
     bool pressed = ImGui::InvisibleButton("##sw", size);
     if (pressed) *v = !*v;
 
-    static std::unordered_map<ImGuiID, float> anim;
+    static std::unordered_map<ImGuiID, float>* pAnim = nullptr;
+    if (!pAnim) pAnim = new std::unordered_map<ImGuiID, float>();
+    auto& anim = *pAnim;
     ImGuiID iid = ImGui::GetID("##sw");
     float& t = anim[iid];
     float target = *v ? 1.0f : 0.0f;
@@ -568,7 +570,9 @@ inline void Card(const char* title, std::function<void()> body, float height = 0
 
 // Collapsible section — compact accordion
 inline bool CollapsibleSection(const char* title, bool defaultOpen = false) {
-    static std::unordered_map<ImGuiID, bool> state;
+    static std::unordered_map<ImGuiID, bool>* pState = nullptr;
+    if (!pState) pState = new std::unordered_map<ImGuiID, bool>();
+    auto& state = *pState;
     ImGuiID id = ImGui::GetID(title);
     if (state.find(id) == state.end()) state[id] = defaultOpen;
     bool& open = state[id];
@@ -1168,11 +1172,13 @@ inline void PageESP() {
         ImGui::EndChild();
         ImGui::SameLine(0, cols.gap);
         ImGui::BeginChild("##pesR", ImVec2(cols.rightW, 0), false);
-        // VisCheck disabled — toggle and color rows removed from menu.
-        // Code remains in VisCheck.hpp, offsets.hpp, Config.hpp for future re-enablement.
-        // Card("Visibility", [&]() {
-        //     { VisCheck toggle, BVH status, Visible/Invisible/SkelVisible/SkelInvisible colors }
-        // }, CardHeight(6, true));
+        Card("Visibility", [&]() {
+            SettingRowGrid("VisCheck", &ESP::VisCheck);
+            SettingRowGrid("Box Visible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::Visible);
+            SettingRowGrid("Box Invisible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::Invisible);
+            SettingRowGrid("Skel Visible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::SkeletonVisible);
+            SettingRowGrid("Skel Invisible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::SkeletonInvisible);
+        }, CardHeight(5, true));
         Card("Filters", [&]() {
             SettingRowGrid("Hide Wounded", &ESP::RemoveWounded);
             SettingRowGrid("Hide Sleepers", &ESP::RemoveSleepers);
@@ -1193,6 +1199,7 @@ inline void PageESP() {
             SettingRowGrid("Held Item", &ESP::Weapon, nullptr,0,0,"", nullptr,0,0, &ESP::color::Weapon);
             SettingRowGrid("Team ID", &ESP::TeamID);
             SettingRowGrid("Hotbar Text", &ESP::hotbar_text);
+            SettingRowGrid("Inventory Panel", &ESP::PlayerInventoryPanel);
         }, CardHeight(10, true));
         ImGui::EndChild();
         ImGui::EndChild(); // close ##espPlayerScroll
@@ -1318,7 +1325,7 @@ inline void PageESP() {
         }, CardHeight(4, true), (WORLD::StonePickup?1:0)+(WORLD::MetalPickup?1:0)+(WORLD::SulfurPickup?1:0)+(WORLD::WoodPickup?1:0));
         Card("Loot", [&]() {
             WorldEntityRow("Stash", &WORLD::Stash, &WORLD::draw_stash, WORLD::color::Stash_Color);
-            WorldEntityRow("Body Bag", &WORLD::BodyBag, &WORLD::draw_corpse, WORLD::color::BodyBag_Color);
+            WorldEntityRow("Corpse", &WORLD::BodyBag, &WORLD::draw_corpse, WORLD::color::BodyBag_Color);
             WorldEntityRow("Backpack", &WORLD::Backpack, &WORLD::draw_backpack, WORLD::color::Backpack_Color);
             WorldEntityRow("Dropped Items", &WORLD::DroppedItem, &WORLD::draw_dropped, WORLD::color::DroppedItem_Color);
         }, CardHeight(4, true), (WORLD::Stash?1:0)+(WORLD::BodyBag?1:0)+(WORLD::Backpack?1:0)+(WORLD::DroppedItem?1:0));

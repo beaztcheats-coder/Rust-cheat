@@ -447,8 +447,19 @@ inline void Pawn()
         ImGui::Checkbox("OFF Arrows", &ESP::OFFArrows);
         ImGui::Checkbox("Team ID", &ESP::TeamID);
         ImGui::Checkbox("Hotbar Text", &ESP::hotbar_text);
+        ImGui::Checkbox("Inventory Panel", &ESP::PlayerInventoryPanel);
         ImGui::Checkbox("Bullet Tracers", &ESP::BulletTracers);
+        ImGui::Checkbox("VisCheck", &ESP::VisCheck);
         ImGui::Columns(1);
+        EndCard();
+
+        BeginCard("visual_vis", "VISIBILITY COLORS", ImVec2(right, 120.f));
+        ImGui::ColorEdit4("Box Visible##bv", (float*)&ESP::color::Visible, ImGuiColorEditFlags_NoInputs);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("Box Invisible##bi", (float*)&ESP::color::Invisible, ImGuiColorEditFlags_NoInputs);
+        ImGui::ColorEdit4("Skel Visible##sv", (float*)&ESP::color::SkeletonVisible, ImGuiColorEditFlags_NoInputs);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("Skel Invisible##si", (float*)&ESP::color::SkeletonInvisible, ImGuiColorEditFlags_NoInputs);
         EndCard();
 
         BeginCard("visual_style", "DISTANCE & STYLE", ImVec2(right, 172.f));

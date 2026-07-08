@@ -28,7 +28,7 @@ static AimbotCacheData CopyAimbotCache(const EspCacheData& src) {
     d.headPos = src.headPos;
     d.velocity = src.velocity;
     for (int i = 0; i < 15; i++) d.bones[i] = src.bones[i];
-    d.weaponName = src.weaponName;
+    d.weaponName = std::string(src.weaponName);
     d.teamId = src.teamId;
     d.skeletonValid = src.skeletonValid;
     d.isDead = src.isDead;
@@ -103,7 +103,7 @@ static int GetBestBone(Rust::BaseEntity* player)
         bool hasCache = false;
         bool isCrouching = false;
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
             auto cd = g_EspCache.find((uintptr_t)player);
             if (cd != g_EspCache.end()) {
                 cachedHead = cd->second.headPos;
@@ -156,7 +156,7 @@ static Vector3 GetPredictedTargetPos(Rust::BaseEntity* player, int bone)
     // Use ONLY cached data — NO live IOCTL reads through potentially stale entity pointers
     Vector3 rootPos;
     {
-        std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+        std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
         auto cd = g_EspCache.find((uintptr_t)player);
         if (cd != g_EspCache.end()) {
             rootPos = cd->second.headPos;
@@ -178,7 +178,7 @@ static Vector3 GetPredictedTargetPos(Rust::BaseEntity* player, int bone)
     Vector3 pos;
     int cacheIdx = (bone >= 0 && bone < 66) ? boneToCache[bone] : -1;
     if (cacheIdx >= 0) {
-        std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+        std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
         auto cd = g_EspCache.find((uintptr_t)player);
         if (cd != g_EspCache.end() && cd->second.skeletonValid) {
             pos = cd->second.bones[cacheIdx];
@@ -191,7 +191,7 @@ static Vector3 GetPredictedTargetPos(Rust::BaseEntity* player, int bone)
         // Use cached crouch state (zero IOCTLs)
         bool isCrouching = false;
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
             auto cd = g_EspCache.find((uintptr_t)player);
             if (cd != g_EspCache.end()) isCrouching = cd->second.isCrouching;
         }
@@ -252,7 +252,7 @@ Rust::BaseEntity* aimbot::Get_BestEntity()
                 EspCacheData tc;
                 bool hasTc = false;
                 {
-                    std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+                    std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
                     auto it = g_EspCache.find((uintptr_t)p);
                     if (it != g_EspCache.end()) { tc = it->second; hasTc = true; }
                 }
@@ -292,7 +292,7 @@ Rust::BaseEntity* aimbot::Get_BestEntity()
         AimbotCacheData pcache;
         bool hasCache = false;
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
             auto it = g_EspCache.find((uintptr_t)Player);
             if (it != g_EspCache.end()) {
                 pcache = CopyAimbotCache(it->second);
@@ -370,8 +370,8 @@ void aimbot::do_aimbot()
     if (g_BnStableCycles.load(std::memory_order_relaxed) < 3) return;
 
     // Early-out: skip the entire aimbot loop when no feature is active
-    if (!AIMBOT::Memory && !AIMBOT::TargetLine && !AIMBOT::TargetText
-        && !AIMBOT::PredictionIndicator && !ESP::hotbar_text) return;
+    if (!AIMBOT::Memory && !AIMBOT::Silent && !AIMBOT::TargetLine && !AIMBOT::TargetText
+        && !AIMBOT::PredictionIndicator && !ESP::hotbar_text && !ESP::PlayerInventoryPanel) return;
 
     {
         static ULONGLONG quarantineStart = 0;
@@ -418,27 +418,28 @@ void aimbot::do_aimbot()
         LOG("AIMBOT: target acquired (0x%I64X) Memory=%d", (uint64_t)BestEntity, (int)AIMBOT::Memory);
     }
 
-    if (ESP::hotbar_text) {
+    if (ESP::hotbar_text || ESP::PlayerInventoryPanel) {
         // Use cached belt from EspCacheData (zero IOCTLs) instead of live Get_Hotbar_list
         EspCacheData tc;
         bool hasTc = false;
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
             auto it = g_EspCache.find((uintptr_t)BestEntity);
             if (it != g_EspCache.end()) { tc = it->second; hasTc = true; }
         }
         if (hasTc) {
             for (int i = 0; i < 6; i++) {
-                if (!tc.belt[i].empty()) {
+                if (!cacheStrEmpty(tc.belt[i])) {
                     hotbar_mutex.lock();
-                    hotbar_list.push_back(tc.belt[i]);
+                    hotbar_list.push_back(std::string(tc.belt[i]));
                     hotbar_mutex.unlock();
                 }
             }
         }
     }
 
-    if (AIMBOT::Memory) {
+    // Calculate angle — shared between Memory aimbot and Silent aim
+    if (AIMBOT::Memory || AIMBOT::Silent) {
         int bone = GetBestBone(BestEntity);
 
         // Get target position with prediction (handles velocity + gravity comp)
@@ -480,86 +481,92 @@ void aimbot::do_aimbot()
                 uint64_t handle = eyesRaw ? read<uint64_t>(eyesRaw + 0x18) : 0;
                 uintptr_t eyesResolved = handle ? decrypt::Il2cppGetHandle(handle) : 0;
                 const char* eyesSrc = eyesResolved ? "GCHandle" : "fallback";
-                LOG("AIMBOT_WRITE[%d]: bone=%d angle=(%.1f,%.1f) cur=(%.1f,%.1f) localY=%.1f targetY=%.1f eyes=%s",
+                LOG("AIMBOT_WRITE[%d]: bone=%d angle=(%.1f,%.1f) cur=(%.1f,%.1f) localY=%.1f targetY=%.1f eyes=%s Mem=%d Sil=%d",
                     aim_count, bone, angle.x, angle.y, cur.x, cur.y,
-                    localPos.y, targetPos.y, eyesSrc);
+                    localPos.y, targetPos.y, eyesSrc, (int)AIMBOT::Memory, (int)AIMBOT::Silent);
                 aim_logged = true;
                 aim_count++;
             }
 
-            uintptr_t input = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
-            if (is_valid(input) && is_valid(input + offsets::PlayerInput::bodyAngles)) {
-                int passes = AIMBOT::SpinWrites ? 3 : 1;
-                for (int p = 0; p < passes; p++) {
-                    // Re-read input each pass — PlayerInput can be freed between spin writes
-                    if (p > 0) {
-                        if (!lpStillStable()) break;
-                        Sleep(0);
-                        input = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
-                        if (!is_valid(input) || !is_valid(input + offsets::PlayerInput::bodyAngles)) break;
-                        Vector3 cur = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
-                        float dx = fabsf(angle.x - cur.x);
-                        float dy = fabsf(angle.y - cur.y);
-                        if (dy > 180.f) dy = 360.f - dy;
-                        if (dx < 0.5f && dy < 0.5f) break;
-                    }
-
-                    if (AIMBOT::SMOOTHING > 1.f) {
-                        if (!lpStillStable()) break;
-                        Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
-                        float smooth = AIMBOT::SMOOTHING;
-                        if (AIMBOT::HumanizeEnabled) {
-                            float variance = (h_rand() - 0.5f) * 2.f * AIMBOT::SmoothingVariance;
-                            smooth *= (1.f + variance);
-                            if (smooth < 1.f) smooth = 1.f;
+            // Memory aimbot — write bodyAngles (visible aim change)
+            if (AIMBOT::Memory) {
+                uintptr_t input = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
+                if (is_valid(input) && is_valid(input + offsets::PlayerInput::bodyAngles)) {
+                    int passes = AIMBOT::SpinWrites ? 3 : 1;
+                    for (int p = 0; p < passes; p++) {
+                        // Re-read input each pass — PlayerInput can be freed between spin writes
+                        if (p > 0) {
+                            if (!lpStillStable()) break;
+                            Sleep(0);
+                            input = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
+                            if (!is_valid(input) || !is_valid(input + offsets::PlayerInput::bodyAngles)) break;
+                            Vector3 cur = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
+                            float dx = fabsf(angle.x - cur.x);
+                            float dy = fabsf(angle.y - cur.y);
+                            if (dy > 180.f) dy = 360.f - dy;
+                            if (dx < 0.5f && dy < 0.5f) break;
                         }
-                        float deltaX = angle.x - currentAngle.x;
-                        float deltaY = angle.y - currentAngle.y;
-                        if (deltaY > 180.f) deltaY -= 360.f;
-                        if (deltaY < -180.f) deltaY += 360.f;
-                        if (AIMBOT::HumanizeEnabled) {
-                            float deltaMag = sqrtf(deltaX * deltaX + deltaY * deltaY);
-                            if (deltaMag < 3.f && deltaMag > 0.5f) {
-                                float over = 1.f + (h_rand() * AIMBOT::OvershootAmount / 10.f);
-                                deltaX *= over;
-                                deltaY *= over;
+
+                        if (AIMBOT::SMOOTHING > 1.f) {
+                            if (!lpStillStable()) break;
+                            Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
+                            float smooth = AIMBOT::SMOOTHING;
+                            if (AIMBOT::HumanizeEnabled) {
+                                float variance = (h_rand() - 0.5f) * 2.f * AIMBOT::SmoothingVariance;
+                                smooth *= (1.f + variance);
+                                if (smooth < 1.f) smooth = 1.f;
                             }
+                            float deltaX = angle.x - currentAngle.x;
+                            float deltaY = angle.y - currentAngle.y;
+                            if (deltaY > 180.f) deltaY -= 360.f;
+                            if (deltaY < -180.f) deltaY += 360.f;
+                            if (AIMBOT::HumanizeEnabled) {
+                                float deltaMag = sqrtf(deltaX * deltaX + deltaY * deltaY);
+                                if (deltaMag < 3.f && deltaMag > 0.5f) {
+                                    float over = 1.f + (h_rand() * AIMBOT::OvershootAmount / 10.f);
+                                    deltaX *= over;
+                                    deltaY *= over;
+                                }
+                            }
+                            Vector3 smoothed;
+                            smoothed.x = currentAngle.x + deltaX / smooth;
+                            smoothed.y = currentAngle.y + deltaY / smooth;
+                            smoothed.z = currentAngle.z;
+                            write<Vector3>(input + offsets::PlayerInput::bodyAngles, smoothed);
                         }
-                        Vector3 smoothed;
-                        smoothed.x = currentAngle.x + deltaX / smooth;
-                        smoothed.y = currentAngle.y + deltaY / smooth;
-                        smoothed.z = currentAngle.z;
-                        write<Vector3>(input + offsets::PlayerInput::bodyAngles, smoothed);
-                    }
-                    else {
-                        if (!lpStillStable()) break;
-                        Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
-                        float deltaX = angle.x - currentAngle.x;
-                        float deltaY = angle.y - currentAngle.y;
-                        if (deltaY > 180.f) deltaY -= 360.f;
-                        if (deltaY < -180.f) deltaY += 360.f;
-                        const float MAX_DELTA = 15.0f;
-                        if (fabsf(deltaX) > MAX_DELTA) deltaX = (deltaX > 0.f ? MAX_DELTA : -MAX_DELTA);
-                        if (fabsf(deltaY) > MAX_DELTA) deltaY = (deltaY > 0.f ? MAX_DELTA : -MAX_DELTA);
-                        if (AIMBOT::HumanizeEnabled) {
-                            deltaX += h_gauss() * AIMBOT::JitterAmount * 0.5f;
-                            deltaY += h_gauss() * AIMBOT::JitterAmount * 0.5f;
+                        else {
+                            if (!lpStillStable()) break;
+                            Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
+                            float deltaX = angle.x - currentAngle.x;
+                            float deltaY = angle.y - currentAngle.y;
+                            if (deltaY > 180.f) deltaY -= 360.f;
+                            if (deltaY < -180.f) deltaY += 360.f;
+                            const float MAX_DELTA = 15.0f;
+                            if (fabsf(deltaX) > MAX_DELTA) deltaX = (deltaX > 0.f ? MAX_DELTA : -MAX_DELTA);
+                            if (fabsf(deltaY) > MAX_DELTA) deltaY = (deltaY > 0.f ? MAX_DELTA : -MAX_DELTA);
+                            if (AIMBOT::HumanizeEnabled) {
+                                deltaX += h_gauss() * AIMBOT::JitterAmount * 0.5f;
+                                deltaY += h_gauss() * AIMBOT::JitterAmount * 0.5f;
+                            }
+                            Vector3 clamped(currentAngle.x + deltaX, currentAngle.y + deltaY, currentAngle.z);
+                            write<Vector3>(input + offsets::PlayerInput::bodyAngles, clamped);
                         }
-                        Vector3 clamped(currentAngle.x + deltaX, currentAngle.y + deltaY, currentAngle.z);
-                        write<Vector3>(input + offsets::PlayerInput::bodyAngles, clamped);
                     }
+                }
+            }
 
-                    // Silent aim — BodyRotation quaternion (no visible aim change)
-                    if (AIMBOT::Memory && AIMBOT::Silent) {
-                        if (!lpStillStable()) break;
-                        uintptr_t eyes = src->LocalPlayer->GetPlayerEyes();
-                        if (eyes) {
-                                float pr = angle.x * 3.141592f / 180.f;
-                                float yr = angle.y * 3.141592f / 180.f;
-                                float cy = cosf(yr * 0.5f), sy = sinf(yr * 0.5f);
-                                float cp = cosf(pr * 0.5f), sp = sinf(pr * 0.5f);
-                                write<Vector4>(eyes + offsets::PlayerEyes::bodyRotation, Vector4(cy * sp, sy * cp, sy * sp, cy * cp));
-                        }
+            // Silent aim — BodyRotation quaternion (no visible aim change)
+            // Works independently of Memory aimbot — only writes bodyRotation, not bodyAngles
+            if (AIMBOT::Silent) {
+                if (lpStillStable()) {
+                    // Use cached PlayerEyes pointer — eliminates 708-IOCTL GetComponentByName() per frame
+                    uintptr_t eyes = g_LocalPlayerEyesPtr.load(std::memory_order_relaxed);
+                    if (eyes && is_valid(eyes)) {
+                            float pr = angle.x * 3.141592f / 180.f;
+                            float yr = angle.y * 3.141592f / 180.f;
+                            float cy = cosf(yr * 0.5f), sy = sinf(yr * 0.5f);
+                            float cp = cosf(pr * 0.5f), sp = sinf(pr * 0.5f);
+                            write<Vector4>(eyes + offsets::PlayerEyes::bodyRotation, Vector4(cy * sp, sy * cp, sy * sp, cy * cp));
                     }
                 }
             }
@@ -575,7 +582,7 @@ void aimbot::do_aimbot()
         EspCacheData tc;
         bool hasTc = false;
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
             auto it = g_EspCache.find((uintptr_t)BestEntity);
             if (it != g_EspCache.end()) { tc = it->second; hasTc = true; }
         }

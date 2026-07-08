@@ -43,17 +43,22 @@ if not exist "output\sdk_decrypt_patch.txt" set /a MISSING_FILES+=1
 if not exist "output\offsetmanager_patch.txt" set /a MISSING_FILES+=1
 if not exist "output\rust_decrypts.dat" set /a MISSING_FILES+=1
 if not exist "output\super_prompt.txt" set /a MISSING_FILES+=1
-if not exist "output\frida_patches.txt" set /a MISSING_FILES+=1
 if %MISSING_FILES% GTR 0 goto patches_missing
-call :log "[OK] All 6 patch files present."
+call :log "[OK] All 5 required patch files present."
+REM frida_patches.txt is OPTIONAL (only present if Frida was run)
+if exist "output\frida_patches.txt" (
+    call :log "[OK] Frida patches available (frida_patches.txt)."
+) else (
+    call :log "[INFO] No Frida patches (optional - morphine-dumper + capstone are sufficient)."
+)
 goto start_steps
 
 :patches_missing
-call :log "[ERROR] %MISSING_FILES% patch file(s) missing in output."
+call :log "[ERROR] %MISSING_FILES% required patch file(s) missing in output."
 call :log "[ERROR] You MUST run getnewoffsets.bat FIRST to generate all patches."
 echo.
 echo ================================================================
-echo   PATCH FILES MISSING (%MISSING_FILES% of 6).
+echo   PATCH FILES MISSING (%MISSING_FILES% of 5 required).
 echo   Run getnewoffsets.bat FIRST to generate all patches.
 echo   Full log: %CD%\%LOG%
 echo ================================================================

@@ -1,0 +1,12 @@
+Morphine build: unknown
+Offsets changed: 0
+Decrypt constants changed: 0
+Materials changed: 0
+Build status: NOT YET BUILT
+Backups: E:\github\Rust-cheat\tools\masterupdate\backups\2026-07-07_17-05-25
+Patch files:
+  - output/offsets_patch.txt
+  - output/sdk_patch.txt
+  - output/sdk_decrypt_patch.txt
+  - output/offsetmanager_patch.txt
+  - output/rust_decrypts.dat

@@ -144,26 +144,48 @@ namespace decrypt {
         if (!page_base) return 0;
 
         uint8_t type = read<uint8_t>(page_base + 0x20);
-        if (type >= 4) return 0;
+        if (type >= 4) {
+            static int diagType = 0;
+            if (diagType < 3) { LOG("GCHANDLE: type=%d >= 4 (invalid) page_base=0x%I64X handle=0x%I64X", type, page_base, handle_ptr); diagType++; }
+            return 0;
+        }
 
         int64_t slot = (int64_t)(handle_ptr - page_base - 0x28) >> 3;
-        if (slot < 0) return 0;
+        if (slot < 0) {
+            static int diagSlot = 0;
+            if (diagSlot < 3) { LOG("GCHANDLE: slot=%lld < 0 page_base=0x%I64X handle=0x%I64X", (long long)slot, page_base, handle_ptr); diagSlot++; }
+            return 0;
+        }
 
         uint32_t size = read<uint32_t>(page_base + 0x1C);
-        if ((uint32_t)slot >= size) return 0;
+        if ((uint32_t)slot >= size) {
+            static int diagSize = 0;
+            if (diagSize < 3) { LOG("GCHANDLE: slot=%u >= size=%u page_base=0x%I64X handle=0x%I64X", (unsigned)slot, size, page_base, handle_ptr); diagSize++; }
+            return 0;
+        }
 
         uint64_t bitmap_ptr = read<uint64_t>(page_base + 0x10);
-        if (!bitmap_ptr) return 0;
+        if (!bitmap_ptr) {
+            static int diagBmp = 0;
+            if (diagBmp < 3) { LOG("GCHANDLE: bitmap_ptr=0 page_base=0x%I64X handle=0x%I64X", page_base, handle_ptr); diagBmp++; }
+            return 0;
+        }
 
         uint32_t bitmask = read<uint32_t>(bitmap_ptr + 4 * ((uint32_t)slot >> 5));
-        if (!((bitmask >> (slot & 0x1F)) & 1)) return 0;
+        if (!((bitmask >> (slot & 0x1F)) & 1)) {
+            static int diagBit = 0;
+            if (diagBit < 3) { LOG("GCHANDLE: bit not set slot=%u bitmask=0x%X page_base=0x%I64X", (unsigned)slot, bitmask, page_base); diagBit++; }
+            return 0;
+        }
 
         uint64_t entry = read<uint64_t>(page_base + 8 * ((uint32_t)slot + 5));
+
+        static int diagOk = 0;
+        if (diagOk < 1) { LOG("GCHANDLE: OK handle=0x%I64X type=%d slot=%u size=%u", handle_ptr, type, (unsigned)slot, size); diagOk++; }
 
         if (type > 1)
             return entry;
 
-        // type 0/1: real helper returns 0 for empty slots instead of ~0
         if (!entry) return 0;
         return ~entry;
     }
@@ -227,7 +249,7 @@ namespace decrypt {
         return value;
     }
 
-    // networkable_key (client_entities): rol-sub-xor-add
+    // networkable_key (client_entities): add-rol-add (build 24091435)
     inline uintptr_t networkable_key(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -236,11 +258,10 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = (x << OffsetManager::DecryptCfg.nk_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk_rol)); // ROL
-            uint32_t v2 = v1 - OffsetManager::DecryptCfg.nk_sub; // SUB
-            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.nk_xor; // XOR
-            uint32_t v4 = v3 + OffsetManager::DecryptCfg.nk_add; // ADD
-            *data = v4;
+            uint32_t v1 = x + OffsetManager::DecryptCfg.nk_add1; // ADD
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.nk_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.nk_rol)); // ROL
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk_add2; // ADD
+            *data = v3;
             data++;
             --count;
         } while (count);
@@ -249,7 +270,7 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
-    // networkable_key2 (entity_list): rol-xor-rol-xor
+    // networkable_key2 (entity_list): rol-sub-xor-add (build 24091435)
     inline uintptr_t networkable_key2(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -259,9 +280,9 @@ namespace decrypt {
         do {
             uint32_t x = *data;
             uint32_t v1 = (x << OffsetManager::DecryptCfg.nk2_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk2_rol)); // ROL
-            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.nk2_xor; // XOR
-            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.nk2_rol_2) | (v2 >> (32 - OffsetManager::DecryptCfg.nk2_rol_2)); // ROL
-            uint32_t v4 = v3 ^ OffsetManager::DecryptCfg.nk2_xor_2; // XOR
+            uint32_t v2 = v1 - OffsetManager::DecryptCfg.nk2_sub; // SUB
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.nk2_xor; // XOR
+            uint32_t v4 = v3 + OffsetManager::DecryptCfg.nk2_add; // ADD
             *data = v4;
             data++;
             --count;
@@ -271,28 +292,26 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
-    // cl_active_item: sub-rol-xor-add
-    // Validict confirmed — produces UIDs matching children entities
+    // cl_active_item: xor-rol-add, count=1 (build 24091435)
     inline uint64_t decrypt_ClActiveItem(uint64_t raw_value)
     {
         if (!raw_value) return 0;
         uint64_t value = raw_value;
         uint32_t* data = (uint32_t*)&value;
-        uint32_t count = 2;
+        uint32_t count = 1;
         do {
             uint32_t x = *data;
-            uint32_t v1 = x - OffsetManager::DecryptCfg.cla_sub; // SUB
+            uint32_t v1 = x ^ OffsetManager::DecryptCfg.cla_xor; // XOR
             uint32_t v2 = (v1 << OffsetManager::DecryptCfg.cla_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
-            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.cla_xor; // XOR
-            uint32_t v4 = v3 + OffsetManager::DecryptCfg.cla_add; // ADD
-            *data = v4;
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.cla_add; // ADD
+            *data = v3;
             data++;
             --count;
         } while (count);
         return value;
     }
 
-    // player_inventory: rol-add-rol
+    // player_inventory: rol-xor-add-rol (build 24091435)
     inline uint64_t decrypt_inventory_pointer(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -301,17 +320,18 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = (x << OffsetManager::DecryptCfg.inv_rol) | (x >> (32 - OffsetManager::DecryptCfg.inv_rol)); // ROL
-            uint32_t v2 = v1 + OffsetManager::DecryptCfg.inv_add; // ADD
-            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.inv_rol_2) | (v2 >> (32 - OffsetManager::DecryptCfg.inv_rol_2)); // ROL
-            *data = v3;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.inv_rol1) | (x >> (32 - OffsetManager::DecryptCfg.inv_rol1)); // ROL
+            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.inv_xor; // XOR
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.inv_add; // ADD
+            uint32_t v4 = (v3 << OffsetManager::DecryptCfg.inv_rol2) | (v3 >> (32 - OffsetManager::DecryptCfg.inv_rol2)); // ROL
+            *data = v4;
             data++;
             --count;
         } while (count);
         return value;
     }
 
-    // player_eyes: sub-xor-rol-add
+    // player_eyes: sub-xor-add-rol (build 24091435)
     inline uint64_t decrypt_eyes(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -322,8 +342,8 @@ namespace decrypt {
             uint32_t x = *data;
             uint32_t v1 = x - OffsetManager::DecryptCfg.ey_sub; // SUB
             uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.ey_xor; // XOR
-            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.ey_rol) | (v2 >> (32 - OffsetManager::DecryptCfg.ey_rol)); // ROL
-            uint32_t v4 = v3 + OffsetManager::DecryptCfg.ey_add; // ADD
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.ey_add; // ADD
+            uint32_t v4 = (v3 << OffsetManager::DecryptCfg.ey_rol) | (v3 >> (32 - OffsetManager::DecryptCfg.ey_rol)); // ROL
             *data = v4;
             data++;
             --count;
@@ -331,21 +351,19 @@ namespace decrypt {
         return value;
     }
 
-    // decrypt_fov: xor-add-rol-sub
+    // decrypt_fov: add-rol-sub (build 24091435)
     inline uint32_t decrypt_fov(uint32_t val) {
-        val ^= OffsetManager::DecryptCfg.fov_xor;
-        val += OffsetManager::DecryptCfg.fov_add;
+        val += OffsetManager::DecryptCfg.fov_add1;
         val = (val << OffsetManager::DecryptCfg.fov_rol) | (val >> (32 - OffsetManager::DecryptCfg.fov_rol));
         val -= OffsetManager::DecryptCfg.fov_sub;
         return val;
     }
 
-    // encrypt_fov: reverse — add-ror-sub-xor
+    // encrypt_fov: reverse — add-ror-sub (build 24091435)
     inline uint32_t encrypt_fov(uint32_t val) {
         val += OffsetManager::DecryptCfg.fov_sub;
         val = (val >> OffsetManager::DecryptCfg.fov_rol) | (val << (32 - OffsetManager::DecryptCfg.fov_rol));
-        val -= OffsetManager::DecryptCfg.fov_add;
-        val ^= OffsetManager::DecryptCfg.fov_xor;
+        val -= OffsetManager::DecryptCfg.fov_add1;
         return val;
     }
 
@@ -410,8 +428,106 @@ public:
             return read<Bounds>((uintptr_t)this + offsets::BaseEntity::bounds);
         }
 
+        // Cached transform pointers — avoids re-resolving transform_internal + relation_array
+        // every bone read. Refreshed every 200ms by skeleton thread (SHA Source approach).
+        struct CachedTransformData {
+            uint64_t relation_array = 0;
+            uint64_t dependency_index_array = 0;
+            int32_t index = -1;
+
+            bool valid() const {
+                return relation_array != 0 && is_valid(relation_array) &&
+                       dependency_index_array != 0 && is_valid(dependency_index_array) &&
+                       index >= 0 && index <= 255;
+            }
+        };
+
         class Transformation {
         public:
+            // Returns cached transform pointers (relation_array, dependency_index_array, index)
+            // Called once per bone per 200ms — saves 2 IOCTLs per bone position read
+            CachedTransformData Get_Cached_Data() {
+                CachedTransformData data;
+                auto transform_internal = read<uint64_t>((uintptr_t)this + 0x10);
+                if (!transform_internal || !is_valid(transform_internal)) return data;
+
+                struct tempshit1 { uint64_t some_ptr; int32_t index; } temp;
+                if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(transform_internal + 0x28), &temp, sizeof(temp))))
+                    if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(transform_internal + 0x28), &temp, sizeof(temp));
+                if (!temp.some_ptr || !is_valid(temp.some_ptr)) return data;
+                if (temp.index < 0 || temp.index > 255) return data;
+
+                struct tempshit2 { uint64_t relation_array; int64_t dependency_index_array; } temp2;
+                if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(temp.some_ptr + 0x18), &temp2, sizeof(temp2))))
+                    if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(temp.some_ptr + 0x18), &temp2, sizeof(temp2));
+                if (!temp2.relation_array || !is_valid(temp2.relation_array)) return data;
+                if (!temp2.dependency_index_array || !is_valid((uint64_t)temp2.dependency_index_array)) return data;
+
+                data.relation_array = temp2.relation_array;
+                data.dependency_index_array = (uint64_t)temp2.dependency_index_array;
+                data.index = temp.index;
+                return data;
+            }
+
+            // Fast position read using cached transform data — skips 2 IOCTLs
+            // (transform_internal read + relation_array resolution)
+            static Vector3 Get_Position_From_Cache(const CachedTransformData& data) {
+                if (!data.valid()) return Vector3();
+
+                __m128 xmmword_1410D1340 = { -2.f, 2.f, -2.f, 0.f };
+                __m128 xmmword_1410D1350 = { 2.f, -2.f, -2.f, 0.f };
+                __m128 xmmword_1410D1360 = { -2.f, -2.f, 2.f, 0.f };
+                uint64_t main_addr = data.relation_array + (uint64_t)data.index * 48;
+                if (!is_valid(main_addr)) return Vector3();
+                auto temp_main = read<__m128>(main_addr);
+                uint64_t dep_addr = data.dependency_index_array + (uint64_t)data.index * 4;
+                if (!is_valid(dep_addr)) return Vector3();
+                auto dependency_index = read<int32_t>(dep_addr);
+                int loop_guard = 0;
+                while (dependency_index >= 0 && loop_guard < 32) {
+                    loop_guard++;
+                    int64_t relation_index = 6 * (int64_t)dependency_index;
+                    uint64_t rel_addr = data.relation_array + 8ULL * relation_index;
+                    if (!is_valid(rel_addr)) break;
+                    struct tempshit3 { __m128 temp_2; __m128i temp_0; __m128 temp_1; } temp3;
+                    if (!(g_UseInternalReads && ReadMemory_Internal(reinterpret_cast<PVOID>(rel_addr), &temp3, sizeof(temp3))))
+                        if (Drv && !Drv->ioctl_blocked && !g_process_dead.load(std::memory_order_relaxed) && !g_shutting_down.load(std::memory_order_relaxed)) Drv->ReadMemory_ACE(reinterpret_cast<PVOID>(rel_addr), &temp3, sizeof(temp3));
+                    __m128 v10 = _mm_mul_ps(temp3.temp_1, temp_main);
+                    __m128 v11 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, 0));
+                    __m128 v12 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, 85));
+                    __m128 v13 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, (unsigned char)-114));
+                    __m128 v14 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, (unsigned char)-37));
+                    __m128 v15 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, (unsigned char)-86));
+                    __m128 v16 = _mm_castsi128_ps(_mm_shuffle_epi32(temp3.temp_0, 113));
+                    __m128 v17 = _mm_add_ps(
+                        _mm_add_ps(
+                            _mm_add_ps(
+                                _mm_mul_ps(
+                                    _mm_sub_ps(
+                                        _mm_mul_ps(_mm_mul_ps(v11, xmmword_1410D1350), v13),
+                                        _mm_mul_ps(_mm_mul_ps(v12, xmmword_1410D1360), v14)),
+                                    _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v10), (unsigned char)-86))),
+                                _mm_mul_ps(
+                                    _mm_sub_ps(
+                                        _mm_mul_ps(_mm_mul_ps(v15, xmmword_1410D1360), v14),
+                                        _mm_mul_ps(_mm_mul_ps(v11, xmmword_1410D1340), v16)),
+                                    _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v10), 85)))),
+                            _mm_add_ps(
+                                _mm_mul_ps(
+                                    _mm_sub_ps(
+                                        _mm_mul_ps(_mm_mul_ps(v12, xmmword_1410D1340), v16),
+                                        _mm_mul_ps(_mm_mul_ps(v15, xmmword_1410D1350), v13)),
+                                    _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v10), 0))),
+                                v10)),
+                        temp3.temp_2);
+                    temp_main = v17;
+                    uint64_t next_dep_addr = data.dependency_index_array + (uint64_t)dependency_index * 4;
+                    if (!is_valid(next_dep_addr)) break;
+                    dependency_index = read<int32_t>(next_dep_addr);
+                }
+                return *reinterpret_cast<Vector3*>(&temp_main);
+            }
+
             Vector3 Get_Position() {
                 auto transform_internal = read<uint64_t>((uintptr_t)this + 0x10);
                 if (!transform_internal || !is_valid(transform_internal)) return Vector3(0, 0, 0);
@@ -571,18 +687,9 @@ public:
 
         bool IsVisibleRawFlag() {
             if (!this) return false;
-            uintptr_t PlayerModel = read<uintptr_t>((uintptr_t)this + offsets::BasePlayer::PlayerModel);
-            if (!PlayerModel || !is_valid(PlayerModel)) return false;
-            uint64_t visAddr = (uint64_t)PlayerModel + offsets::PlayerModel::visible;
-            if (!is_valid(visAddr)) return false;
-            struct { bool hasValue; bool value; } nb = { false, false };
-            bool readOk = false;
-            if (g_UseInternalReads)
-                readOk = ReadMemory_Internal((PVOID)visAddr, &nb, 2);
-            if (!readOk && Drv && !Drv->ioctl_blocked)
-                readOk = Drv->ReadMemory_ACE((PVOID)visAddr, &nb, 2);
-            if (!readOk) return false;
-            return nb.hasValue ? nb.value : true;
+            // Read raw isVisible flag at BaseEntity+0x150 (1 byte)
+            // This is Unity's rendering visibility flag — set by the game's occlusion culling system
+            return read<uint8_t>((uintptr_t)this + 0x150) != 0;
         }
 
         bool IsVisibleFiltered(bool rawVisible) {
@@ -598,7 +705,9 @@ public:
                 bool stableVisible = false;
             };
 
-            static std::unordered_map<uintptr_t, VisState> s_visState;
+            static std::unordered_map<uintptr_t, VisState>* pVisState = nullptr;
+            if (!pVisState) pVisState = new std::unordered_map<uintptr_t, VisState>();
+            auto& s_visState = *pVisState;
             static uint64_t s_lastPruneMs = 0;
 
             uint64_t now = GetTickCount64();
@@ -619,7 +728,7 @@ public:
                 if ((st.history >> i) & 1u) bitCount++;
             }
 
-            int required = (st.sampleCount + 1) / 2;
+            int required = (st.sampleCount + 1) / 2;  // simple majority — faster response
             bool consensusVisible = bitCount >= required;
             if (consensusVisible) {
                 st.stableVisible = true;
@@ -877,6 +986,16 @@ public:
             if (!uiddecrypt) return nullptr;
             uint32_t targetUid = (uint32_t)(uiddecrypt & 0xFFFFFFFF);
 
+            // Diagnostic: log cl_active_item decrypt result (first 5 times only)
+            {
+                static int claDiagCount = 0;
+                if (claDiagCount < 5) {
+                    claDiagCount++;
+                    LOG("CLA_DIAG[%d]: raw=0x%I64X dec=0x%I64X targetUid=0x%X uidValid=%d",
+                        claDiagCount, active_item_id, uiddecrypt, targetUid, (int)uidValid);
+                }
+            }
+
             uintptr_t player_inventory = ResolvePlayerInventory();
             if (!player_inventory || !is_valid(player_inventory)) return nullptr;
 
@@ -903,10 +1022,25 @@ public:
                         }
                         if (!itm || !is_valid(itm)) continue;
                         for (int uo : { (int)offsets::Item::ItemId, (int)offsets::Item::ItemIdFallback1, (int)offsets::Item::ItemIdFallback2 }) {
-                            if (read<uint32_t>(itm + uo) == targetUid)
+                            if (read<uint32_t>(itm + uo) == targetUid) {
+                                static int claMatchCount = 0;
+                                if (claMatchCount < 3) {
+                                    claMatchCount++;
+                                    LOG("CLA_MATCH[%d]: targetUid=0x%X matched at uid_off=0x%X", claMatchCount, targetUid, uo);
+                                }
                                 return (HeldItem*)itm;
+                            }
                         }
                     }
+                }
+            }
+
+            // Diagnostic: log if no match found (first 3 times)
+            {
+                static int claNoMatchCount = 0;
+                if (claNoMatchCount < 3) {
+                    claNoMatchCount++;
+                    LOG("CLA_NOMATCH[%d]: targetUid=0x%X not found in belt", claNoMatchCount, targetUid);
                 }
             }
 

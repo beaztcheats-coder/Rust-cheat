@@ -1,0 +1,6 @@
+// ============================================================
+// Frida hash-mapped offset patches ( Morphine-independent )
+// Fields resolved by hash: 90
+// Fields changed: 0
+// ============================================================
+
