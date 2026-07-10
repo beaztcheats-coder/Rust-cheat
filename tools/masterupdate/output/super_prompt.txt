@@ -1,0 +1,1096 @@
+=== COPY EVERYTHING BELOW THIS LINE INTO OPENCODE ===
+
+# RUST CHEAT POST-UPDATE SUPER PROMPT FOR OPENCODE
+# Generated: 2026-07-07 17:05:51
+# Morphine/sha-dumper/Frida build: unknown
+# Data source: unknown
+# SECTION 1: CONTEXT
+
+You are restoring ALL features of an external Rust cheat after a Rust game update.
+The auto-update pipeline has generated offset patches and decrypt function patches.
+Your job is to:
+  1. Apply the automatic patches (Section 2)
+  2. Verify manual offsets against the Frida dump (Section 3)
+  3. Check hardcoded offsets inside game-logic functions (Section 4)
+  4. Handle prefab drift if needed (Section 5)
+  5. Build and verify (Section 8)
+
+Project root: E:\github\Rust-cheat
+Target DLL flavor: Rust Prv Ext
+Build command:
+  & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "E:\github\Rust-cheat\Rust Prv Ext.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
+Target output: E:\github\Rust-cheat / x64 / Release / Rust Prv Ext.dll
+GameAssembly.dll: C:\Program Files (x86)\Steam\steamapps\common\Rust\GameAssembly.dll
+
+Authoritative Frida dump: E:\github\Rust-cheat\tools\masterupdate\output\frida_dump.txt
+Frida validation offsets: E:\github\Rust-cheat\tools\masterupdate\output\frida_validation.json
+
+AGENTS.md (project root) is the authoritative project reference. Read it first.
+ALL game memory access MUST go through read<T>(address) / write<T>(address) in
+Driver.hpp. NEVER add direct memory dereferences (*/& on game pointers).
+
+================================================================
+SECTION 2: AUTOMATIC PATCH BLOCKS (apply these)
+================================================================
+
+## 2.1 offsets.hpp changes
+
+Apply the following offset changes to offsets.hpp:
+```text
+// ============================================================
+// Auto-generated offsets.hpp patch from Morphine
+// Build: unknown
+// ============================================================
+```
+
+## 2.2 sdk.hpp decrypt namespace
+
+Replace the ENTIRE `namespace decrypt { ... }` block in sdk.hpp with the following.
+This block includes Il2cppGetHandle, resolve_possible_handle, and all decrypt functions.
+The decrypt functions use OffsetManager::DecryptCfg.* references (runtime-loaded constants).
+
+```cpp
+// ============================================================
+// Auto-generated decrypt namespace patch from Morphine
+// Build: unknown
+// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
+// ============================================================
+
+namespace decrypt {
+
+    // ============================================================
+    // Runtime pointer validation
+    // ============================================================
+
+    inline bool IsValidPointer(uint64_t p)
+    {
+        if (!p) return false;
+        if (p & 0x7) return false;                 // basic 8-byte alignment
+        if (p < 0x10000) return false;             // reject null/small values
+        return true;
+    }
+
+    inline bool IsInModuleRange(uint64_t p)
+    {
+        // Fast range check against loaded module bases.
+        // Falls back to true if bases are not initialized yet.
+        if (!GameAssembly && !UnityPlayer) return true;
+        uint64_t ga_end = GameAssembly ? GameAssembly + 0x40000000 : 0; // ~1GB generous
+        uint64_t up_end = UnityPlayer ? UnityPlayer + 0x20000000 : 0;
+        if (GameAssembly && p >= GameAssembly && p <= ga_end) return true;
+        if (UnityPlayer && p >= UnityPlayer && p <= up_end) return true;
+        return false;
+    }
+
+    // ============================================================
+    // Il2Cpp GCHandle resolver
+    // Derived from il2cpp_gchandle_get_target disassembly.
+    // ============================================================
+
+    inline uint64_t Il2cppGetHandle(uint64_t handle_ptr)
+    {
+        if (!handle_ptr) return 0;
+
+        uint64_t page_base = handle_ptr & 0xFFFFFFFFFFFFE000ULL;
+        if (!page_base) return 0;
+
+        uint8_t type = read<uint8_t>(page_base + 0x20);
+        if (type >= 4) return 0;
+
+        int64_t slot = (int64_t)(handle_ptr - page_base - 0x28) >> 3;
+        if (slot < 0) return 0;
+
+        uint32_t size = read<uint32_t>(page_base + 0x1C);
+        if ((uint32_t)slot >= size) return 0;
+
+        uint64_t bitmap_ptr = read<uint64_t>(page_base + 0x10);
+        if (!bitmap_ptr) return 0;
+
+        uint32_t bitmask = read<uint32_t>(bitmap_ptr + 4 * ((uint32_t)slot >> 5));
+        if (!((bitmask >> (slot & 0x1F)) & 1)) return 0;
+
+        uint64_t entry = read<uint64_t>(page_base + 8 * ((uint32_t)slot + 5));
+
+        if (type > 1)
+            return entry;
+
+        // type 0/1: real helper returns 0 for empty slots instead of ~0
+        if (!entry) return 0;
+        return ~entry;
+    }
+
+    // ============================================================
+    // Type-aware read helpers
+    // Use these for fields classified by the updater.
+    // ============================================================
+
+    inline uint64_t ReadObjectPtr(uint64_t address)
+    {
+        uint64_t handle = read<uint64_t>(address);
+        if (!IsValidPointer(handle)) return 0;
+        return Il2cppGetHandle(handle);
+    }
+
+    inline uint64_t ReadRawPtr(uint64_t address)
+    {
+        uint64_t p = read<uint64_t>(address);
+        return IsValidPointer(p) ? p : 0;
+    }
+
+    inline uint64_t ReadTaggedPtr(uint64_t address, uint64_t (*decrypt_fn)(uint64_t))
+    {
+        uint64_t encoded = read<uint64_t>(address);
+        if (!encoded) return 0;
+        uint64_t decoded = decrypt_fn(encoded);
+        return IsValidPointer(decoded) ? decoded : 0;
+    }
+
+    inline uint64_t ReadObjectTagged(uint64_t address, uint64_t (*decrypt_fn)(uint64_t))
+    {
+        uint64_t encoded = read<uint64_t>(address);
+        if (!encoded) return 0;
+        uint64_t decoded = decrypt_fn(encoded);
+        if (!decoded) return 0;
+        return Il2cppGetHandle(decoded);
+    }
+
+    // ============================================================
+    // Handle resolver — preserved across updates (not Morphine-generated)
+    // ============================================================
+
+    inline uint64_t resolve_possible_handle(uint64_t value)
+    {
+        if (!value) return 0;
+        if (value & 1)
+            return Il2cppGetHandle(value);
+        // If not 8-byte aligned, it might be a disguised GCHandle — try Il2cppGetHandle
+        if (value & 0x7) {
+            uint64_t resolved = Il2cppGetHandle(value);
+            if (resolved && (resolved & 0x7) == 0 && resolved > 0x10000)
+                return resolved;
+        }
+        // Aligned value: check if pointer-to-pointer
+        if ((value & 0x7) == 0 && value < 0x7FFFFFFFFFFF) {
+            uint64_t deref = read<uint64_t>(value);
+            if (deref && deref < 0x7FFFFFFFFFFF && (deref & 0x7) == 0 && deref != value)
+                return deref;
+        }
+        return value;
+    }
+
+    // WARNING: client_entities not found in any data source
+
+    // WARNING: entity_list not found in any data source
+
+    // PRESERVED: base_networkable_0 — Using last known good values (not found in sha-dumper)
+    inline uintptr_t networkable_key(uint64_t a1)
+    {
+        uint64_t value = read<uint64_t>(a1 + 0x18);
+        if (!value) return 0;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.nk_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk_rol)); // ROL
+            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.nk_xor; // XOR
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk_add; // ADD
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        uintptr_t resolved = Il2cppGetHandle(value);
+        if (resolved) return resolved;
+        return (value & 0x7) == 0 ? value : 0;
+    }
+
+    // PRESERVED: base_networkable_1 — Using last known good values (not found in sha-dumper)
+    inline uintptr_t networkable_key2(uint64_t a1)
+    {
+        uint64_t value = read<uint64_t>(a1 + 0x18);
+        if (!value) return 0;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = x + OffsetManager::DecryptCfg.nk2_add; // ADD
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.nk2_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.nk2_rol)); // ROL
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk2_add_2; // ADD
+            uint32_t v4 = v3 ^ OffsetManager::DecryptCfg.nk2_xor; // XOR
+            *data = v4;
+            data++;
+            --count;
+        } while (count);
+        uintptr_t resolved = Il2cppGetHandle(value);
+        if (resolved) return resolved;
+        return (value & 0x7) == 0 ? value : 0;
+    }
+
+    // PRESERVED: cl_active_item — Using last known good values (not found in sha-dumper)
+    inline uint64_t decrypt_ClActiveItem(uint64_t raw_value)
+    {
+        if (!raw_value) return 0;
+        uint64_t value = raw_value;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.cla_rol) | (x >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
+            uint32_t v2 = v1 + OffsetManager::DecryptCfg.cla_add; // ADD
+            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.cla_rol_2) | (v2 >> (32 - OffsetManager::DecryptCfg.cla_rol_2)); // ROL
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        return value;
+    }
+
+    // PRESERVED: player_inventory — Using last known good values (not found in sha-dumper)
+    inline uint64_t decrypt_inventory_pointer(uint64_t raw_value)
+    {
+        if (!raw_value) return 0;
+        uint64_t value = raw_value;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = x + OffsetManager::DecryptCfg.inv_add; // ADD
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.inv_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.inv_rol)); // ROL
+            uint32_t v3 = v2 + OffsetManager::DecryptCfg.inv_add_2; // ADD
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        return value;
+    }
+
+    // PRESERVED: player_eyes — Using last known good values (not found in sha-dumper)
+    inline uint64_t decrypt_eyes(uint64_t raw_value)
+    {
+        if (!raw_value) return 0;
+        uint64_t value = raw_value;
+        uint32_t* data = (uint32_t*)&value;
+        uint32_t count = 2;
+        do {
+            uint32_t x = *data;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.ey_rol) | (x >> (32 - OffsetManager::DecryptCfg.ey_rol)); // ROL
+            uint32_t v2 = v1 + OffsetManager::DecryptCfg.ey_add; // ADD
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.ey_xor; // XOR
+            *data = v3;
+            data++;
+            --count;
+        } while (count);
+        return value;
+    }
+
+    // PRESERVED: decrypt_fov — Using last known good values (not found in sha-dumper)
+    inline uint32_t decrypt_fov(uint32_t val) {
+        val += OffsetManager::DecryptCfg.fov_add;
+        val = (val << OffsetManager::DecryptCfg.fov_rol) | (val >> (32 - OffsetManager::DecryptCfg.fov_rol));
+        val -= OffsetManager::DecryptCfg.fov_sub;
+        val ^= OffsetManager::DecryptCfg.fov_xor;
+        return val;
+    }
+
+    // encrypt_fov — reverse of decrypt_fov, preserved across updates
+    inline uint32_t encrypt_fov(uint32_t val) {
+        val ^= OffsetManager::DecryptCfg.fov_xor;
+        val += OffsetManager::DecryptCfg.fov_sub;
+        val = (val >> OffsetManager::DecryptCfg.fov_rol) | (val << (32 - OffsetManager::DecryptCfg.fov_rol));
+        val -= OffsetManager::DecryptCfg.fov_add;
+        return val;
+    }
+
+} // namespace decrypt
+```
+
+## 2.3 rust_decrypts.dat
+
+This file is loaded at runtime by OffsetManager::LoadDecryptConfig() from C:\rust_decrypts.dat.
+Copy this content to C:\rust_decrypts.dat (close Rust first -- file is locked while game runs):
+
+```text
+# Morphine decrypt constants — loaded by OffsetManager::LoadDecryptConfig()
+# Build: unknown
+# Key format: {prefix}_{op_type} where prefix matches OffsetManager struct fields
+# Duplicate op types get _2, _3 suffix (first occurrence has no suffix)
+
+# networkable_key (base_networkable_0) prefix=nk sequence: rol-xor-add
+nk_rol=0x0000000B
+nk_xor=0xBCDFA6C7
+nk_add=0x01A88518
+
+# networkable_key2 (base_networkable_1) prefix=nk2 sequence: add-rol-add-xor
+nk2_add=0x4016C175
+nk2_rol=0x0000001D
+nk2_add_2=0x7D75A2B0
+nk2_xor=0x97FF1778
+
+# decrypt_ClActiveItem (cl_active_item) prefix=cla sequence: rol-add-rol
+cla_rol=0x0000001B
+cla_add=0x56427D52
+cla_rol_2=0x00000008
+
+# decrypt_inventory_pointer (player_inventory) prefix=inv sequence: add-rol-add
+inv_add=0x86F83B72
+inv_rol=0x00000015
+inv_add_2=0x41069A6F
+
+# decrypt_eyes (player_eyes) prefix=ey sequence: rol-add-xor
+ey_rol=0x00000005
+ey_add=0x487FBCF7
+ey_xor=0xE70F1737
+
+# decrypt_fov (decrypt_fov) prefix=fov sequence: add-rol-sub-xor
+fov_add=0x0F7ED7C0
+fov_rol=0x00000012
+fov_sub=0xA557A4EC
+fov_xor=0xD6A6E25E
+```
+
+## 2.4 OffsetManager.hpp changes
+
+Apply these changes to OffsetManager.hpp:
+  1. Replace the DecryptConfig struct body (between { and };)
+  2. Replace the LOAD_DEC block (between #define LOAD_DEC and #undef LOAD_DEC)
+  3. DO NOT modify SaveDecryptConfig -- it is a no-op (disabled for anti-cheat stealth).
+     Do NOT insert W(...) lambda calls. The existing code is correct.
+
+```text
+// ============================================================
+// Auto-generated OffsetManager.hpp patch from Morphine
+// Build: unknown
+// ============================================================
+
+// === DECRYPTCONFIG_STRUCT ===
+// Replace struct DecryptConfig body (between { and };)
+        // networkable_key (base_networkable_0): rol-xor-add
+        uint32_t nk_rol = 11;
+        uint32_t nk_xor = 0xBCDFA6C7;
+        uint32_t nk_add = 0x01A88518;
+
+        // networkable_key2 (base_networkable_1): add-rol-add-xor
+        uint32_t nk2_add = 0x4016C175;
+        uint32_t nk2_rol = 29;
+        uint32_t nk2_add_2 = 0x7D75A2B0;
+        uint32_t nk2_xor = 0x97FF1778;
+
+        // decrypt_ClActiveItem (cl_active_item): rol-add-rol
+        uint32_t cla_rol = 27;
+        uint32_t cla_add = 0x56427D52;
+        uint32_t cla_rol_2 = 8;
+
+        // decrypt_inventory_pointer (player_inventory): add-rol-add
+        uint32_t inv_add = 0x86F83B72;
+        uint32_t inv_rol = 21;
+        uint32_t inv_add_2 = 0x41069A6F;
+
+        // decrypt_eyes (player_eyes): rol-add-xor
+        uint32_t ey_rol = 5;
+        uint32_t ey_add = 0x487FBCF7;
+        uint32_t ey_xor = 0xE70F1737;
+
+        // decrypt_fov (decrypt_fov): add-rol-sub-xor
+        uint32_t fov_add = 0x0F7ED7C0;
+        uint32_t fov_rol = 18;
+        uint32_t fov_sub = 0xA557A4EC;
+        uint32_t fov_xor = 0xD6A6E25E;
+
+
+// === LOAD_DEC_BLOCK ===
+// Replace between #define LOAD_DEC and #undef LOAD_DEC
+
+                        LOAD_DEC("nk_rol", DecryptCfg.nk_rol);
+                        LOAD_DEC("nk_xor", DecryptCfg.nk_xor);
+                        LOAD_DEC("nk_add", DecryptCfg.nk_add);
+                        // networkable_key
+                        LOAD_DEC("nk2_add", DecryptCfg.nk2_add);
+                        LOAD_DEC("nk2_rol", DecryptCfg.nk2_rol);
+                        LOAD_DEC("nk2_add_2", DecryptCfg.nk2_add_2);
+                        LOAD_DEC("nk2_xor", DecryptCfg.nk2_xor);
+                        // networkable_key2
+                        LOAD_DEC("cla_rol", DecryptCfg.cla_rol);
+                        LOAD_DEC("cla_add", DecryptCfg.cla_add);
+                        LOAD_DEC("cla_rol_2", DecryptCfg.cla_rol_2);
+                        // decrypt_ClActiveItem
+                        LOAD_DEC("inv_add", DecryptCfg.inv_add);
+                        LOAD_DEC("inv_rol", DecryptCfg.inv_rol);
+                        LOAD_DEC("inv_add_2", DecryptCfg.inv_add_2);
+                        // decrypt_inventory_pointer
+                        LOAD_DEC("ey_rol", DecryptCfg.ey_rol);
+                        LOAD_DEC("ey_add", DecryptCfg.ey_add);
+                        LOAD_DEC("ey_xor", DecryptCfg.ey_xor);
+                        // decrypt_eyes
+                        LOAD_DEC("fov_add", DecryptCfg.fov_add);
+                        LOAD_DEC("fov_rol", DecryptCfg.fov_rol);
+                        LOAD_DEC("fov_sub", DecryptCfg.fov_sub);
+                        LOAD_DEC("fov_xor", DecryptCfg.fov_xor);
+// (SAVE_BLOCK omitted -- SaveDecryptConfig is a no-op, do not add W(...) calls)
+```
+
+================================================================
+SECTION 2.5: DECRYPT CONSTANT FALLBACK CHAIN
+================================================================
+
+Decrypt constants are sourced in priority order:
+
+1. MORPHINE (primary) - online offset publisher, provides all 7 decrypt functions
+   If Morphine is available, ALL 20 constants are correct and verified.
+   This is the normal path - Morphine is usually available.
+
+2. SHA-DUMPER (fallback) - injected DLL reads live game memory
+   WARNING: sha-dumper may produce WRONG constants for duplicate cipher sections.
+   Known: cipher_cl_active_item, cipher_eyes, cipher_inventory have duplicate sections.
+   Parser keeps FIRST occurrence. cipher_fov and cipher_bn_1 are NOT emitted at all.
+   If Morphine is unavailable, verify sha-dumper constants against a known-good source.
+
+3. EMBEDDED DEFAULTS (last resort) - hardcoded in OffsetManager.hpp lines 10-42
+   These are from the PREVIOUS build and will be STALE after a game update.
+   The runtime file C:\rust_decrypts.dat overrides these if present.
+
+FRIDA is NOT a decrypt source - it is used ONLY for offset verification (Section 3).
+If a Morphine decrypt function is missing, the patch emits a WARNING comment and the
+corresponding constants will be absent from rust_decrypts.dat, causing a compile error.
+
+================================================================
+SECTION 2.6: VISCHECK MESH DATA (BVH Raycast)
+================================================================
+
+Mesh data: NOT GENERATED
+
+VisCheck will fall back to PlayerModel._visible flag (~60% accuracy).
+To generate mesh data for 100% accurate raycast VisCheck:
+  1. Join a Rust server (world must be loaded, not main menu)
+  2. Run getnewoffsets.bat — sha-dumper dumps mesh automatically
+  3. Mesh file appears at output/rust_mesh.tri
+  4. Re-run update_now.bat to package with the cheat
+
+================================================================
+SECTION 3: MANUAL OFFSETS TO VERIFY AGAINST FRIDA DUMP
+================================================================
+
+The following namespaces in offsets.hpp are NOT auto-patched and may be stale.
+Verify each value against: E:\github\Rust-cheat\tools\masterupdate\output\frida_dump.txt (Frida runtime dump (100% accuracy))
+Or against: E:\github\Rust-cheat\tools\masterupdate\output\frida_validation.json
+
+For each field below:
+  - Read the current value in offsets.hpp
+  - Search the Frida dump for the matching class and field name
+  - If the value differs, update it in offsets.hpp
+  - If the field does not exist in the dump, mark it TODO and report it
+
+### BaseCamera
+
+| Field | Current Value | Action |
+|---|---|---|
+| viewMatrix | 0x2FC | Verify against Frida dump, update if changed |
+| projectionMatrix | 0x18C | Verify against Frida dump, update if changed |
+| culling_mask | 0x3E8 | Verify against Frida dump, update if changed |
+| world_position | 0x444 | Verify against Frida dump, update if changed |
+| field_of_view | 0x170 | Verify against Frida dump, update if changed |
+| wrapper_class | 0x30 | Verify against Frida dump, update if changed |
+| entity | 0x10 | Verify against Frida dump, update if changed |
+
+### BaseNetworkable2
+
+| Field | Current Value | Action |
+|---|---|---|
+| parent_entity | 0x38 | Verify against Frida dump, update if changed |
+| prefab_id | 0x54 | Verify against Frida dump, update if changed |
+
+### ModelState
+
+| Field | Current Value | Action |
+|---|---|---|
+| flags | 0x3C | Verify against Frida dump, update if changed |
+| Flying | 0x40 | Verify against Frida dump, update if changed |
+| OnGround | 0x04 | Verify against Frida dump, update if changed |
+| Sleeping | 0x08 | Verify against Frida dump, update if changed |
+| Mounted | 0x200 | Verify against Frida dump, update if changed |
+| Ducked | 0x10 | Verify against Frida dump, update if changed |
+
+### base_player_flags
+
+| Field | Current Value | Action |
+|---|---|---|
+| IsAdmin | 0x4 | Verify against Frida dump, update if changed |
+| ReceivingSnapshot | 0x8 | Verify against Frida dump, update if changed |
+| Sleeping | 0x10 | Verify against Frida dump, update if changed |
+| Spectating | 0x20 | Verify against Frida dump, update if changed |
+| Wounded | 0x40 | Verify against Frida dump, update if changed |
+| IsDeveloper | 0x80 | Verify against Frida dump, update if changed |
+| Connected | 0x100 | Verify against Frida dump, update if changed |
+| ThirdPersonViewmode | 0x400 | Verify against Frida dump, update if changed |
+
+### unity_string
+
+| Field | Current Value | Action |
+|---|---|---|
+| m_stringLength | 0x10 | Verify against Frida dump, update if changed |
+| first_char | 0x14 | Verify against Frida dump, update if changed |
+
+### ItemMagazine
+
+| Field | Current Value | Action |
+|---|---|---|
+| contents | 0x0 | Verify against Frida dump, update if changed |
+
+### HeldEntity
+
+| Field | Current Value | Action |
+|---|---|---|
+| ownerItemUID | 0x000002D0 | Verify against Frida dump, update if changed |
+| viewModel | 0x000001F0 | Verify against Frida dump, update if changed |
+
+### Model
+
+| Field | Current Value | Action |
+|---|---|---|
+| boneTransforms | 0x50 | Verify against Frida dump, update if changed |
+
+### SkinnedMultiMesh
+
+| Field | Current Value | Action |
+|---|---|---|
+| RendererList | 0x50 | Verify against Frida dump, update if changed |
+
+### BaseMovement2
+
+| Field | Current Value | Action |
+|---|---|---|
+| admin_cheat | 0x20 | Verify against Frida dump, update if changed |
+| target_movement | 0x128 | Verify against Frida dump, update if changed |
+
+### PlayerWalkMovement
+
+| Field | Current Value | Action |
+|---|---|---|
+| GroundAngle | 0x70 | Verify against Frida dump, update if changed |
+| GroundAngleNew | 0x78 | Verify against Frida dump, update if changed |
+| GroundTime | 0x80 | Verify against Frida dump, update if changed |
+| JumpTime | 0x88 | Verify against Frida dump, update if changed |
+| LandTime | 0x90 | Verify against Frida dump, update if changed |
+| GravityMultiplier | 0x98 | Verify against Frida dump, update if changed |
+| TargetMovement | 0x128 | Verify against Frida dump, update if changed |
+
+### RecoilProperties
+
+| Field | Current Value | Action |
+|---|---|---|
+| RecoilYawMin | 0x18 | Verify against Frida dump, update if changed |
+| RecoilYawMax | 0x1C | Verify against Frida dump, update if changed |
+| RecoilPitchMin | 0x20 | Verify against Frida dump, update if changed |
+| RecoilPitchMax | 0x24 | Verify against Frida dump, update if changed |
+| AimconeCurveScale | 0x60 | Verify against Frida dump, update if changed |
+| NewRecoilOverride | 0x80 | Verify against Frida dump, update if changed |
+
+### BaseProjectileExt
+
+| Field | Current Value | Action |
+|---|---|---|
+| camera_punches | 0x2A8 | Verify against Frida dump, update if changed |
+| viewmodel_instance | 0x1E8 | Verify against Frida dump, update if changed |
+| magazine | 0x3A8 | Verify against Frida dump, update if changed |
+| aim_sway | 0x3C8 | Verify against Frida dump, update if changed |
+| aim_sway_speed | 0x3CC | Verify against Frida dump, update if changed |
+| sight_aim_cone_scale | 0x45C | Verify against Frida dump, update if changed |
+| hip_aim_cone_scale | 0x464 | Verify against Frida dump, update if changed |
+| string_hold_duration_max | 0x4C0 | Verify against Frida dump, update if changed |
+
+### BaseEntity
+
+| Field | Current Value | Action |
+|---|---|---|
+| flags | 0x1B0 | Verify against Frida dump, update if changed |
+| model | 0x1A8 | Verify against Frida dump, update if changed |
+| positionLerp | 0x1E0 | Verify against Frida dump, update if changed |
+| objRef | 0x10 | Verify against Frida dump, update if changed |
+| posChain0 | 0x20 | Verify against Frida dump, update if changed |
+| posChain1 | 0x20 | Verify against Frida dump, update if changed |
+| posChain2 | 0x8 | Verify against Frida dump, update if changed |
+| posChain3 | 0x28 | Verify against Frida dump, update if changed |
+| posFinal | 0x90 | Verify against Frida dump, update if changed |
+| bounds | 0x17C | Verify against Frida dump, update if changed |
+
+### FOV
+
+| Field | Current Value | Action |
+|---|---|---|
+| ConVar_Graphics | 0xFBD99A8 | Verify against Frida dump, update if changed |
+| fovField | 0x560 | Verify against Frida dump, update if changed |
+| fovWrite | 0xA8 | Verify against Frida dump, update if changed |
+| cameraFovBypass | 0x170 | Verify against Frida dump, update if changed |
+
+### PlayerInput
+
+| Field | Current Value | Action |
+|---|---|---|
+| bodyAngles | 0x44 | Verify against Frida dump, update if changed |
+| yaw | 0x60 | Verify against Frida dump, update if changed |
+
+### PlayerEyes
+
+| Field | Current Value | Action |
+|---|---|---|
+| viewOffset | 0x40 | Verify against Frida dump, update if changed |
+| bodyRotation | 0x50 | Verify against Frida dump, update if changed |
+| headPosition | 0x60 | Verify against Frida dump, update if changed |
+
+### EffectNetwork
+
+| Field | Current Value | Action |
+|---|---|---|
+| static_fields | 0xB8 | Verify against Frida dump, update if changed |
+| instance | 0x8 | Verify against Frida dump, update if changed |
+| hitPosition | 0x88 | Verify against Frida dump, update if changed |
+
+### convar_admin
+
+| Field | Current Value | Action |
+|---|---|---|
+| convar_admin | 0xFC4C440 | Verify against Frida dump, update if changed |
+| playerIds | 0x20 | Verify against Frida dump, update if changed |
+
+### TOD_Sky_Static
+
+| Field | Current Value | Action |
+|---|---|---|
+| instances | 0x18 | Verify against Frida dump, update if changed |
+
+### TOD_Sky
+
+| Field | Current Value | Action |
+|---|---|---|
+| Instances | 0x10 | Verify against Frida dump, update if changed |
+| CycleParameters | 0x40 | Verify against Frida dump, update if changed |
+| AtmosphereParameters | 0x50 | Verify against Frida dump, update if changed |
+| DayParameters | 0x58 | Verify against Frida dump, update if changed |
+| NightParameters | 0x60 | Verify against Frida dump, update if changed |
+| SunParameters | 0x68 | Verify against Frida dump, update if changed |
+| MoonParameters | 0x70 | Verify against Frida dump, update if changed |
+| StarParameters | 0x78 | Verify against Frida dump, update if changed |
+| Clouds | 0x80 | Verify against Frida dump, update if changed |
+| AmbientParameters | 0x98 | Verify against Frida dump, update if changed |
+| timeSinceAmbientUpdate | 0x23C | Verify against Frida dump, update if changed |
+| timeSinceReflectionUpdate | 0x240 | Verify against Frida dump, update if changed |
+
+### TOD_AmbientParameters
+
+| Field | Current Value | Action |
+|---|---|---|
+| Saturation | 0x14 | Verify against Frida dump, update if changed |
+| UpdateInterval | 0x18 | Verify against Frida dump, update if changed |
+
+### TOD_NightParameters
+
+| Field | Current Value | Action |
+|---|---|---|
+| AmbientMultiplier | 0x5C | Verify against Frida dump, update if changed |
+
+### PlayerInventory
+
+| Field | Current Value | Action |
+|---|---|---|
+| Belt | 0x30 | Verify against Frida dump, update if changed |
+| Wear | 0x58 | Verify against Frida dump, update if changed |
+| Main | 0x28 | Verify against Frida dump, update if changed |
+| loot | 0x48 | Verify against Frida dump, update if changed |
+| BeltFallback1 | 0x58 | Verify against Frida dump, update if changed |
+| BeltFallback2 | 0x28 | Verify against Frida dump, update if changed |
+
+### ItemContainer
+
+| Field | Current Value | Action |
+|---|---|---|
+| ItemList | 0x40 | Verify against Frida dump, update if changed |
+| ItemListFallback | 0x10 | Verify against Frida dump, update if changed |
+
+### Item
+
+| Field | Current Value | Action |
+|---|---|---|
+| ItemDefinition | 0xA0 | Verify against Frida dump, update if changed |
+| ItemId | 0x68 | Verify against Frida dump, update if changed |
+| HeldEntity_1 | 0x58 | Verify against Frida dump, update if changed |
+| Amount | 0x78 | Verify against Frida dump, update if changed |
+| ItemIdFallback1 | 0x38 | Verify against Frida dump, update if changed |
+| ItemIdFallback2 | 0x70 | Verify against Frida dump, update if changed |
+
+### BaseCamera - Native Struct Offsets (MANUAL - Unity 6 limitation)
+
+**IMPORTANT:** In Unity 6, Camera native struct offsets CANNOT be auto-detected.
+The icall disassembly approach was tried with 4 iterations (getters, setters,
+_Injected variants, resolve_icall) - ALL icalls only access managed cached fields,
+NOT the native Camera struct. The native struct is accessed through internal Unity
+engine functions that are not exposed as icalls.
+
+When sha-dumper reports `resolved=1` in `[camera_icall_offsets]`, offsets were
+auto-detected (rare - only works if Unity changes icall implementation).
+When `resolved=0` (expected for Unity 6), you MUST verify camera offsets manually:
+
+**Step 1: Check `[camera_icall_offsets]` in sha-dumper-output.txt**
+  - If resolved=1: offsets are auto-detected, skip to Step 3
+  - If resolved=0: continue to Step 2
+
+**Step 2: Search UnknownCheats for latest Rust camera offsets**
+  - Go to https://www.unknowncheats.me/forum/rust-a/
+  - Search for recent posts (last 30 days) mentioning camera offsets
+  - Look for posts by: fefe4444, v1mper, temopzso, sha-dumper threads
+  - Search terms: 'camera offset', 'viewMatrix', 'fieldOfView', 'BaseCamera'
+  - Cross-reference with the `[camera_icall_debug]` section in sha-dumper output
+    (shows function bytes for manual disassembly if needed)
+  - If UC has no recent posts, use the UC-confirmed values below as fallback
+
+UC-confirmed fallback offsets (build 23824285):
+| Field | Offset | Source |
+|---|---|---|
+| viewMatrix | 0x2FC | fefe4444 #24841 + runtime diagnostic |
+| projectionMatrix | 0x18C | old UC dump (same source as viewMatrix) |
+| field_of_view | 0x170 | v1mper IL2CPP dump + temopzso #24865 |
+| world_position | 0x444 | fefe4444 #24841 |
+| culling_mask | 0x74 | v1mper IL2CPP dump |
+
+**Step 3: Verify at runtime with CAM_CHAIN diagnostic**
+  (See POST-BUILD CAMERA DIAGNOSTIC section below)
+
+Chain offsets (auto-detected from sha-dumper - confirmed correct):
+| static_fields | 0xB8 |
+| wrapper_class | 0x90 |
+| entity | 0x10 |
+
+**Also:** Camera matrix reading MUST be BEFORE the `playerList.empty()` check in
+PositionRefresh. If gated by playerList, camera matrix is never read when no other
+players are on server -> ALL ESP blocked. See cache.cpp PositionRefresh function.
+
+### Static pointers (global `offsets` namespace)
+
+These are critical RVA pointers that must match the current GameAssembly.dll build:
+
+| Pointer | Current RVA | Action |
+|---|---|---|
+| basenetworkable_pointer | 0x0FBE3040 | Verify against Frida/sha-dumper output, update if changed |
+| camera_pointer | 0x0FBD99B0 | Verify against Frida/sha-dumper output, update if changed |
+| Il2cppGetHandle | 0x10077870 | Verify against Frida/sha-dumper output, update if changed |
+| TOD_Sky_TypeInfo | 0x0FC6EF38 | Verify against Frida/sha-dumper output, update if changed |
+| Class_TOD_Sky_Static | 0x0FC6EF38 | Verify against Frida/sha-dumper output, update if changed |
+| EffectNetwork_Pointer | 0xFB605F8 | Verify against Frida/sha-dumper output, update if changed |
+| Class_SingletonComponent_UI_LoadingScreen | 0xFC5C060 | Verify against Frida/sha-dumper output, update if changed |
+| Class_SingletonComponent_MixerSnapshotManager__c | 0xFBD5160 | Verify against Frida/sha-dumper output, update if changed |
+| cam_typeinfo_singleton | 0xE2D5CC8 | Verify against Frida/sha-dumper output, update if changed |
+| cam_typeinfo_camera_c | 0xE2C3EC8 | Verify against Frida/sha-dumper output, update if changed |
+
+================================================================
+SECTION 3.5: FRIDA + IL2CPPINSPECTOR CROSS-REFERENCE
+================================================================
+
+Two independent cross-validation sources:
+  1. Frida (injected runtime dump) — hash-based field matching
+  2. Il2CppInspectorPro (offline metadata dump) — direct field offset extraction
+
+Il2CppInspectorPro reads GameAssembly.dll + global-metadata.dat directly
+(no game injection needed). It gives ALL IL2CPP field offsets, TypeInfo RVAs,
+and method RVAs from the authoritative metadata source.
+
+Il2CppInspectorPro cross-validation results:
+Il2CppInspectorPro Cross-Validation Report
+==================================================
+Total fields checked: 0
+Matched (offset agrees): 0
+Unmatched (offset not found): 0
+Match rate: 0%
+TypeInfo RVAs:
+Validated structs:
+
+--- Frida runtime dump ---
+
+Frida classes available: 20703
+Target classes found: unknown
+
+Cross-Validation Report
+========================
+Frida classes:       20703
+Agreements:          0
+Disagreements:       0
+Fields not in Frida: 124
+
+Patches generated:    0
+Patch file:           E:\github\Rust-cheat\tools\masterupdate\output\frida_patches.txt
+
+All offsets match Frida validation. No changes needed.
+
+All offsets match Frida validation. No changes needed.
+
+If Frida found changes, update offsets.hpp with the NEW values above.
+The frida_field_mapping.json file tracks hash -> field name for future updates.
+
+================================================================
+SECTION 4: HARDCODED OFFSETS INSIDE GAME-LOGIC FUNCTIONS
+================================================================
+
+These functions contain hardcoded offsets that are NOT in the auto-patched namespaces.
+Read each function at the line numbers below and verify every hardcoded offset against
+the Frida dump. Replace ONLY the offset numbers -- DO NOT rewrite the algorithm.
+
+### 4.1 sdk.hpp game-logic functions
+
+  - Get_Transformation  (around line 745)
+  - Get_HeldWeapon  (around line 882)
+  - Get_HeldItem  (around line 958)
+  - Get_Hotbar_list  (around line 1027)
+  - Prediction2  (around line 1223)
+  - recoil_values table  (around line 1076)
+  - bullets table  (around line 1105)
+  - decrypt namespace  (around line 108)
+
+Key hardcoded offsets to verify in sdk.hpp:
+  - Get_Transformation(): +0x10, +0x28, +0x18, +0x90 (SSE transform chain offsets)
+  - Get_HeldWeapon(): children list offsets 0x10, 0x18, 0x20, inventory container offsets
+  - Get_HeldItem(): uses ResolvePlayerInventory() + direct Belt(0x60) + ItemList(0x20)
+  - ResolvePlayerInventory(): inv_raw+0x18 -> decrypt_inventory_pointer -> Il2cppGetHandle (primary),
+    component walker GetPlayerInventory() (fallback). Do NOT change this pattern.
+  - Get_Hotbar_list(): uses ResolvePlayerInventory() + direct Belt(0x60) + ItemList(0x20)
+  - Get_ObjectPosition(): now uses offsets::BaseEntity::posChain0-3, posFinal (verify in Section 3)
+  - decrypt functions (networkable_key, networkable_key2): use hardcoded 0x18 for GCHandle read — verify matches offsets::BaseNetworkable::encrypted_handle
+  - List<T> layout: list+0x10 (array ptr), list+0x18 (size), array+0x20+i*8 (items) — from system_list namespace
+  - recoil_values / bullets tables: item shortname strings (not offsets, but verify item IDs)
+
+### 4.2 Hacks/Misc/misc.cpp functions
+
+  - ResolveCameraComponent  (around line 27)
+  - TOD_Sky resolver  (around line 114)
+  - FOV changer  (around line 197)
+  - recoil brute force  (around line 483)
+
+Key hardcoded offsets to verify in misc.cpp:
+  - ResolveCameraComponent(): camera chain offsets (static_fields=0xB8, wrapper_class, entity=0x10)
+  - FovChanger(): ConVar_Graphics static_fields, fovWrite offset
+  - ResolveTodSkyPtr(): TOD_Sky_Static::instances=0x98, list traversal +0x10, +0x20
+  - Recoil brute force: children=0x28, items=0x10, count=0x18, child+0x20+i*8
+    RecoilProperties offsets (RecoilYawMin=0x18, etc.), BaseProjectile::recoil
+  - DebugCam: world_position, PlayerInput::yaw, ModelState::flags, BaseMovement2::target_movement
+
+### 4.3 Hacks/Aimbot/aimbot.cpp functions
+
+  - bone / target selection  (around line 81)
+  - bodyAngles write  (around line 478)
+
+Key hardcoded offsets to verify in aimbot.cpp:
+  - GetBestBone(): bone index mapping (53=head, 52=neck, 20=spine1, 14=pelvis) — verify against dump.cs bone hierarchy
+  - boneToCache[66] arrays (4 duplicates at lines ~114, ~206, ~269, ~504): bone-to-cache-slot mapping — verify all 4 match
+  - bodyAngles write target: PlayerInput+offset (verify PlayerInput namespace)
+  - Silent aim: PlayerEyes::bodyRotation offset
+  - Height offsets for crouch compensation (1.65f, 1.50f, 1.20f, 0.50f)
+
+### 4.4 Hacks/Cache/cache.cpp functions
+
+  - NPC keyword block  (around line 467)
+  - animal keyword block  (around line 495)
+  - player prefab check  (around line 485)
+  - world prefab block  (around line 368)
+  - entity classification loop  (around line 371)
+
+Key hardcoded offsets to verify in cache.cpp:
+  - BN chain: static_fields=0xB8, wrapper_class, parent_static_fields=0x10, entity=0x18
+  - Entity array: +0x18 (size), +0x10 (array ptr), +0x20+i*8 (entities)
+  - Prefab name read: object+0x10, objectClass+0x20, +0x50 (namePtr)
+  - World prefab position: now uses Get_ObjectPosition() (same as players/NPCs — verify BaseEntity::posChain* in Section 3)
+  - Diagnostic camera scan: uses offsets::camera_pointer + cam_typeinfo_singleton/cam_typeinfo_camera_c + BaseCamera::* constants
+  - Player inventory wear: uses ResolvePlayerInventory() + PlayerInventory::Wear + ItemList(0x20)
+  - Crouch flag: uses offsets::ModelState::Ducked (verify in Section 3)
+
+### 4.5 CRITICAL CODE CONSTRAINTS — DO NOT BREAK THESE
+
+These are runtime patterns that MUST be preserved when fixing offsets after an update.
+Breaking any of these will cause ESP to partially or fully fail.
+
+1. **Camera matrix BEFORE playerList check** (cache.cpp PositionRefresh):
+   The camera chain (7 IOCTLs) MUST be read BEFORE the `playerList.empty()` check.
+   If gated by playerList, camera matrix is never read when no other players are on
+   server -> ALL ESP blocked (NPC, animal, world, everything).
+
+2. **Animal lifestate read as int** (cache.cpp animal classification):
+   `BaseCombatEntity::lifestate` is an int (0=Alive, 1=Dead, 2=Sleeping).
+   Animal classification must read lifestate as `int` and only skip if `== 1`.
+   Do NOT use `IsDead()` (reads bool, treats sleeping bears as dead).
+   Code: `int lifestate = read<int>(...); bool animalDead = (lifestate == 1);`
+
+3. **Animal/NPC position always updated in cache merge** (cache.cpp ~line 1100):
+   The merge from tempEspCache to g_EspCache must ALWAYS update headPos:
+   `it->second.headPos = v.headPos;`
+   Do NOT use `if (it->second.headPos.Empty())` — this freezes animal/NPC positions
+   after the first cache cycle (no fast position thread for animals/NPCs).
+
+================================================================
+SECTION 5: PREFAB DRIFT DISCOVERY
+================================================================
+
+Prefab name drift is the #1 cause of broken ESP after updates.
+The cache.cpp keyword lists classify entities by prefab name substring matching.
+
+Current NPC keywords (cache.cpp around line 467):
+  scientistnpc, scarecrow, scientist, tunneldweller, underwaterdweller,
+  murderer, bandit_guard, peacekeeper, heavyscientist, npc/bandit, npc/scientist,
+  npc/murderer, npc/scarecrow, bandit/missionprovider, npc/peacekeeper,
+  npc/heavyscientist, /tunneldweller, /underwaterdweller
+
+Current animal keywords (cache.cpp around line 495):
+  boar, chicken, cow, deer, pig, rabbit, goat, sheep, horse, wolf, bear,
+  moose, elk, buffalo, bison, goose, duck, turkey, raccoon, fox, coyote
+
+Current world prefab keywords (cache.cpp around line 368):
+  hemp-collectable, small_stash_deployed, metal-ore, stone-ore, sulfur-ore,
+  player_corpse, autoturret_deployed, guntrap, minicopter.entity,
+  item_drop_backpack, bradleyapc, stone-collectable, metal-collectable,
+  sulfur-collectable, wood-collectable, sam_site, beartrap, landmine,
+  flameturret, ballista, catapult, locker.deployed, sleepingbag, bed_deployed,
+  cupboard.tool, vending, workbench, storage_barrel, box.wooden.large,
+  coffinstorage, ladder.wooden, generator, rechargable.battery,
+  loot_barrel_1, loot_barrel_2, oil_barrel, crate_normal, crate_normal_2,
+  crate_tools, crate_elite, codelockedhackablecrate, crate_medical, crate_food,
+  rowboat, rhib, kayak, tugboat, submarine, scraptransporthelicopter,
+  attackhelicopter, hotairballoon, motorbike, trike, pedalbike, snowmobile,
+  shark, cargo
+
+### Discovery workflow:
+  1. Logging is controlled by g_UpdateLoggingEnabled (set in Logger.hpp).
+     If enabled, cache.cpp emits 'CACHE UNMATCHED' lines for unclassified prefabs.
+     Check the flavor log: C:\cheat_debug.log (or _bomza)
+  2. Search for 'CACHE UNMATCHED' lines and extract the prefab name.
+  3. Add the new prefab keyword to the appropriate keyword list in cache.cpp.
+  4. If it is a new entity type, also add a toggle in offsets.hpp WORLD/NPC_ESP/ANIMAL_ESP namespace.
+
+================================================================
+SECTION 6: FEATURE-PLUMBING CHECKLIST
+================================================================
+
+If you add a NEW feature toggle in offsets.hpp, you MUST also:
+  1. Add SaveBool/SaveFloat/SaveColor in Config.hpp::Save()
+  2. Add the matching LOAD_* in the Config::Load callback
+  3. Add a menu control in Render/render.hpp
+  4. Add a TR() string in Translation.hpp if user-facing
+  5. Add a hotkey binding in Hotkeys.hpp if applicable
+
+================================================================
+SECTION 7: ARCHITECTURE GUARDRAILS -- DO NOT VIOLATE
+================================================================
+
+1. NEVER generate complete files. Only output targeted patches.
+
+2. NEVER rewrite recoil, aimbot, TOD, camera, or BN-chain algorithms.
+   These use brute-force and fallback strategies that are proven to work.
+   You MAY update hardcoded offset numbers inside them, but DO NOT change the logic.
+
+3. ALWAYS use read<T>(address) / write<T>(address) for all game memory access.
+   NEVER use direct memory dereferences (*, &, -> on game pointers).
+
+4. NEVER swap nk_ and nk2_ prefixes.
+   nk_ = networkable_key (client_entities), nk2_ = networkable_key2 (entity_list).
+
+5. PlayerInventory IS wired through decrypt in ResolvePlayerInventory().
+   The correct chain is: read(BasePlayer+PlayerInventory) -> +0x18 -> decrypt_inventory_pointer -> Il2cppGetHandle.
+   This is the SAME pattern as networkable_key/networkable_key2 in the BN chain.
+   decrypt_eyes exists but PlayerEyes uses component walker (GetComponentByName) — leave as-is.
+   Do NOT change ResolvePlayerInventory() to direct decrypt or raw pointer — it will break held item.
+
+6. DO NOT change BrightNight (TOD_Sky_Static::instances at offset 0x98).
+   This is verified by sha-dumper. If the offset changes, verify with sha-dumper first.
+
+7. The `resolve_possible_handle` function MUST be preserved in the decrypt namespace.
+   If replacing the decrypt namespace, include this function unchanged.
+
+8. SaveDecryptConfig in OffsetManager.hpp is a NO-OP (disabled for anti-cheat stealth).
+   Do NOT insert W(...) lambda calls. The existing empty body is correct.
+
+9. Decrypt constants are loaded at runtime from C:\rust_decrypts.dat via OffsetManager.
+   The .dat file keys use the format {prefix}_{op_type} (e.g., nk_rol, cla_sub).
+   Generated decrypt functions use OffsetManager::DecryptCfg.* references.
+   Do NOT hardcode decrypt constants in the C++ code.
+
+10. AGENTS.md is the authoritative reference. Read it before making changes.
+    Morphine/sha-dumper/Frida are the source of truth for offset VALUES,
+    but AGENTS.md describes the architecture and what NOT to change.
+
+11. If the Morphine build number differs from the current build,
+    be extra cautious. Verify critical offsets (PlayerEyes, PlayerInput, ClActiveItem,
+    BaseMovement, PlayerFlags) against the Frida dump before committing changes.
+
+12. C:\rust_decrypts.dat is LOCKED while Rust is running. Close the game before
+    overwriting it. apply_patches.py will warn 'file is likely locked' if it is.
+
+13. Prefer small, targeted edits over rewriting whole files.
+    Match existing indentation (tabs in offsets.hpp, spaces in sdk.hpp).
+
+14. Preserve ResolvePlayerInventory() pattern in sdk.hpp.
+    It resolves the inventory pointer via: inv_raw+0x18 -> decrypt_inventory_pointer -> Il2cppGetHandle.
+    This is the SAME GCHandle pattern as networkable_key/networkable_key2 in the BN chain.
+    Get_HeldItem(), Get_Hotbar_list(), and cache.cpp wear read all use ResolvePlayerInventory().
+    Do NOT replace it with direct decrypt or raw pointer — it will break held item resolution.
+
+================================================================
+SECTION 8: BUILD & VERIFICATION
+================================================================
+
+### Build
+  & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe" "E:\github\Rust-cheat\Rust Prv Ext.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
+  Target: E:\github\Rust-cheat / x64 / Release / Rust Prv Ext.dll
+  After each batch of edits, run the build and use compiler errors as feedback.
+
+### POST-BUILD CAMERA DIAGNOSTIC (CRITICAL - do this FIRST)
+  Camera native struct offsets CANNOT be auto-detected in Unity 6 (see BaseCamera section).
+  If you searched UnknownCheats and updated camera offsets in offsets.hpp, you MUST verify them.
+  If you did NOT update camera offsets (resolved=0, using UC-confirmed fallback), still verify.
+  The CAM_CHAIN diagnostic confirms correct camera operation at runtime.
+
+  Steps:
+  1. Build the DEBUG flavor: TargetName='Rust Prv Ext_debug' (logging auto-enabled).
+  2. Inject Rust Prv Ext_debug.dll into the game.
+  3. Open C:\cheat_debug.log and search for 'CAM_CHAIN'.
+  4. Expected success line:
+     CAM_CHAIN: OK ncam=0x... fov=65.0 v._11=0.XXXX p._11=1.0000
+     - fov should be 40-90 (player FOV)
+     - v._11 should be NON-ZERO (typically 0.5-0.9)
+     - p._11 should be ~1.0
+  5. If you see 'CAM_CHAIN: FAIL' or any of these are zero:
+     - viewMatrix=0 (v._11=0): Camera viewMatrix offset is WRONG.
+       Try 0x2FC (UC source). If still zero, try 0x300, 0x2F8, 0x304.
+     - fov=0 or fov FAILED: fieldOfView offset is WRONG.
+       Try 0x170 (UC source). If still zero, try 0x16C, 0x174.
+     - worldPos=0: worldPosition offset is WRONG.
+       Try 0x444 (UC source). If still zero, try 0x440, 0x448.
+     - ncam=0 (native_cam): Camera chain failed at static_fields/wrapper_class/entity.
+       Check Section 3.5 — chain offsets should match sha-dumper.
+  6. Camera chain MUST be read BEFORE the playerList.empty() check in PositionRefresh
+     (cache.cpp ~line 1158). If camera is inside the playerList gate, ALL ESP breaks
+     when no other players are on the server.
+
+### In-game verification (do not skip)
+  1. Build MUST complete with zero errors.
+  2. Inject the DLL with the project loader.
+  3. If logging is enabled, check the flavor log:
+     - C:\cheat_debug.log         (BeaZt)
+     - C:\cheat_debug_bomza.log   (Bomza)
+  4. Verify the BN chain succeeds: look for 'BN chain SUCCESS!' + non-zero entity size.
+  5. Verify ESP renders OTHER PLAYERS, NPCs, and WORLD PREFABS -- not just LocalPlayer.
+     (LocalPlayer-only ESP means the BN chain or decrypt is wrong.)
+  6. If ESP classification is wrong, review the log for 'CACHE UNMATCHED' prefab names
+     and add them to cache.cpp (Section 5).
+  7. Test aimbot: enable Memory aimbot, verify it locks onto targets and writes bodyAngles.
+  8. Test recoil: enable RecoilEnabled, verify weapon recoil is reduced.
+  9. Test FOV changer: enable FovChanger, verify camera FOV changes.
+  10. Test BrightNight: enable, verify ambient light increases at night.
+  11. VisCheck: mesh data NOT available — will use PlayerModel._visible fallback.
+      To enable raycast VisCheck, run getnewoffsets.bat with Rust in-game.
+
+================================================================
+SECTION 9: EXECUTION ORDER
+================================================================
+
+1. Read AGENTS.md (project root) first.
+2. Apply the automatic patches from Section 2 (offsets.hpp, sdk.hpp, OffsetManager.hpp, rust_decrypts.dat).
+3. Verify the manual offsets in Section 3 against the Frida dump.
+4. Check the hardcoded offsets in Section 4 against the Frida dump.
+5. Handle any prefab drift from Section 5.
+6. Build and verify per Section 8 (start with POST-BUILD CAMERA DIAGNOSTIC).
+7. If mesh data exists (Section 2.6), package rust_mesh.tri with the cheat DLL.
+8. Report: what you changed, what still needs testing, and any offsets you could not verify.
+
+=== END OF PROMPT ===

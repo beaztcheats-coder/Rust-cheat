@@ -1,19 +1,20 @@
 @echo off
 setlocal
-title Rust Cheat Auto-Update Scanner
+title Rust Cheat Update Scanner
 cd /d "%~dp0"
 
 if not exist "output" mkdir output
 if exist "output\master.json" del "output\master.json"
-call :log "[OK] Cleared stale master.json (prevents wrong nk2 values from previous runs)"
-set "LOG=output\auto_update.log"
-set "STEPLOG=%TEMP%\auto_update_step.log"
+set "LOG=output\getnewoffsets.log"
+set "STEPLOG=%TEMP%\getnewoffsets_step.log"
 if exist "%LOG%" del "%LOG%"
+call :log "[OK] Cleared stale master.json (prevents wrong values from previous runs)"
 
 call :log "================================================================"
-call :log "  RUST CHEAT AUTO-UPDATE SCANNER"
-call :log "  Scans sha-dumper + capstone + Frida + current code"
-call :log "  Morphine is OPTIONAL (cross-validation only)"
+call :log "  RUST CHEAT UPDATE SCANNER"
+call :log "  Primary: morphine-dumper (injected DLL, runtime-verified)"
+call :log "  Decrypt: disasm_decrypts.py (capstone, offline, single source of truth)"
+call :log "  Optional: sha-dumper, Frida, Il2CppInspector (cross-validation)"
 call :log "  Outputs to: output\"
 call :log "================================================================"
 call :log "Working dir: %CD%"
@@ -40,127 +41,60 @@ exit /b 1
 :found_python
 call :log "[OK] Python: %PYTHON_CMD%"
 
-REM === Ask user about Morphine (OPTIONAL - cross-validation only) ===
-echo.
-echo ================================================================
-echo   MORPHINE OFFSET SOURCE (OPTIONAL)
-echo ================================================================
-echo   The pipeline now works 100%% without Morphine using:
-echo     - sha-dumper (field offsets, static TypeInfos, camera)
-echo     - disasm_decrypts.py (capstone decrypt algorithms, offline)
-echo     - Frida (cross-validation, needs game running)
-echo.
-echo   [1] Skip Morphine - use independent sources (RECOMMENDED)
-echo   [2] Fetch Morphine for cross-validation (optional)
-echo.
-echo   Choose [1] for fastest update. Choose [2] if you want to
-echo   cross-validate against Morphine's dump.
-echo ================================================================
-echo.
-choice /C 12 /N /T 10 /D 1 /M "Select option [1 or 2] (default 1 in 10s): "
-if errorlevel 2 (
-    call :log "[USER] Morphine fetch requested (cross-validation)"
-    set MORPHINE_OK=0
-    goto step1
-)
-call :log "[USER] Morphine skipped - using independent sources (sha-dumper + capstone)"
-set MORPHINE_OK=0
-if not exist "output" mkdir output
-%PYTHON_CMD% -c "import json; json.dump({'offsets':{},'structs':{},'klass_rvas':{},'namespaces':{},'decrypt_functions':{},'decrypts':{},'materials':{}}, open('output/master.json','w'), indent=2)"
-call :log "[OK] Empty master.json created for downstream scripts"
-goto step3
-
-REM === Step 1: Fetch Morphine offsets (optional, cross-validation) ===
-:step1
-call :log "[1/14] Fetching Morphine offsets (cross-validation)..."
-%PYTHON_CMD% fetch_morphine.py > "%STEPLOG%" 2>&1
-set "RC=%errorlevel%"
-if exist "%STEPLOG%" type "%STEPLOG%"
-if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-set MORPHINE_OK=1
-
-if "%RC%"=="0" (
-    call :log "[OK] Morphine fetch succeeded."
-    goto step2
-)
-
-if "%RC%"=="2" (
-    call :log "[OFFLINE] Morphine appears to be OFFLINE (all URLs unreachable)."
-    echo.
-    echo ================================================================
-    echo   MORPHINE APPEARS TO BE OFFLINE
-    echo   All Morphine URLs are unreachable.
-    echo.
-    echo   The sha-dumper can provide ALL offsets, decrypts, and mesh data.
-    echo   Known limitation: some decrypt constants may be incorrect
-    echo   for duplicate cipher sections ^(cl_active_item, eyes, inventory^).
-    echo.
-    echo   You can verify these manually after the update.
-    echo ================================================================
-    echo.
-    choice /C YN /T 15 /D Y /M "Skip Morphine and continue with sha-dumper only"
-    if errorlevel 2 goto abort_morphine
-    call :log "[USER] Skipping Morphine - using sha-dumper only"
-    set MORPHINE_OK=0
-    goto step3
-)
-
-REM RC=1 - partial failure
-if not "%RC%"=="0" (
-    set MORPHINE_OK=0
-    call :log "[WARN] Morphine fetch partially failed (RC=%RC%) - will use sha-dumper/Frida as fallback."
-    call :log "       If Rust is running, sha-dumper + Frida can provide ALL offsets + decrypts."
-)
-
-:step2
-REM === Step 2: Parse Morphine into master.json ===
-if not "%MORPHINE_OK%"=="1" call :log "[2/11] Skipping Morphine parse (no data)"
-if not "%MORPHINE_OK%"=="1" goto step3
-call :log "[2/12] Parsing Morphine offsets and decrypts..."
-%PYTHON_CMD% parse_all.py > "%STEPLOG%" 2>&1
-set "RC=%errorlevel%"
-if exist "%STEPLOG%" type "%STEPLOG%"
-if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if "%RC%"=="0" goto step3
-call :log "[WARN] Parse failed (RC=%RC%) - will rely on sha-dumper/Frida."
-set MORPHINE_OK=0
-:step3
-REM === Enable logging marker for the injected DLL (after Morphine prompt) ===
+REM === Enable logging marker for the injected DLL ===
 echo enabled > "C:\rust_debug_enabled.txt"
 call :log "[OK] Debug logging marker created (C:\rust_debug_enabled.txt)"
 
-REM === Step 3: Run Il2CppInspectorPro (offline, no game needed) ===
-call :log "[3/12] Running Il2CppInspectorPro (offline IL2CPP metadata dump)..."
-set "DOTNET_ROOT=C:\Users\ludwi\AppData\Local\Temp\opencode\dotnet10"
-set "DOTNET_MULTILEVEL_LOOKUP=0"
-set "IL2CPP_OUT=output\il2cppinspector"
-if not exist "%IL2CPP_OUT%" mkdir "%IL2CPP_OUT%"
-set "IL2CPP_EXE=E:\github\Il2CppInspectorPro-master\Il2CppInspector.CLI\bin\Release\net10.0\win-x64\Il2CppInspector.exe"
-set "IL2CPP_GA=C:\Program Files (x86)\Steam\steamapps\common\Rust\GameAssembly.dll"
-set "IL2CPP_META=C:\Program Files (x86)\Steam\steamapps\common\Rust\RustClient_Data\il2cpp_data\Metadata\global-metadata.dat"
-if not exist "%IL2CPP_GA%" (call :log "[WARN] GameAssembly.dll not found at: %IL2CPP_GA% - skipping Il2CppInspector" & goto :skip_il2cpp)
-"%IL2CPP_EXE%" -i "%IL2CPP_GA%" -m "%IL2CPP_META%" --select-outputs -o "%IL2CPP_OUT%\metadata.json" -h "%IL2CPP_OUT%\cpp" > "%STEPLOG%" 2>&1
+REM === Step 1: Build + inject morphine-dumper (PRIMARY SOURCE) ===
+call :log "[1/12] Building and injecting morphine-dumper (primary source)..."
+echo.
+echo ================================================================
+echo   STEP 1: MORPHINE-DUMPER INJECTION
+echo   This is the PRIMARY source for offsets, decrypts, and encrypts.
+echo   Requires: Rust running + joined a server.
+echo ================================================================
+echo.
+%PYTHON_CMD% morphine_dumper_inject.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if not "%RC%"=="0" call :log "[WARN] Il2CppInspector had issues (RC=%RC%) - continuing with sha-dumper/Frida."
-if exist "%IL2CPP_OUT%\metadata.json" call :log "[OK] Il2CppInspector metadata.json generated"
-if exist "%IL2CPP_OUT%\cpp\appdata\il2cpp-types-ptr.h" call :log "[OK] Il2CppInspector il2cpp-types-ptr.h generated"
-
-REM Step 3b: Run DumpOffsets (queries Camera/BasePlayer/etc via Il2CppInspector.Common library API)
-set "DUMPOFFSETS_EXE=E:\github\Rust-cheat\tools\masterupdate\il2cpp_dumper\bin\Release\net10.0\DumpOffsets.exe"
-set "DUMPOFFSETS_DIR=E:\github\Rust-cheat\tools\masterupdate\il2cpp_dumper\bin\Release\net10.0"
-if not exist "%DUMPOFFSETS_DIR%\plugins" mkdir "%DUMPOFFSETS_DIR%\plugins"
-if exist "%DUMPOFFSETS_EXE%" (
-    call :log "[3b/12] Running DumpOffsets (field offset extraction)..."
-    "%DUMPOFFSETS_EXE%" > "%STEPLOG%" 2>&1
-    set "RC=%errorlevel%"
-    if exist "%STEPLOG%" type "%STEPLOG%"
-    if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-    if exist "%IL2CPP_OUT%\offsets.json" call :log "[OK] DumpOffsets offsets.json generated"
-    if not "%RC%"=="0" call :log "[WARN] DumpOffsets had issues (RC=%RC%) - continuing."
+if not "%RC%"=="0" (
+    call :log "[WARN] morphine-dumper step had issues (RC=%RC%) - pipeline will continue with fallbacks."
+    call :log "       disasm_decrypts.py can use standalone cipher scan (no dumper needed)."
 )
-:skip_il2cpp
+
+REM === Step 2: Parse morphine-dumper output into master.json ===
+call :log "[2/12] Parsing morphine-dumper output into master.json..."
+if exist "output\morphine-dump.h" (
+    %PYTHON_CMD% parse_morphine_dump.py --input "output\morphine-dump.h" > "%STEPLOG%" 2>&1
+    set "RC=%errorlevel%"
+) else if exist "output\morphine-dump.json" (
+    %PYTHON_CMD% parse_morphine_dump.py --input "output\morphine-dump.json" > "%STEPLOG%" 2>&1
+    set "RC=%errorlevel%"
+) else (
+    call :log "[WARN] No morphine-dumper output found - creating empty master.json"
+    %PYTHON_CMD% -c "import json; json.dump({'offsets':{'static_pointers':{},'structs':{}},'klass_rvas':{},'namespaces':{},'decrypt_functions':{},'encrypt_functions':{}}, open('output/master.json','w'), indent=2)"
+    set "RC=0"
+)
+if exist "%STEPLOG%" type "%STEPLOG%"
+if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
+if "%RC%"=="0" (
+    call :log "[OK] master.json generated from morphine-dumper output"
+) else (
+    call :log "[WARN] Parse failed (RC=%RC%) - continuing with empty master.json"
+)
+
+REM === Step 3: Run capstone decrypt disassembler (THE AUTHORITY for decrypts) ===
+call :log "[3/12] Running capstone decrypt disassembler (offline, single source of truth)..."
+call :log "       Reads fn_rvas from master.json (morphine-dumper) or sha-dumper output"
+call :log "       Falls back to standalone cipher scan if no fn_rvas available"
+call :log "       Auto-generates encrypt functions (inverse of decrypt)"
+%PYTHON_CMD% disasm_decrypts.py > "%STEPLOG%" 2>&1
+set "RC=%errorlevel%"
+if exist "%STEPLOG%" type "%STEPLOG%"
+if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
+if exist "output\decrypt_algorithms.json" call :log "[OK] Decrypt + encrypt algorithms extracted (output\decrypt_algorithms.json)"
+if not "%RC%"=="0" call :log "[WARN] Capstone decrypt scan had issues (RC=%RC%) - fallback decrypts will be used."
 
 REM === Step 3.5: Signature-based static pointer scan (100% OFFLINE, no game needed) ===
 call :log "[3.5/12] Running signature-based static pointer scanner (offline)..."
@@ -168,66 +102,59 @@ call :log "[3.5/12] Running signature-based static pointer scanner (offline)..."
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if not "%RC%"=="0" call :log "[WARN] Sig scanner had issues (RC=%RC%) - sha-dumper will provide static pointers."
+if not "%RC%"=="0" call :log "[WARN] Sig scanner had issues (RC=%RC%) - morphine-dumper static pointers will be used."
 
-:step4
-REM === Step 4: Build + inject sha-dumper ===
-call :log "[4/12] Building and injecting sha-dumper..."
+REM === Step 4: Optional sha-dumper (cross-validation) ===
+call :log "[4/12] Building and injecting sha-dumper (optional cross-validation)..."
 %PYTHON_CMD% sha_dumper_inject.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if not "%RC%"=="0" call :log "[WARN] sha-dumper step had issues (RC=%RC%) - continuing with Morphine/Frida data only."
+if not "%RC%"=="0" call :log "[WARN] sha-dumper step had issues (RC=%RC%) - morphine-dumper data is sufficient."
 
 REM === Check for mesh dump output ===
 call :check_mesh
 
-REM === Step 5: Parse sha-dumper output ===
-call :log "[5/12] Parsing sha-dumper output..."
+REM === Step 5: Parse sha-dumper output (if available) ===
+call :log "[5/12] Parsing sha-dumper output (if available)..."
+if not exist "output\sha-dumper-output.txt" (
+    call :log "[INFO] No sha-dumper output - skipping (morphine-dumper is primary source)"
+    goto step5_done
+)
 %PYTHON_CMD% parse_sha_dumper.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if "%RC%"=="0" goto step5_done
-call :log "[WARN] sha-dumper parse failed (RC=%RC%) - continuing with Morphine data only."
+if not "%RC%"=="0" call :log "[WARN] sha-dumper parse failed (RC=%RC%) - continuing with morphine-dumper data."
 :step5_done
 
-REM === Step 5.5: Run capstone decrypt disassembler (100% OFFLINE, no game needed) ===
-call :log "[5.5/14] Running capstone decrypt disassembler (offline)..."
-%PYTHON_CMD% disasm_decrypts.py > "%STEPLOG%" 2>&1
-set "RC=%errorlevel%"
-if exist "%STEPLOG%" type "%STEPLOG%"
-if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if exist "output\decrypt_algorithms.json" call :log "[OK] Capstone decrypt algorithms extracted and merged into master.json"
-if not "%RC%"=="0" call :log "[WARN] Capstone decrypt scan had issues (RC=%RC%) - sha-dumper/Morphine decrypts still available."
-
-REM === Step 5.6: Parse Il2CppInspector output ===
-call :log "[5.6/14] Parsing Il2CppInspector output..."
+REM === Step 5.6: Parse Il2CppInspector output (if available) ===
+call :log "[5.6/12] Parsing Il2CppInspector output (if available)..."
 %PYTHON_CMD% parse_il2cppinspector.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if not "%RC%"=="0" call :log "[WARN] Il2CppInspector parse had issues (RC=%RC%) - continuing."
 
-REM === Step 6: Run Frida validation (100% accurate runtime dump) ===
-call :log "[6/13] Running Frida runtime dumper..."
+REM === Step 6: Run Frida validation (optional, 100% accurate runtime dump) ===
+call :log "[6/12] Running Frida runtime dumper (optional cross-validation)..."
 %PYTHON_CMD% run_frida_validation.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if not "%RC%"=="0" call :log "[WARN] Frida dump had issues (RC=%RC%) - sha-dumper/Morphine data still available."
+if not "%RC%"=="0" call :log "[WARN] Frida dump had issues (RC=%RC%) - morphine-dumper data still available."
 
 REM === Step 6b: Run Frida decrypt scanner (extract decrypt algorithms from game memory) ===
-call :log "[6b/13] Running Frida decrypt algorithm scanner..."
+call :log "[6b/12] Running Frida decrypt algorithm scanner..."
 %PYTHON_CMD% frida_decrypt_scan.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if exist "output\frida_decrypt_algorithms.json" call :log "[OK] Decrypt algorithms extracted to frida_decrypt_algorithms.json"
-if not "%RC%"=="0" call :log "[WARN] Decrypt scan had issues (RC=%RC%) - sha-dumper/Morphine decrypts still available."
+if exist "output\frida_decrypt_algorithms.json" call :log "[OK] Frida decrypt algorithms extracted"
+if not "%RC%"=="0" call :log "[WARN] Frida decrypt scan had issues (RC=%RC%) - capstone decrypts still available."
 
 REM === Step 6c: Generate offset patches from Frida data (100% accurate field offsets) ===
-call :log "[6c/13] Generating Frida offset patches..."
+call :log "[6c/12] Generating Frida offset patches..."
 %PYTHON_CMD% apply_frida_offsets.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
@@ -236,14 +163,14 @@ if exist "output\frida_offset_patches.txt" call :log "[OK] Frida offset patches 
 if not "%RC%"=="0" call :log "[WARN] Frida offset patch generation had issues (RC=%RC%)."
 
 REM === Step 6d: Apply hash mapping (Morphine-independent field resolution) ===
-call :log "[6d/13] Applying Frida hash mapping..."
+call :log "[6d/12] Applying Frida hash mapping..."
 if not exist "output\field_hash_mapping.json" (
-    call :log "[INFO] No hash mapping yet — building from current offsets.hpp + Frida dump..."
+    call :log "[INFO] No hash mapping yet -- building from current offsets.hpp + Frida dump..."
     %PYTHON_CMD% frida_hash_mapper.py --build > "%STEPLOG%" 2>&1
     if exist "%STEPLOG%" type "%STEPLOG%"
     if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 ) else (
-    call :log "[OK] Hash mapping exists — applying to generate patches..."
+    call :log "[OK] Hash mapping exists -- applying to generate patches..."
     %PYTHON_CMD% frida_hash_mapper.py --apply > "%STEPLOG%" 2>&1
     if exist "%STEPLOG%" type "%STEPLOG%"
     if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
@@ -251,10 +178,10 @@ if not exist "output\field_hash_mapping.json" (
 if exist "output\field_hash_mapping.json" call :log "[OK] Hash mapping active"
 
 REM === Step 7: Compare and generate patches ===
-call :log "[7/13] Comparing offsets and generating patches..."
+call :log "[7/12] Comparing offsets and generating patches..."
 if not exist "output\master.json" (
-    call :log "[ERROR] master.json not found - Morphine and sha-dumper both failed. Cannot generate patches."
-    call :log "       Super prompt will still be generated with available data (Frida dump)."
+    call :log "[ERROR] master.json not found - all dumpers failed. Cannot generate patches."
+    call :log "       Super prompt will still be generated with available data."
     goto step10
 )
 for %%A in ("output\master.json") do set "MJ_SIZE=%%~zA"
@@ -270,7 +197,7 @@ if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if not "%RC%"=="0" call :log "[WARN] Compare had issues (RC=%RC%) - continuing anyway."
 
 REM === Step 7.5: Generate verification report ===
-call :log "[7.5/14] Generating verification report..."
+call :log "[7.5/12] Generating verification report..."
 %PYTHON_CMD% generate_verification_report.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
@@ -278,8 +205,8 @@ if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if exist "output\verification_report.txt" call :log "[OK] Verification report generated (output\verification_report.txt)"
 if not "%RC%"=="0" call :log "[WARN] Verification report had issues (RC=%RC%)."
 
-REM === Step 7.6: Generate consolidated offsets dump (Morphine-style) ===
-call :log "[7.6/14] Generating consolidated offsets dump..."
+REM === Step 7.6: Generate consolidated offsets dump ===
+call :log "[7.6/12] Generating consolidated offsets dump..."
 %PYTHON_CMD% generate_offsets_dump.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
@@ -287,13 +214,22 @@ if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
 if exist "output\offsets_dump.hpp" call :log "[OK] Consolidated offsets dump generated (output\offsets_dump.hpp)"
 if not "%RC%"=="0" call :log "[WARN] Offsets dump generation had issues (RC=%RC%)."
 
-REM === Step 8: Cross-validate offsets (Frida/il2cpp-dumper override Morphine) ===
+REM === Step 8: Cross-validate offsets (Frida/il2cpp-dumper override morphine-dumper) ===
 call :log "[8/12] Cross-validating offsets against Frida/Il2CppInspector..."
 %PYTHON_CMD% cross_validate_offsets.py > "%STEPLOG%" 2>&1
 set "RC=%errorlevel%"
 if exist "%STEPLOG%" type "%STEPLOG%"
 if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
-if not "%RC%"=="0" call :log "[WARN] Cross-validation had issues (RC=%RC%) - Morphine offsets used as-is."
+if not "%RC%"=="0" call :log "[WARN] Cross-validation had issues (RC=%RC%) - morphine-dumper offsets used as-is."
+
+REM === Step 8.5: Run end-to-end pipeline verification ===
+call :log "[8.5/12] Running end-to-end pipeline verification..."
+%PYTHON_CMD% verify_pipeline.py > "%STEPLOG%" 2>&1
+set "RC=%errorlevel%"
+if exist "%STEPLOG%" type "%STEPLOG%"
+if exist "%STEPLOG%" type "%STEPLOG%" >> "%LOG%"
+if exist "output\pipeline_verification.txt" call :log "[OK] Pipeline verification report generated (output\pipeline_verification.txt)"
+if not "%RC%"=="0" call :log "[WARN] Pipeline verification had issues (RC=%RC%)."
 
 REM === Step 9: Analyze GCHandle disassembly ===
 call :log "[9/12] Analyzing GCHandle resolver (analyze_handle.py)..."
@@ -333,8 +269,9 @@ if exist "output\summary.txt" type "output\summary.txt" >> "%LOG%"
 echo.
 echo Next steps:
 echo   1. Review: output\diff_report.txt
-echo   2. Review: output\summary.txt
-echo   3. Either:
+echo   2. Review: output\pipeline_verification.txt
+echo   3. Review: output\summary.txt
+echo   4. Either:
 echo      a. Run update_now.bat to auto-apply + build
 echo      b. Paste output\super_prompt.txt into opencode for full feature restore
 echo.
@@ -342,12 +279,6 @@ echo Full log: %CD%\%LOG%
 echo.
 pause
 exit /b 0
-
-:abort_morphine
-call :log "[USER] User chose to abort - Morphine required."
-echo Aborting.
-pause
-exit /b 1
 
 :check_mesh
 set "MESH_LOG=%USERPROFILE%\Desktop\rust_mesh_dump.log"
@@ -379,17 +310,17 @@ if not exist "output\rust_decrypts.dat" set /a MISSING+=1
 if not exist "output\super_prompt.txt" set /a MISSING+=1
 if %MISSING% GTR 0 call :log "[WARN] %MISSING% required output file(s) missing - review steps above."
 if %MISSING%==0 call :log "[OK] All 5 required output files present."
+if exist "output\morphine-dump.json" call :log "[OK] morphine-dumper JSON available (morphine-dump.json)."
+if not exist "output\morphine-dump.json" call :log "[WARN] No morphine-dumper JSON - morphine-dumper may have failed."
+if exist "output\decrypt_algorithms.json" call :log "[OK] Capstone decrypt algorithms available (decrypt_algorithms.json)."
 if exist "output\frida_dump.txt" call :log "[OK] Frida dump available (frida_dump.txt)."
-if not exist "output\frida_dump.txt" call :log "[WARN] No Frida dump - manual offsets verification will be limited."
-if exist "output\il2cppinspector\offsets.json" call :log "[OK] Il2CppInspector offsets available (il2cppinspector/offsets.json)."
-if not exist "output\il2cppinspector\offsets.json" call :log "[WARN] No Il2CppInspector dump - offline offset validation not available."
-if exist "output\il2cpp_cross_validation.txt" call :log "[OK] Il2CppInspector cross-validation report available."
+if not exist "output\frida_dump.txt" call :log "[INFO] No Frida dump - morphine-dumper + capstone are sufficient."
 if exist "output\handle_dump.json" call :log "[OK] Handle dump available (handle_dump.json)."
 if not exist "output\handle_dump.json" call :log "[WARN] No handle dump - Il2cppGetHandle verification will be limited."
 if exist "output\rust_mesh.tri" (
     for %%A in ("output\rust_mesh.tri") do call :log "[OK] Mesh data available (rust_mesh.tri, %%~zA bytes) - VisCheck ready for packaging."
 ) else (
-    call :log "[WARN] No mesh data (rust_mesh.tri) - VisCheck will use PlayerModel._visible fallback."
+    call :log "[INFO] No mesh data (rust_mesh.tri) - VisCheck will use isVisible flag fallback."
 )
 goto :eof
 

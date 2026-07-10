@@ -288,7 +288,7 @@ When Rust updates, use the master update pipeline to automatically fetch new off
 ### Quick Update (automated)
 ```
 1. cd tools\masterupdate
-2. auto_update.bat     # Fetches Morphine + sha-dumper, generates patches
+2. getnewoffsets.bat     # Fetches Morphine + sha-dumper, generates patches
 3. update_now.bat      # Applies patches + builds DLL
 4. Inject and test
 ```
@@ -296,7 +296,7 @@ When Rust updates, use the master update pipeline to automatically fetch new off
 ### Manual Update (via opencode)
 ```
 1. cd tools\masterupdate
-2. auto_update.bat
+2. getnewoffsets.bat
 3. Paste output\super_prompt.txt into opencode
 4. opencode applies all changes
 5. Build with build_vsharp.bat (or build_lite.bat / build_private.bat)

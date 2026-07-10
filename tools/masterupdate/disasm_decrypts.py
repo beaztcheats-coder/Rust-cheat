@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
 """
-disasm_decrypts.py — Offline capstone decrypt disassembler.
+disasm_decrypts.py — Offline capstone decrypt disassembler (THE authority for decrypt algorithms).
 
-Reads sha-dumper output for decrypt function RVAs, reads GameAssembly.dll
-from disk, disassembles with capstone, and outputs accurate decrypt algorithms.
+Reads cipher function RVAs from morphine-dumper JSON (preferred) or sha-dumper output,
+reads GameAssembly.dll from disk, disassembles with capstone, and outputs accurate
+decrypt + auto-generated encrypt algorithms.
 
 100% Morphine-independent. Does NOT need game running (reads binary from disk).
-Requires: sha-dumper output (for cipher function RVAs) + GameAssembly.dll on disk.
+
+Input priority (first available wins):
+  1. master.json from morphine-dumper (fn_rva for all 6 decrypt functions)
+  2. sha-dumper-output.txt (cipher sections with fn_rva)
+  3. Standalone cipher scan (scans .text section for mov reg,2 prologues — no dumper needed)
+
+Output:
+  - decrypt_algorithms.json: All identified decrypt + auto-generated encrypt functions
+  - Merges into master.json (decrypt_functions + encrypt_functions)
 
 Usage:
     python disasm_decrypts.py [--gameassembly PATH] [--sha-output PATH] [--output PATH]
+    python disasm_decrypts.py  # uses config.json defaults, standalone scan if no dumper output
 
 If paths not specified, reads from config.json defaults.
 """
@@ -39,16 +49,16 @@ SHA_DUMPER_OUTPUT = OUTPUT_DIR / "sha-dumper-output.txt"
 MASTER_JSON = OUTPUT_DIR / "master.json"
 OUTPUT_FILE = OUTPUT_DIR / "decrypt_algorithms.json"
 
-# Known decrypt function patterns (build 24037537, from validict verification).
+# Known decrypt function patterns (build 24069519 — UC confirmed + capstone verified).
 # Used to identify unknown ciphers by matching operation sequences.
 # Format: canonical_name → [(op, value), ...]
 KNOWN_PATTERNS = {
-    "base_networkable_0": [("rol", 0x16), ("sub", 0x512FB7E6), ("xor", 0x3C25B628), ("add", 0x606330A1)],
-    "base_networkable_1": [("rol", 0x12), ("xor", 0xE54E9BFF), ("rol", 0x8), ("xor", 0xCECB4770)],
-    "cl_active_item":     [("sub", 0x1D2981D5), ("rol", 0x2), ("xor", 0x8DA4E5D3), ("add", 0x6189597E)],
-    "decrypt_fov":        [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
-    "player_inventory":   [("rol", 0x8), ("add", 0x18E53C82), ("rol", 0x1)],
-    "player_eyes":        [("sub", 0x6FB58358), ("xor", 0x6DC93C8F), ("rol", 0x15), ("add", 0x4E3D6061)],
+    "base_networkable_0": [("rol", 0xB), ("xor", 0xBCDFA6C7), ("add", 0x1A88518)],
+    "base_networkable_1": [("add", 0x4016C175), ("rol", 0x1D), ("add", 0x7D75A2B0), ("xor", 0x97FF1778)],
+    "cl_active_item":     [("rol", 27), ("add", 0x56427D52), ("rol", 8)],
+    "decrypt_fov":        [("add", 0xF7ED7C0), ("rol", 0x12), ("sub", 0xA557A4EC), ("xor", 0xD6A6E25E)],
+    "player_inventory":   [("add", 0x86F83B72), ("rol", 0x15), ("add", 0x41069A6F)],
+    "player_eyes":        [("rol", 0x5), ("add", 0x487FBCF7), ("xor", 0xE70F1737)],
 }
 
 # Map sha-dumper cipher section names to canonical names
@@ -79,6 +89,43 @@ def load_config():
     return {}
 
 
+def parse_master_json_ciphers(path):
+    """Parse decrypt function fn_rvas from master.json (morphine-dumper JSON source).
+
+    Returns list of dicts: [{name, fn_rva, sha_ops}, ...]
+    sha_ops is from morphine-dumper (may use HDE64 — we re-disassemble with capstone).
+
+    This is the preferred source — morphine-dumper provides fn_rva for ALL decrypt
+    functions, not just cipher sections. Falls back to sha-dumper if master.json
+    has no fn_rvas.
+    """
+    if not path.exists():
+        return []
+
+    with open(path, "r", encoding="utf-8") as f:
+        master = json.load(f)
+
+    ciphers = []
+    for name, data in master.get("decrypt_functions", {}).items():
+        fn_rva = data.get("fn_rva", 0)
+        if fn_rva and fn_rva > 0:
+            ops = data.get("ops_raw", data.get("ops", []))
+            sha_ops = []
+            for op in ops:
+                if isinstance(op, dict):
+                    sha_ops.append((op["op"], op["value"]))
+                elif isinstance(op, (list, tuple)):
+                    sha_ops.append((op[0], op[1]))
+            ciphers.append({
+                "name": name,
+                "fn_rva": fn_rva,
+                "sha_ops": sha_ops,
+            })
+
+    print(f"[morphine-json] Found {len(ciphers)} decrypt fn_rvas in master.json")
+    return ciphers
+
+
 def parse_sha_dumper_ciphers(path):
     """Parse ALL cipher sections from sha-dumper output (including unknown_N).
 
@@ -91,7 +138,6 @@ def parse_sha_dumper_ciphers(path):
 
     content = path.read_text(encoding="utf-8", errors="ignore")
     ciphers = []
-
     # Match [cipher_NAME] sections (including cipher_unknown_N)
     pattern = re.compile(r'\[(cipher_[^\]]+)\]([\s\S]*?)(?=\n\[|\Z)', re.MULTILINE)
     for match in pattern.finditer(content):
@@ -122,13 +168,13 @@ def parse_sha_dumper_ciphers(path):
     return ciphers
 
 
-# Known constants for binary search (from FALLBACK_DECRYPT_OPS, build 24037537)
+# Known constants for binary search (build 24069519 — UC confirmed + capstone verified)
 # Used to find decrypt functions that sha-dumper missed or mis-tagged.
 # Format: canonical_name → [constant_value, ...] (any of these can be searched)
 SEED_CONSTANTS = {
-    "player_inventory":  [0x18E53C82, 0x0F898622],  # Fallback ADD + structural match ADD
-    "cl_active_item":    [0x1D2981D5, 0x8DA4E5D3, 0x6189597E],  # Validict confirmed — CLA_TRYALL proved match
-    "decrypt_fov":       [0x8041A4D4, 0x2270CDAC, 0x3BA7A498],  # Validict-confirmed (independent function, NOT derived from cl_active_item)
+    "player_inventory":  [0x86F83B72, 0x41069A6F],  # ADD constants from build 24069519
+    "cl_active_item":    [0x56427D52],               # ADD constant from build 24069519 (UC confirmed)
+    "decrypt_fov":       [0xF7ED7C0, 0xA557A4EC, 0xD6A6E25E],  # ADD/SUB/XOR from build 24069519
 }
 
 
@@ -470,6 +516,122 @@ def get_morphine_decrypt_rvas():
     return rvas
 
 
+def scan_text_section_for_ciphers(dll_path, max_hits=2000):
+    """Scan GameAssembly.dll .text section for cipher prologues (mov reg, 2).
+
+    This is the STANDALONE fallback — works without any injected dumper.
+    Finds ALL functions that start with the cipher loop prologue
+    `mov reg, 2` (the loop counter initialization), then disassembles
+    each with capstone to extract ROL/XOR/ADD/SUB operations.
+
+    Patterns matched (both REX and non-REX forms):
+        41 B8-BF 02 00 00 00  — mov r8d-r15d, 2 (REX form)
+        B8-BF 02 00 00 00     — mov eax-edi, 2 (non-REX form)
+
+    Returns list of dicts: [{name, fn_rva, sha_ops}, ...]
+    """
+    try:
+        pe = pefile.PE(str(dll_path), fast_load=True)
+    except Exception as e:
+        print(f"[ERROR] Failed to parse PE for text scan: {e}")
+        return []
+
+    text_section = None
+    for section in pe.sections:
+        if b'.text' in section.Name:
+            text_section = section
+            break
+    if not text_section:
+        print("[ERROR] .text section not found")
+        return []
+
+    text_rva = text_section.VirtualAddress
+    text_raw = text_section.get_data()
+    text_size = len(text_raw)
+
+    # Build search patterns for mov reg, 2
+    # Non-REX: B8-BF (eax-edi), followed by 02 00 00 00
+    # REX: 41 B8-BF (r8d-r15d), followed by 02 00 00 00
+    prologue_non_rex = [bytes([0xB8 + reg, 0x02, 0x00, 0x00, 0x00]) for reg in range(8)]
+    prologue_rex = [bytes([0x41, 0xB8 + reg, 0x02, 0x00, 0x00, 0x00]) for reg in range(8)]
+
+    ciphers = []
+    seen_rvas = set()
+
+    for patterns, prefix_size in [(prologue_non_rex, 0), (prologue_rex, 1)]:
+        for pat in patterns:
+            offset = 0
+            while True:
+                idx = text_raw.find(pat, offset)
+                if idx == -1:
+                    break
+                # The mov instruction starts at idx (or idx-1 for REX prefix)
+                # But we want to start disassembling from a few bytes before to catch
+                # any preceding instructions that set up the cipher
+                fn_rva = text_rva + idx - prefix_size
+                if fn_rva in seen_rvas:
+                    offset = idx + 1
+                    continue
+                seen_rvas.add(fn_rva)
+
+                # Read bytes around the prologue for disassembly
+                start = max(0, idx - prefix_size - 32)
+                read_size = 512
+                raw = text_raw[start:start + read_size]
+                if len(raw) < 64:
+                    offset = idx + 1
+                    continue
+
+                ops = extract_cipher_ops_capstone(raw)
+                if len(ops) >= 2:
+                    ciphers.append({
+                        "name": f"scan_unknown_{len(ciphers)}",
+                        "fn_rva": fn_rva,
+                        "sha_ops": ops,  # Capstone-extracted ops (not HDE64)
+                        "source": "standalone_scan",
+                    })
+
+                if len(ciphers) >= max_hits:
+                    break
+                offset = idx + 1
+            if len(ciphers) >= max_hits:
+                break
+        if len(ciphers) >= max_hits:
+            break
+
+    pe.close()
+    print(f"[standalone-scan] Found {len(ciphers)} cipher prologues in .text section")
+    return ciphers
+
+
+def generate_encrypt_ops(decrypt_ops):
+    """Generate the inverse (encrypt) operation sequence from decrypt ops.
+
+    Encrypt = reverse order, with inverted operations:
+        ADD → SUB
+        SUB → ADD
+        XOR → XOR (self-inverse)
+        ROL → ROR (rotate right)
+
+    Args:
+        decrypt_ops: list of (op_type, value) tuples
+
+    Returns:
+        list of (op_type, value) tuples for the encrypt function
+    """
+    inverse_map = {
+        "add": "sub",
+        "sub": "add",
+        "xor": "xor",
+        "rol": "ror",
+    }
+    result = []
+    for op_type, value in reversed(decrypt_ops):
+        inv_type = inverse_map.get(op_type, op_type)
+        result.append((inv_type, value))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description="Offline capstone decrypt disassembler")
     parser.add_argument("--gameassembly", type=Path, help="Path to GameAssembly.dll")
@@ -493,18 +655,41 @@ def main():
         return 1
 
     if not sha_output.exists():
-        print(f"[FATAL] sha-dumper output not found: {sha_output}")
-        print("        Run getnewoffsets.bat first to generate sha-dumper output")
-        return 1
+        # Check if master.json has fn_rvas — if so, sha-dumper is not required
+        morphine_ciphers = parse_master_json_ciphers(MASTER_JSON)
+        if not morphine_ciphers:
+            # Last resort: standalone cipher scan (no dumper needed at all)
+            print(f"[INFO] No sha-dumper output or master.json fn_rvas found")
+            print(f"[INFO] Will use standalone cipher scan (scans GameAssembly.dll .text section)")
+        else:
+            print(f"[INFO] sha-dumper output not found — using master.json fn_rvas only")
 
     print(f"[disasm_decrypts] Offline capstone decrypt disassembler")
     print(f"  GameAssembly.dll: {dll_path}")
     print(f"  sha-dumper output: {sha_output}")
     print()
 
-    # Step 1: Parse all cipher sections from sha-dumper output
-    all_ciphers = parse_sha_dumper_ciphers(sha_output)
-    print(f"[1] Parsed {len(all_ciphers)} cipher sections from sha-dumper output")
+    # Step 1: Parse cipher fn_rvas — prefer master.json (morphine-dumper), fall back to sha-dumper
+    all_ciphers = parse_master_json_ciphers(MASTER_JSON)
+    if all_ciphers:
+        print(f"[1] Parsed {len(all_ciphers)} cipher fn_rvas from master.json (morphine-dumper)")
+        if sha_output.exists():
+            sha_ciphers = parse_sha_dumper_ciphers(sha_output)
+            sha_names = {c["name"] for c in all_ciphers}
+            added = 0
+            for c in sha_ciphers:
+                if c["name"] not in sha_names and not c["name"].startswith("unknown_"):
+                    all_ciphers.append(c)
+                    added += 1
+            if added:
+                print(f"    Added {added} additional ciphers from sha-dumper")
+    elif sha_output.exists():
+        all_ciphers = parse_sha_dumper_ciphers(sha_output)
+        print(f"[1] Parsed {len(all_ciphers)} cipher sections from sha-dumper output")
+    else:
+        # No dumper output — use standalone cipher scan (no dumper needed)
+        print(f"[1] No dumper output available — running standalone cipher scan...")
+        all_ciphers = scan_text_section_for_ciphers(dll_path)
 
     named_ciphers = [c for c in all_ciphers if not c["name"].startswith("unknown_")]
     unknown_ciphers = [c for c in all_ciphers if c["name"].startswith("unknown_")]
@@ -653,6 +838,44 @@ def main():
             print(f"  [OK] decrypt_fov derived: {ops_str}")
             print(f"       (same function as cl_active_item @ {identified['cl_active_item']['fn_rva']}, ROL skipped)")
 
+    # Step 3d: Standalone cipher scan — scan .text section for mov reg,2 prologues
+    # This is the LAST RESORT fallback — works without any injected dumper.
+    if missing:
+        print(f"\n[3d] Standalone cipher scan (scanning .text section for cipher prologues)...")
+        scanned_ciphers = scan_text_section_for_ciphers(dll_path)
+        for sc in scanned_ciphers:
+            ops = sc["sha_ops"]
+            # Try exact match
+            canonical = match_ops_to_pattern(ops)
+            if canonical and canonical in missing:
+                identified[canonical] = {
+                    "fn_rva": f"0x{sc['fn_rva']:X}",
+                    "fn_rva_int": sc["fn_rva"],
+                    "ops": [{"op": o[0], "value": f"0x{o[1]:X}" if o[1] > 0xFFFF else o[1]} for o in ops],
+                    "ops_raw": [[o[0], o[1]] for o in ops],
+                    "source": "capstone_standalone_scan",
+                    "sha_name": sc["name"],
+                }
+                missing.remove(canonical)
+                print(f"  [OK] {canonical} @ 0x{sc['fn_rva']:X} -> standalone scan exact match")
+            else:
+                # Try structural match
+                candidates = match_ops_by_structure(ops)
+                for candidate in candidates:
+                    if candidate in missing:
+                        identified[candidate] = {
+                            "fn_rva": f"0x{sc['fn_rva']:X}",
+                            "fn_rva_int": sc["fn_rva"],
+                            "ops": [{"op": o[0], "value": f"0x{o[1]:X}" if o[1] > 0xFFFF else o[1]} for o in ops],
+                            "ops_raw": [[o[0], o[1]] for o in ops],
+                            "source": "capstone_standalone_structural",
+                            "sha_name": sc["name"],
+                            "warning": "Found via standalone scan, structural match (values may differ)",
+                        }
+                        missing.remove(candidate)
+                        print(f"  [OK] {candidate} @ 0x{sc['fn_rva']:X} -> standalone scan structural match")
+                        break
+
     # Step 4: Report any still-missing decrypts
     if missing:
         print(f"\n[WARN] Could not identify: {missing}")
@@ -675,12 +898,43 @@ def main():
             "warning": info.get("warning"),
         })
 
+    # Auto-generate encrypt functions (inverse of decrypt)
+    encrypt_results = []
+    for canonical, info in identified.items():
+        decrypt_ops_raw = info["ops_raw"]
+        # Convert ops_raw (list of [op, value] lists) to tuples
+        decrypt_ops = [(op[0], op[1]) for op in decrypt_ops_raw]
+        encrypt_ops = generate_encrypt_ops(decrypt_ops)
+        encrypt_name = f"encrypt_{canonical}" if not canonical.startswith("decrypt_") else canonical.replace("decrypt_", "encrypt_")
+        encrypt_results.append({
+            "name": encrypt_name,
+            "dat_key": DECRYPT_DAT_KEYS.get(canonical, canonical),
+            "rva": info["fn_rva"],
+            "ops": [{"op": o[0], "value": f"0x{o[1]:X}" if o[1] > 0xFFFF else o[1]} for o in encrypt_ops],
+            "ops_raw": [[o[0], o[1]] for o in encrypt_ops],
+            "source": "auto_generated_inverse",
+            "confidence": "auto-generated",
+        })
+
+    # Collect unidentified ciphers for output (Task 3.4)
+    unknown_results = []
+    for entry in unidentified:
+        unknown_results.append({
+            "fn_rva": f"0x{entry['fn_rva']:X}",
+            "ops": [{"op": o[0], "value": f"0x{o[1]:X}" if o[1] > 0xFFFF else o[1]} for o in entry["ops"]],
+            "ops_raw": [[o[0], o[1]] for o in entry["ops"]],
+            "candidates": entry["candidates"],
+            "sha_name": entry["sha_name"],
+        })
+
     output = {
         "status": "SUCCESS" if len(identified) >= 4 else "PARTIAL",
         "identified": len(identified),
         "total": len(KNOWN_PATTERNS),
         "missing": [name for name in KNOWN_PATTERNS if name not in identified],
         "algorithms": results,
+        "encrypt_algorithms": encrypt_results,
+        "unidentified_ciphers": unknown_results,
     }
 
     # Also output in decrypt_dat format (for rust_decrypts.dat generation)
@@ -723,13 +977,17 @@ def main():
 
     # Step 6: Merge into master.json (so compare_and_patch.py can use the results)
     if not args.no_merge:
-        merge_into_master(identified)
+        merge_into_master(identified, encrypt_results)
 
     print(f"\n{'='*60}")
     print(f"  Identified {len(identified)}/{len(KNOWN_PATTERNS)} decrypt algorithms")
     for r in results:
         ops_str = " ".join(f"{o['op'].upper()} {o['value']}" for o in r["ops"])
         print(f"    {r['name']:25s} {r['rva']:12s} {ops_str}")
+    if encrypt_results:
+        print(f"  Auto-generated {len(encrypt_results)} encrypt functions (inverse of decrypt)")
+    if unknown_results:
+        print(f"  {len(unknown_results)} unidentified ciphers (output for manual investigation)")
     print(f"  Output: {output_file}")
     if missing:
         print(f"  Missing: {missing} (will use fallback)")
@@ -737,11 +995,12 @@ def main():
     return 0 if len(identified) >= 4 else 2
 
 
-def merge_into_master(identified):
+def merge_into_master(identified, encrypt_results=None):
     """Merge capstone-extracted decrypt algorithms into master.json.
 
     Overwrites/augments master.json["decrypt_functions"] with capstone results.
     Capstone results have higher confidence than sha-dumper HDE64 results.
+    Also merges auto-generated encrypt functions into master.json["encrypt_functions"].
     """
     if not MASTER_JSON.exists():
         print(f"[5] Skipping merge — master.json not found")
@@ -771,10 +1030,12 @@ def merge_into_master(identified):
         morphine_name = morphine_names.get(canonical, canonical)
 
         ops_raw = info["ops_raw"]
+        fn_rva_int = info.get("fn_rva_int", 0)
         entry = {
             "ops": [{"op": o[0], "value": f"0x{o[1]:X}" if o[1] > 0xFFFF else o[1]} for o in ops_raw],
             "ops_raw": ops_raw,
-            "read_offset": info["fn_rva"],
+            "fn_rva": fn_rva_int,
+            "read_offset": info.get("read_offset"),
             "confidence": "high" if "exact" in info["source"] else "medium",
             "source": info["source"],
         }
@@ -790,10 +1051,25 @@ def merge_into_master(identified):
             master["decrypt_functions"][morphine_name] = entry
             merged_count += 1
 
+    # Merge encrypt functions
+    encrypt_merged = 0
+    if encrypt_results:
+        if "encrypt_functions" not in master:
+            master["encrypt_functions"] = {}
+        for enc in encrypt_results:
+            master["encrypt_functions"][enc["name"]] = {
+                "ops": enc["ops"],
+                "ops_raw": enc["ops_raw"],
+                "fn_rva": enc.get("rva_int", 0),
+                "confidence": "auto-generated",
+                "source": "capstone_inverse",
+            }
+            encrypt_merged += 1
+
     with open(MASTER_JSON, "w", encoding="utf-8") as f:
         json.dump(master, f, indent=2)
 
-    print(f"[5] Merged {merged_count} capstone decrypt algorithms into master.json")
+    print(f"[5] Merged {merged_count} capstone decrypt + {encrypt_merged} encrypt algorithms into master.json")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,162 @@
+╔══════════════════════════════════════════════════════════════╗
+║                    BEAZT — RUST PRIVATE                      ║
+║                       FEATURE LIST                           ║
+╚══════════════════════════════════════════════════════════════╝
+
+════════════════════════════════════════════════════════════════
+ AIMBOT
+════════════════════════════════════════════════════════════════
+ [✓] Memory Aimbot — Writes aim angles directly to game memory
+ [✓] Silent Aim — Aimbot without visible camera movement
+ [✓] Smoothing — Adjustable aim smoothness (1-20)
+ [✓] FOV Targeting — Only targets players within your FOV circle
+ [✓] FOV Circle — Visual FOV indicator with color + outline
+ [✓] Bone Priority — 6 modes: Head, Neck, Chest, Pelvis,
+     Closest to Crosshair, Smart (auto-switches to head when close)
+ [✓] Prediction — Velocity-based bullet prediction with
+     gravity compensation (bullet drop)
+ [✓] Prediction Indicator — Visual line showing predicted path
+ [✓] Keep Target — Sticky target that stays locked on
+ [✓] Target Line — Line from crosshair to target
+ [✓] Target Icon — Circle marker on current target
+ [✓] Humanization — Anti-detection: jitter, overshoot,
+     smoothing variance, and configurable miss probability
+ [✓] Targeting Filters:
+     • Ignore Team members
+     • Ignore Wounded players
+     • Ignore Sleepers
+     • Weapon Check (only targets armed players)
+     • Max Aim Distance slider
+
+════════════════════════════════════════════════════════════════
+ PLAYER ESP
+════════════════════════════════════════════════════════════════
+ [✓] Box ESP — Standard, Corner, or Filled box styles
+     with outline and adjustable thickness
+ [✓] Skeleton ESP — 15-bone skeleton with outline
+     and adjustable thickness
+ [✓] Head Circle — Circle marker on player heads
+ [✓] Name — Player name display
+ [✓] Distance — Distance in meters with bracket styles
+     (100m) / [100m] / {100m} / 100m
+ [✓] Held Weapon — Shows equipped weapon name
+ [✓] Team ID — Shows team number
+ [✓] Snap Lines — Lines from screen edge to players
+     (4 modes: Off, Bottom, Middle, Top)
+ [✓] OFF Arrows — Off-screen player direction indicators
+ [✓] Hotbar Text — Shows target's belt items (6 slots)
+ [✓] Inventory Panel — Full inventory panel showing target's
+     name, distance, weapon, ammo, belt, and clothing
+ [✓] Ammo Bar — Shows ammo count
+ [✓] Movement Trails — Position history trail (fading)
+ [✓] VisCheck — Color-codes visible vs hidden players
+ [✓] Player Filters:
+     • Hide Wounded
+     • Hide Sleepers
+     • Hide Teammates
+     • Highlight Wounded (custom color)
+     • Highlight Sleepers (custom color)
+ [✓] Advanced Distances — Per-feature draw distance sliders
+ [✓] Font Size — Adjustable ESP text size
+ [✓] Velocity Prediction — Smooth ESP tracking with
+     velocity-based position prediction + gravity correction
+
+════════════════════════════════════════════════════════════════
+ NPC ESP
+════════════════════════════════════════════════════════════════
+ [✓] Box, Name, Distance, Skeleton, Snap Lines
+ [✓] Held Item — Shows NPC's equipped weapon
+ [✓] NPC Type Filters:
+     • Scientists
+     • Tunnel Dwellers
+     • Underwater Dwellers
+ [✓] Advanced distance sliders
+
+════════════════════════════════════════════════════════════════
+ ANIMAL ESP
+════════════════════════════════════════════════════════════════
+ [✓] Box, Name, Distance, Health Bar, Snap Lines
+ [✓] Animal Type Filters:
+     • Bear, Polar Bear, Wolf, Boar, Stag
+     • Chicken, Horse, Panther, Tiger, Snake
+ [✓] Advanced distance sliders
+
+════════════════════════════════════════════════════════════════
+ WORLD ESP (55+ ENTITY TYPES)
+════════════════════════════════════════════════════════════════
+ [✓] Resources — Stone Ore, Metal Ore, Sulfur Ore, Hemp
+ [✓] Pickups — Stone, Metal, Sulfur, Wood
+ [✓] Loot — Stash, Corpse, Backpack, Dropped Items
+ [✓] Traps — Auto Turret, Shotgun Trap, SAM Site,
+     Bear Trap, Landmine, Flame Turret
+ [✓] Vehicles — Minicopter, Bradley APC, Rowboat, RHIB,
+     Kayak, Submarine, Tugboat, Transport Heli, Attack Heli,
+     Hot Air Balloon, Motorbike, Snowmobile, and more
+ [✓] Barrels — Beige, Blue, Fuel
+ [✓] Crates — Normal, Military, Elite, Locked, Medical, Food
+ [✓] Deployables — Lockers, Sleeping Bags, Beds, Tool Cupboard,
+     Vending Machine, Workbench, Large Storage, Generator, Battery
+ [✓] Special — Shark, Cargo Ship, Supply Drop
+ [✓] Per-entity distance + color customization
+ [✓] Global draw distance slider
+ [✓] "Disable All World ESP" button
+
+════════════════════════════════════════════════════════════════
+ RADAR
+════════════════════════════════════════════════════════════════
+ [✓] 2D Radar with grid overlay
+ [✓] Rotation — Radar rotates with player view
+ [✓] 4 corner positions
+ [✓] Configurable size, scale, dot size, opacity
+ [✓] Shows Players, NPCs, Animals
+ [✓] Hide Sleepers / Remove Team options
+ [✓] Color customization for all entity types
+
+════════════════════════════════════════════════════════════════
+ WEAPON FEATURES
+════════════════════════════════════════════════════════════════
+ [✓] Recoil Control — Adjustable recoil modifier (0-100%)
+     with per-weapon original value caching + restore
+ [✓] Recoil Variance — Randomized ±10% for anti-detection
+ [✓] Recoil Floor — Minimum recoil scale clamp
+ [✓] Burst Mode — Forces burst fire on weapons
+
+════════════════════════════════════════════════════════════════
+ VISUAL FEATURES
+════════════════════════════════════════════════════════════════
+ [✓] FOV Changer — Custom field of view (1-200)
+ [✓] Zoom — Adjustable zoom level (1-200)
+ [✓] Crosshair — 3 styles: Dot, Cross, Circle
+     with size and color customization
+ [✓] Bright Night — Increases ambient light at night
+     with adjustable multiplier and saturation
+ [✓] Time Changer — Set time of day (0-24 hours)
+ [✓] Screen Info — Aimbot status + held weapon display
+
+════════════════════════════════════════════════════════════════
+ UTILITY
+════════════════════════════════════════════════════════════════
+ [✓] Admin Flags — Sets IsAdmin flag (required for debug camera)
+ [✓] Debug Camera — Free-fly camera with WASD + Space/Ctrl
+     movement, 50-second timeout, body freeze, loading screen bypass
+ [✓] Battle Mode — Quick-toggle filter system:
+     • Players ESP on/off
+     • Aimbot on/off
+     • World ESP on/off
+     • NPC ESP on/off
+     • Animal ESP on/off
+     • Radar on/off
+ [✓] Combat Mode — Suppresses NPC/Animal ESP for clean view
+
+════════════════════════════════════════════════════════════════
+ CONFIGURATION
+════════════════════════════════════════════════════════════════
+ [✓] Config System — Save/Load multiple named configs
+ [✓] Config Auto-Save — Automatic save on changes
+ [✓] Keybind System — Fully rebindable hotkeys with:
+     • Toggle / Hold / Always modes
+     • Conflict detection
+     • Search + page filter
+     • Clear All button
+ [✓] Color Customization — Every ESP element has custom colors
+ [✓] Language Support — English + French

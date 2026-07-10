@@ -1,0 +1,11 @@
+Cross-Validation Report
+========================
+Frida classes:       20703
+Agreements:          0
+Disagreements:       0
+Fields not in Frida: 124
+
+Patches generated:    0
+Patch file:           E:\github\Rust-cheat\tools\masterupdate\output\frida_patches.txt
+
+All offsets match Frida validation. No changes needed.

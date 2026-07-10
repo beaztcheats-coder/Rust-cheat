@@ -1,0 +1,13 @@
+============================================================
+  PIPELINE VERIFICATION: PASS
+============================================================
+
+  [INFO] BUILD_ID: build ID is 'unknown' or missing
+  [WARN] MISSING: decrypt function 'base_networkable_0' not found in master.json
+  [WARN] MISSING: decrypt function 'base_networkable_1' not found in master.json
+  [WARN] MISSING: decrypt function 'cl_active_item' not found in master.json
+  [WARN] MISSING: decrypt function 'player_inventory' not found in master.json
+  [WARN] MISSING: decrypt function 'player_eyes' not found in master.json
+  [WARN] MISSING: decrypt function 'decrypt_fov' not found in master.json
+
+============================================================

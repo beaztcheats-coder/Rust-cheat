@@ -11,15 +11,15 @@ from pathlib import Path
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
 # Fallback operation sequences for decrypt functions.
-# Used when sha-dumper can't find a function (name obfuscation) or confidence is low.
-# Updated: 2026-07-03 (validict build 24037537)
+# Used when sha-dumper/morphine can't find a function (name obfuscation) or confidence is low.
+# Updated: 2026-07-06 (build 24069519 — UC confirmed + capstone verified)
 FALLBACK_DECRYPT_OPS = {
-    "base_networkable_0": [("rol", 0x16), ("sub", 0x512FB7E6), ("xor", 0x3C25B628), ("add", 0x606330A1)],
-    "base_networkable_1": [("rol", 0x12), ("xor", 0xE54E9BFF), ("rol", 0x8), ("xor", 0xCECB4770)],
-    "cl_active_item": [("rol", 0x1E), ("add", 0x69D5BDEE), ("rol", 0x10), ("xor", 0x60869282)],
-    "decrypt_fov": [("xor", 0x8041A4D4), ("add", 0x2270CDAC), ("rol", 0x1D), ("sub", 0x3BA7A498)],
-    "player_inventory": [("rol", 0x8), ("add", 0x18E53C82), ("rol", 0x1)],
-    "player_eyes": [("sub", 0x6FB58358), ("xor", 0x6DC93C8F), ("rol", 0x15), ("add", 0x4E3D6061)],
+    "base_networkable_0": [("rol", 0xB), ("xor", 0xBCDFA6C7), ("add", 0x1A88518)],
+    "base_networkable_1": [("add", 0x4016C175), ("rol", 0x1D), ("add", 0x7D75A2B0), ("xor", 0x97FF1778)],
+    "cl_active_item":     [("rol", 27), ("add", 0x56427D52), ("rol", 8)],
+    "decrypt_fov":        [("add", 0xF7ED7C0), ("rol", 0x12), ("sub", 0xA557A4EC), ("xor", 0xD6A6E25E)],
+    "player_inventory":   [("add", 0x86F83B72), ("rol", 0x15), ("add", 0x41069A6F)],
+    "player_eyes":        [("rol", 0x5), ("add", 0x487FBCF7), ("xor", 0xE70F1737)],
 }
 
 
@@ -152,12 +152,18 @@ def extract_namespace_block(content: str, namespace: str) -> str:
     return content[start_idx:i]
 
 
-def find_existing_offset(content: str, name: str, namespace: str = None) -> tuple:
+def find_existing_offset(content: str, name: str, namespace: str = None, allow_fallback: bool = True) -> tuple:
     """Find an existing inline/constexpr uint64_t Name = value; line. Returns (old_value, line).
 
-    Searches the specified namespace first. If not found, falls back to searching
-    ALL namespaces — handles cases where Morphine puts a field in a different
-    namespace than the cheat (e.g. BaseProjectile vs BaseProjectileExt)."""
+    Searches the specified namespace first. If allow_fallback is True and not
+    found, falls back to searching ALL namespaces — handles cases where Morphine
+    puts a field in a different namespace than the cheat (e.g. BaseProjectile vs
+    BaseProjectileExt).
+
+    For klass_rvas (TypeInfo pointers), pass allow_fallback=False to prevent
+    name collisions where a klass_rva name (e.g. 'PlayerEyes' = 0x0FE755C0)
+    matches a same-named field offset in a struct namespace (e.g.
+    BasePlayer::PlayerEyes = 0x340)."""
     pattern = re.compile(rf"((?:inline|constexpr)\s+uint64_t\s+{re.escape(name)}\s*=\s*)(0x[0-9A-Fa-f]+|\d+)(;)")
 
     if namespace:
@@ -166,6 +172,10 @@ def find_existing_offset(content: str, name: str, namespace: str = None) -> tupl
             m = pattern.search(block)
             if m:
                 return int(m.group(2), 0), m.group(0)
+
+    if not allow_fallback:
+        # klass_rva lookup — only match in the specified namespace, never fall back
+        return None, None
 
     # Fallback: search entire file (all namespaces)
     m = pattern.search(content)
@@ -197,6 +207,13 @@ def generate_offset_patches(cfg: dict, master: dict, content: str) -> tuple:
             missing.append((project_name, value))
             continue
 
+        # Sanity check: skip if new_value is clearly a pointer RVA (>0x10000000)
+        # but old_value is clearly a struct field offset (<0x10000). This catches
+        # name collisions where a klass_rva name matches a field offset.
+        if value > 0x10000000 and old_value < 0x10000:
+            changes.append((f"{project_name} (SKIPPED: klass_rva/field collision {old_value:#x} -> {value:#x})", old_value, value))
+            continue
+
         if old_value != value:
             changes.append((project_name, old_value, value))
             patches.append({
@@ -214,14 +231,25 @@ def generate_offset_patches(cfg: dict, master: dict, content: str) -> tuple:
             })
 
     # 2. Class TypeInfo RVAs (klass_rvas) — static pointers in global offsets namespace
+    # NOTE: allow_fallback=False prevents name collisions where a klass_rva name
+    # (e.g. 'PlayerEyes' = 0x0FE755C0) matches a same-named field offset in a struct
+    # namespace (e.g. BasePlayer::PlayerEyes = 0x340). klass_rvas must ONLY match
+    # top-level static pointers in the "offsets" namespace.
     for morphine_name, value in master.get("klass_rvas", {}).items():
         project_name = name_mappings.get(morphine_name, morphine_name)  # Fallback: use name as-is (sig_scanner uses project_names)
         if value == 0:
             continue  # Never patch to 0x0
 
-        old_value, old_line = find_existing_offset(content, project_name, namespace="offsets")
+        old_value, old_line = find_existing_offset(content, project_name, namespace="offsets", allow_fallback=False)
         if old_value is None:
             missing.append((project_name, value))
+            continue
+
+        # Sanity check: skip if new_value is clearly a pointer RVA (>0x10000000)
+        # but old_value is clearly a struct field offset (<0x10000). This catches
+        # any remaining name collision where a klass_rva name matches a field offset.
+        if value > 0x10000000 and old_value < 0x10000:
+            changes.append((f"{project_name} (SKIPPED: klass_rva/field collision {old_value:#x} -> {value:#x})", old_value, value))
             continue
 
         if old_value != value:
@@ -276,6 +304,13 @@ def generate_offset_patches(cfg: dict, master: dict, content: str) -> tuple:
                 missing.append((project_name, value))
                 continue
 
+            # Sanity check: skip if new_value is clearly a pointer RVA (>0x10000000)
+            # but old_value is clearly a struct field offset (<0x10000). Catches
+            # name collisions where a klass_rva matches a struct field name.
+            if value > 0x10000000 and old_value < 0x10000:
+                changes.append((f"{project_name} (SKIPPED: klass_rva/field collision {old_value:#x} -> {value:#x})", old_value, value))
+                continue
+
             if old_value != value:
                 changes.append((project_name, old_value, value))
                 patches.append({
@@ -328,6 +363,13 @@ def generate_offset_patches(cfg: dict, master: dict, content: str) -> tuple:
             old_value, old_line = find_existing_offset(content, project_name, namespace=project_ns)
             if old_value is None:
                 missing.append((project_name, value))
+                continue
+
+            # Sanity check: skip if new_value is clearly a pointer RVA (>0x10000000)
+            # but old_value is clearly a struct field offset (<0x10000). Catches
+            # name collisions where a klass_rva matches a namespace field name.
+            if value > 0x10000000 and old_value < 0x10000:
+                changes.append((f"{project_name} (SKIPPED: klass_rva/field collision {old_value:#x} -> {value:#x})", old_value, value))
                 continue
 
             if old_value != value:

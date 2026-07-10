@@ -5,22 +5,38 @@
 #include "../../Occlusion.hpp"
 #include <cmath>
 
+void SafeDoCheat();
+
 namespace Xheat {
 
     bool ReadFrameCameraMatrix() {
         static int camDiag = 0;
-        uint64_t cam_typeinfo = read<uint64_t>(GameAssembly + offsets::camera_pointer);
-        if (!cam_typeinfo || !is_valid(cam_typeinfo)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_typeinfo invalid (0x%I64X)", cam_typeinfo); camDiag++; } return false; }
-        uint64_t cam_sf = read<uint64_t>(cam_typeinfo + offsets::BaseCamera::static_fields);
-        if (!cam_sf || !is_valid(cam_sf)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_sf invalid (0x%I64X)", cam_sf); camDiag++; } return false; }
-        uint64_t cam_instance = read<uint64_t>(cam_sf + offsets::BaseCamera::wrapper_class);
-        if (!cam_instance || !is_valid(cam_instance)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_instance invalid (0x%I64X)", cam_instance); camDiag++; } return false; }
-        uint64_t native_cam = read<uint64_t>(cam_instance + offsets::BaseCamera::entity);
-        if (!native_cam || !is_valid(native_cam)) native_cam = cam_instance;
-        if (!native_cam || !is_valid(native_cam)) { if (camDiag < 5) { LOG("CAM_CHAIN: native_cam invalid"); camDiag++; } return false; }
+        static uint64_t cached_native_cam = 0;
+        static int cache_refresh_counter = 0;
+        bool rechain = false;
+        if (!cached_native_cam || !is_valid(cached_native_cam)) rechain = true;
+        if (++cache_refresh_counter >= 200) { cache_refresh_counter = 0; rechain = true; }
+
+        uint64_t native_cam;
+        if (rechain) {
+            uint64_t cam_typeinfo = read<uint64_t>(GameAssembly + offsets::camera_pointer);
+            if (!cam_typeinfo || !is_valid(cam_typeinfo)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_typeinfo invalid (0x%I64X)", cam_typeinfo); camDiag++; } return false; }
+            uint64_t cam_sf = read<uint64_t>(cam_typeinfo + offsets::BaseCamera::static_fields);
+            if (!cam_sf || !is_valid(cam_sf)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_sf invalid (0x%I64X)", cam_sf); camDiag++; } return false; }
+            uint64_t cam_instance = read<uint64_t>(cam_sf + offsets::BaseCamera::wrapper_class);
+            if (!cam_instance || !is_valid(cam_instance)) { if (camDiag < 5) { LOG("CAM_CHAIN: cam_instance invalid (0x%I64X)", cam_instance); camDiag++; } return false; }
+            native_cam = read<uint64_t>(cam_instance + offsets::BaseCamera::entity);
+            if (!native_cam || !is_valid(native_cam)) native_cam = cam_instance;
+            if (!native_cam || !is_valid(native_cam)) { if (camDiag < 5) { LOG("CAM_CHAIN: native_cam invalid"); camDiag++; } return false; }
+            cached_native_cam = native_cam;
+        } else {
+            native_cam = cached_native_cam;
+        }
+
         float fov_test = read<float>(native_cam + offsets::BaseCamera::field_of_view);
         if (!(fov_test > 1.0f && fov_test < 180.0f && std::isfinite(fov_test))) {
             if (camDiag < 5) { LOG("CAM_CHAIN: fov=%.2f FAILED ncam=0x%I64X", fov_test, native_cam); camDiag++; }
+            cached_native_cam = 0;
             return false;
         }
 
@@ -108,7 +124,6 @@ namespace Xheat {
         };
 
         // Read camera matrix FRESH in the render thread — eliminates swimming/lag
-        // (SHA source approach: read matrix right before WorldToScreen)
         if (!ReadFrameCameraMatrix()) {
             static int c4=0; if(c4<3){LOG("Do_Cheat SKIP: ReadFrameCameraMatrix failed");c4++;}
             return;
@@ -119,12 +134,7 @@ namespace Xheat {
         if (firstRun) { LOG("Do_Cheat RUNNING — first frame (all gates passed)"); firstRun = false; }
 
         Anybrain::Neutralize();
-        static int screenWidth = 0;
-        static int screenHeight = 0;
-        if (!screenWidth) {
-            screenWidth = GetSystemMetrics(SM_CXSCREEN);
-            screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        }
+        // g_ScreenW/g_ScreenH are global (vectorMath.hpp), updated every frame in render.hpp
 
         // Cache LocalPlayer position from globals (zero IOCTLs — written by fast thread)
         Vector3 lpPos;
@@ -152,15 +162,15 @@ namespace Xheat {
         const bool allowAimbot = !battleMode || BATTLE::Aimbot;
 
         if (allowWorld) {
-            std::vector<Rust::PrefabData> pList;
-            { std::lock_guard<std::mutex> lk(cac->prefab_mutex); pList = prefab_List; }
+            static std::vector<Rust::PrefabData> pList;
+            { std::unique_lock<std::mutex> lk(cac->prefab_mutex, std::try_to_lock); if (lk.owns_lock()) pList = prefab_List; }
 
             for (const auto& prefab : pList)
         {
             Vector2 Screen = WorldToScreen(prefab.Position, frameMatrix);
             if (!std::isfinite(Screen.x) || !std::isfinite(Screen.y)
-                || Screen.x <= 1 || Screen.x >= (float)screenWidth - 1
-                || Screen.y <= 1 || Screen.y >= (float)screenHeight - 1) {
+                || Screen.x <= 1 || Screen.x >= (float)g_ScreenW - 1
+                || Screen.y <= 1 || Screen.y >= (float)g_ScreenH - 1) {
                 continue;
             }
 
@@ -178,8 +188,8 @@ namespace Xheat {
         }
         }
 
-        std::vector<Rust::BaseEntity*> entlist;
-        { std::lock_guard<std::mutex> lk(cac->entity_mutex); entlist = entity_List; }
+        static std::vector<Rust::BaseEntity*> entlist;
+        { std::unique_lock<std::mutex> lk(cac->entity_mutex, std::try_to_lock); if (lk.owns_lock()) entlist = entity_List; }
 
         {
             static bool entlist_empty_logged = false;
@@ -214,36 +224,46 @@ namespace Xheat {
 
         static bool dist_diag = false;
 
-        // Copy entire cache ONCE per frame (1 lock instead of 50 per player)
-        std::unordered_map<uintptr_t, EspCacheData> cacheCopy;
+        // Copy entire cache ONCE per frame — try_to_lock (never blocks render thread)
+        // If cache worker is merging, use previous frame's copy (at most 100ms stale)
+        static std::unordered_map<uintptr_t, EspCacheData>* pCacheCopy = nullptr;
+        if (!pCacheCopy) pCacheCopy = new std::unordered_map<uintptr_t, EspCacheData>();
+        auto& cacheCopy = *pCacheCopy;
         {
-            std::lock_guard<std::mutex> lk(g_EspCacheMutex);
-            cacheCopy.reserve(g_EspCache.size());
-            cacheCopy = g_EspCache;
+            std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex, std::try_to_lock);
+            if (lk.owns_lock()) {
+                cacheCopy = g_EspCache;
+            }
         }
 
         // AABB occlusion system disabled — ESP uses game visibility flags now
         // (occluder list + camera position copy removed to save CPU)
 
-        // Compute hotbar target once per frame (was O(N) per player inside do_Visuals)
-        if (ESP::hotbar_text) {
+        // Compute target player closest to crosshair (for hotbar + inventory panel)
+        // Only considers players (entlist), not animals/NPCs
+        if (ESP::hotbar_text || ESP::PlayerInventoryPanel) {
             uintptr_t bestTgt = 0;
             float best = FLT_MAX;
-            float cx = (float)screenWidth * 0.5f;
-            float cy = (float)screenHeight * 0.5f;
-            for (const auto& [k, v] : cacheCopy) {
+            float cx = (float)g_ScreenW * 0.5f;
+            float cy = (float)g_ScreenH * 0.5f;
+            float fovLimit = ESP::PlayerInventoryPanel ? 150.0f * 150.0f : FLT_MAX;
+            for (auto* Player : entlist) {
+                if (!Player || !is_valid((uintptr_t)Player)) continue;
+                auto it = cacheCopy.find((uintptr_t)Player);
+                if (it == cacheCopy.end()) continue;
+                const auto& v = it->second;
                 if (v.isDead) continue;
                 Vector3 sp = v.spine1Pos;
                 if (sp.Empty()) sp = v.headPos;
                 if (sp.Empty()) continue;
                 Vector2 ps = WorldToScreen(sp, frameMatrix);
                 if (!std::isfinite(ps.x) || !std::isfinite(ps.y)
-                    || ps.x <= 1 || ps.x >= (float)screenWidth - 1
-                    || ps.y <= 1 || ps.y >= (float)screenHeight - 1) continue;
+                    || ps.x <= 1 || ps.x >= (float)g_ScreenW - 1
+                    || ps.y <= 1 || ps.y >= (float)g_ScreenH - 1) continue;
                 float dx = ps.x - cx;
                 float dy = ps.y - cy;
                 float d2 = dx * dx + dy * dy;
-                if (d2 < best) { best = d2; bestTgt = k; }
+                if (d2 < best && d2 <= fovLimit) { best = d2; bestTgt = (uintptr_t)Player; }
             }
             g_HotbarTarget = bestTgt;
         } else {
@@ -296,8 +316,8 @@ namespace Xheat {
 
             Vector2 Screen = WorldToScreen(tPos, frameMatrix);     
             if (!std::isfinite(Screen.x) || !std::isfinite(Screen.y)
-                || Screen.x <= 1 || Screen.x >= (float)screenWidth - 1
-                || Screen.y <= 1 || Screen.y >= (float)screenHeight - 1) {
+                || Screen.x <= 1 || Screen.x >= (float)g_ScreenW - 1
+                || Screen.y <= 1 || Screen.y >= (float)g_ScreenH - 1) {
                 continue;
             }
 
@@ -309,9 +329,65 @@ namespace Xheat {
         }
         skipPlayers:;
 
+        // Player Inventory Panel — shows inventory of player you're looking at
+        if (ESP::PlayerInventoryPanel && g_HotbarTarget && !SETTINGS::MenuOpen) {
+            auto pit = cacheCopy.find(g_HotbarTarget);
+            if (pit != cacheCopy.end()) {
+                const EspCacheData& tc = pit->second;
+                float panelDist = lpPos.DistTo(tc.headPos);
+                if (panelDist <= ESP::draw_distance && !tc.isDead) {
+                    float panelW = 230.0f;
+                    float panelX = (float)g_ScreenW - panelW - 10.0f;
+                    ImGui::SetNextWindowPos(ImVec2(panelX, (float)g_ScreenH * 0.5f), ImGuiCond_Always, ImVec2(0.0f, 0.5f));
+                    ImGui::SetNextWindowSize(ImVec2(panelW, 0), ImGuiCond_Always);
+                    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.88f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.25f, 0.35f, 0.6f));
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+                    ImGui::Begin("##InvPanel", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+
+                    ImGui::TextColored(ImColor(200, 200, 210, 255), "%s", cacheStrEmpty(tc.name) ? "Unknown" : tc.name);
+                    ImGui::TextColored(ImColor(150, 170, 200, 255), "Distance: %dm", (int)panelDist);
+                    ImGui::Separator();
+
+                    ImGui::TextColored(ImColor(180, 190, 200, 255), "Held: %s", cacheStrEmpty(tc.weaponName) ? "Empty" : tc.weaponName);
+                    if (tc.ammo >= 0)
+                        ImGui::TextColored(ImColor(150, 170, 200, 255), "Ammo: %d", tc.ammo);
+                    ImGui::Separator();
+
+                    ImGui::TextColored(ImColor(150, 170, 200, 255), "Belt:");
+                    for (int i = 0; i < 6; i++) {
+                        if (!cacheStrEmpty(tc.belt[i])) {
+                            bool isActive = !cacheStrEmpty(tc.weaponName) && strcmp(tc.belt[i], tc.weaponName) == 0;
+                            if (isActive)
+                                ImGui::TextColored(ImColor(100, 255, 100, 255), "  %d. %s  <<<", i + 1, tc.belt[i]);
+                            else
+                                ImGui::TextColored(ImColor(200, 200, 210, 255), "  %d. %s", i + 1, tc.belt[i]);
+                        } else {
+                            ImGui::TextColored(ImColor(90, 90, 90, 255), "  %d. ---", i + 1);
+                        }
+                    }
+                    ImGui::Separator();
+
+                    bool hasWear = false;
+                    for (int i = 0; i < 5; i++) if (!cacheStrEmpty(tc.wear[i])) { hasWear = true; break; }
+                    if (hasWear) {
+                        ImGui::TextColored(ImColor(150, 170, 200, 255), "Wear:");
+                        for (int i = 0; i < 5; i++) {
+                            if (!cacheStrEmpty(tc.wear[i]))
+                                ImGui::TextColored(ImColor(200, 200, 210, 255), "  %s", tc.wear[i]);
+                        }
+                    }
+
+                    ImGui::End();
+                    ImGui::PopStyleVar();
+                    ImGui::PopStyleColor(2);
+                }
+            }
+        }
+
         if (allowNPC && NPC_ESP::Enabled && !MISC::CombatMode) {
-            std::vector<Rust::BaseEntity*> npclist;
-            { std::lock_guard<std::mutex> lk(cac->npc_mutex); npclist = npc_List; }
+            static std::vector<Rust::BaseEntity*> npclist;
+            { std::unique_lock<std::mutex> lk(cac->npc_mutex, std::try_to_lock); if (lk.owns_lock()) npclist = npc_List; }
             int npcCount = 0;
             static int npcDiagTick = 0;
             static int npcTotal = 0, npcValid = 0, npcDead = 0, npcCacheMiss = 0, npcPosEmpty = 0, npcDistExceeded = 0, npcRendered = 0;
@@ -338,8 +414,8 @@ namespace Xheat {
         }
 
         if (allowAnimals && ANIMAL_ESP::Enabled && !MISC::CombatMode) {
-            std::vector<Rust::BaseEntity*> animallist;
-            { std::lock_guard<std::mutex> lk(cac->animal_mutex); animallist = animal_List; }
+            static std::vector<Rust::BaseEntity*> animallist;
+            { std::unique_lock<std::mutex> lk(cac->animal_mutex, std::try_to_lock); if (lk.owns_lock()) animallist = animal_List; }
             for (const auto& Animal : animallist) {
                 if (!Animal || !is_valid((uintptr_t)Animal)) continue;
                 auto cit = cacheCopy.find((uintptr_t)Animal);
@@ -357,9 +433,9 @@ namespace Xheat {
         // do_misc and do_aimbot now run on background threads (see Rust Prv Ext.cpp)
 
         if (SETTINGS::BattleMode) {
-            ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)screenHeight - 25), ImColor(255, 50, 50, 255), TR("BATTLE MODE"));
+            ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)g_ScreenH - 25), ImColor(255, 50, 50, 255), TR("BATTLE MODE"));
         } else if (MISC::CombatMode) {
-            ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)screenHeight - 25), ImColor(255, 50, 50, 255), TR("COMBAT MODE"));
+            ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)g_ScreenH - 25), ImColor(255, 50, 50, 255), TR("COMBAT MODE"));
         }
 
         // ESP status: show entity counts on screen
@@ -372,7 +448,7 @@ namespace Xheat {
                 { std::lock_guard<std::mutex> lk(cac->animal_mutex); aCount = (int)animal_List.size(); }
                 char buf[64];
                 sprintf_s(buf, "ESP: %dP %dN %dA", pCount, nCount, aCount);
-                ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)screenHeight - 45), ImColor(100, 220, 100, 200), buf);
+                ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)g_ScreenH - 45), ImColor(100, 220, 100, 200), buf);
             }
         }
 
@@ -382,7 +458,7 @@ namespace Xheat {
             ImColor timerColor = (remaining <= 10.0f) ? ImColor(255, 50, 50, 255) : ImColor(255, 220, 80, 255);
             char debugCamText[64] = {};
             sprintf_s(debugCamText, "DEBUG CAM EXIT IN: %.0fs", remaining);
-            ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)screenHeight - 45), timerColor, debugCamText);
+            ImGui::GetBackgroundDrawList()->AddText(ImVec2(10, (float)g_ScreenH - 45), timerColor, debugCamText);
         }
 
         // Aimbot runs in render thread (like SHA source) — uses validated LocalPlayer, no race conditions
@@ -392,4 +468,16 @@ namespace Xheat {
 
     }
 
+}
+
+static int s_doCheatCrashCount = 0;
+
+void SafeDoCheat() {
+    __try {
+        Xheat::Do_Cheat();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        s_doCheatCrashCount++;
+        LOG("CRASH in Do_Cheat! code=0x%X crash#%d", GetExceptionCode(), s_doCheatCrashCount);
+    }
 }

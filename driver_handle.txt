@@ -1,0 +1,13 @@
+Driver Handle Info
+==================
+
+Device Path:      \\.\Bfo64
+IOCTL Code:       CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6B4F92A3, METHOD_BUFFERED, FILE_ANY_ACCESS)
+Security Code 1:  0xD93F7A61B8E42C5F
+Security Code 2:  0x4B7E29C8F1A6D3E0
+
+Open:
+  CreateFileW(L"\\\\.\\Bfo64", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL)
+
+Communicate:
+  DeviceIoControl(hDriver, IOCTL_DISPATCH, &req, sizeof(REQUEST_DATA), &req, sizeof(REQUEST_DATA), &bytesReturned, NULL)

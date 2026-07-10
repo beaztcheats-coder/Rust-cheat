@@ -327,7 +327,6 @@ inline void Aim()
     ImGui::BeginGroup();
     BeginCard("aim_basic", "BASIC", ImVec2(col, 130.f));
     ImGui::Checkbox("Aimbot Enable", &AIMBOT::Memory);
-    ImGui::Checkbox("Silent Aim", &AIMBOT::Silent);
     ImGui::Combo("Bone Priority", &AIMBOT::BonePriority, "Head\0Neck\0Chest\0Pelvis\0Closest\0Smart\0");
     EndCard();
 
@@ -468,10 +467,19 @@ inline void Pawn()
         ImGui::Checkbox("OFF Arrows", &ESP::OFFArrows);
         ImGui::Checkbox("Team ID", &ESP::TeamID);
         ImGui::Checkbox("Hotbar Text", &ESP::hotbar_text);
+        ImGui::Checkbox("Inventory Panel", &ESP::PlayerInventoryPanel);
         ImGui::Checkbox("Bullet Tracers", &ESP::BulletTracers);
-        // VisCheck disabled — toggle removed from menu
-        // ImGui::Checkbox("VisCheck", &ESP::VisCheck);
+        ImGui::Checkbox("VisCheck", &ESP::VisCheck);
         ImGui::Columns(1);
+        EndCard();
+
+        BeginCard("visual_vis", "VISIBILITY COLORS", ImVec2(right, 120.f));
+        ImGui::ColorEdit4("Box Visible##bv", (float*)&ESP::color::Visible, ImGuiColorEditFlags_NoInputs);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("Box Invisible##bi", (float*)&ESP::color::Invisible, ImGuiColorEditFlags_NoInputs);
+        ImGui::ColorEdit4("Skel Visible##sv", (float*)&ESP::color::SkeletonVisible, ImGuiColorEditFlags_NoInputs);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("Skel Invisible##si", (float*)&ESP::color::SkeletonInvisible, ImGuiColorEditFlags_NoInputs);
         EndCard();
 
         BeginCard("visual_style", "DISTANCE & STYLE", ImVec2(right, 172.f));

@@ -1,0 +1,7 @@
+// ============================================================
+// Auto-generated sdk.hpp patch from Morphine
+// Build: unknown
+// ============================================================
+
+// No direct sdk.hpp offset updates required.
+// Use sdk_decrypt_patch.txt for decrypt function updates.

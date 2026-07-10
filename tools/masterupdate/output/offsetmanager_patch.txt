@@ -1,0 +1,97 @@
+// ============================================================
+// Auto-generated OffsetManager.hpp patch from Morphine
+// Build: unknown
+// ============================================================
+
+// === DECRYPTCONFIG_STRUCT ===
+// Replace struct DecryptConfig body (between { and };)
+        // networkable_key (base_networkable_0): rol-xor-add
+        uint32_t nk_rol = 11;
+        uint32_t nk_xor = 0xBCDFA6C7;
+        uint32_t nk_add = 0x01A88518;
+
+        // networkable_key2 (base_networkable_1): add-rol-add-xor
+        uint32_t nk2_add = 0x4016C175;
+        uint32_t nk2_rol = 29;
+        uint32_t nk2_add_2 = 0x7D75A2B0;
+        uint32_t nk2_xor = 0x97FF1778;
+
+        // decrypt_ClActiveItem (cl_active_item): rol-add-rol
+        uint32_t cla_rol = 27;
+        uint32_t cla_add = 0x56427D52;
+        uint32_t cla_rol_2 = 8;
+
+        // decrypt_inventory_pointer (player_inventory): add-rol-add
+        uint32_t inv_add = 0x86F83B72;
+        uint32_t inv_rol = 21;
+        uint32_t inv_add_2 = 0x41069A6F;
+
+        // decrypt_eyes (player_eyes): rol-add-xor
+        uint32_t ey_rol = 5;
+        uint32_t ey_add = 0x487FBCF7;
+        uint32_t ey_xor = 0xE70F1737;
+
+        // decrypt_fov (decrypt_fov): add-rol-sub-xor
+        uint32_t fov_add = 0x0F7ED7C0;
+        uint32_t fov_rol = 18;
+        uint32_t fov_sub = 0xA557A4EC;
+        uint32_t fov_xor = 0xD6A6E25E;
+
+
+// === LOAD_DEC_BLOCK ===
+// Replace between #define LOAD_DEC and #undef LOAD_DEC
+
+                        LOAD_DEC("nk_rol", DecryptCfg.nk_rol);
+                        LOAD_DEC("nk_xor", DecryptCfg.nk_xor);
+                        LOAD_DEC("nk_add", DecryptCfg.nk_add);
+                        // networkable_key
+                        LOAD_DEC("nk2_add", DecryptCfg.nk2_add);
+                        LOAD_DEC("nk2_rol", DecryptCfg.nk2_rol);
+                        LOAD_DEC("nk2_add_2", DecryptCfg.nk2_add_2);
+                        LOAD_DEC("nk2_xor", DecryptCfg.nk2_xor);
+                        // networkable_key2
+                        LOAD_DEC("cla_rol", DecryptCfg.cla_rol);
+                        LOAD_DEC("cla_add", DecryptCfg.cla_add);
+                        LOAD_DEC("cla_rol_2", DecryptCfg.cla_rol_2);
+                        // decrypt_ClActiveItem
+                        LOAD_DEC("inv_add", DecryptCfg.inv_add);
+                        LOAD_DEC("inv_rol", DecryptCfg.inv_rol);
+                        LOAD_DEC("inv_add_2", DecryptCfg.inv_add_2);
+                        // decrypt_inventory_pointer
+                        LOAD_DEC("ey_rol", DecryptCfg.ey_rol);
+                        LOAD_DEC("ey_add", DecryptCfg.ey_add);
+                        LOAD_DEC("ey_xor", DecryptCfg.ey_xor);
+                        // decrypt_eyes
+                        LOAD_DEC("fov_add", DecryptCfg.fov_add);
+                        LOAD_DEC("fov_rol", DecryptCfg.fov_rol);
+                        LOAD_DEC("fov_sub", DecryptCfg.fov_sub);
+                        LOAD_DEC("fov_xor", DecryptCfg.fov_xor);
+
+// === SAVE_BLOCK ===
+// Replace between auto W = lambda and CloseHandle in SaveDecryptConfig
+
+        W("nk_rol", DecryptCfg.nk_rol);
+        W("nk_xor", DecryptCfg.nk_xor);
+        W("nk_add", DecryptCfg.nk_add);
+        // networkable_key
+        W("nk2_add", DecryptCfg.nk2_add);
+        W("nk2_rol", DecryptCfg.nk2_rol);
+        W("nk2_add_2", DecryptCfg.nk2_add_2);
+        W("nk2_xor", DecryptCfg.nk2_xor);
+        // networkable_key2
+        W("cla_rol", DecryptCfg.cla_rol);
+        W("cla_add", DecryptCfg.cla_add);
+        W("cla_rol_2", DecryptCfg.cla_rol_2);
+        // decrypt_ClActiveItem
+        W("inv_add", DecryptCfg.inv_add);
+        W("inv_rol", DecryptCfg.inv_rol);
+        W("inv_add_2", DecryptCfg.inv_add_2);
+        // decrypt_inventory_pointer
+        W("ey_rol", DecryptCfg.ey_rol);
+        W("ey_add", DecryptCfg.ey_add);
+        W("ey_xor", DecryptCfg.ey_xor);
+        // decrypt_eyes
+        W("fov_add", DecryptCfg.fov_add);
+        W("fov_rol", DecryptCfg.fov_rol);
+        W("fov_sub", DecryptCfg.fov_sub);
+        W("fov_xor", DecryptCfg.fov_xor);

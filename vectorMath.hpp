@@ -496,7 +496,11 @@ inline Vector2 WorldToScreen(const Vector3& entity_position, Matrix4x4 view_matr
 
 	float w = trans_vec.Dot(entity_position) + view_matrix._44;
 
-	if (w < 0.1f) return Vector2(-1, -1);
+	// Discard entities behind camera or too close to near-clip plane.
+	// Clamping w to 0.0001f (old approach) caused entities to project to extreme
+	// screen positions — appearing "in the sky" on some PCs. CCODIX approach is safer.
+	if (w < 0.098f)
+		return Vector2(-1, -1);
 
 	float y = up_vec.Dot(entity_position) + view_matrix._42;
 	float x = right_vec.Dot(entity_position) + view_matrix._41;

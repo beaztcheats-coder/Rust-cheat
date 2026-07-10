@@ -54,6 +54,31 @@ private:
     ~Logger() {}
 
     void WriteLine(const char* msg) {
+        // Filter out verbose diagnostic messages — keeps log small with only important info
+        static const char* skipPatterns[] = {
+            "CACHE cycle:", "CACHE entity_size=", "POS cycle:", "POS: refresh",
+            "RECOIL: ", "ESP Lists:", "NPC FILTER:", "TOGGLES:",
+            "TOD_DIAG:", "TOD_RETRY:", "FOV: ", "BRIGHTNIGHT:",
+            "TIMECHANGER:", "DRAW[", "CAM_CHAIN: view", "CAM_CHAIN: VP ",
+            "CACHE entity_size changed", "BN chain SUCCESS", "  entity_size:",
+            "  static_fields", "  +0x", "  INVALID", "=== CAMERA SCAN",
+            "=== END CAMERA", "Do_Cheat: LocalPlayer", "Do_Cheat: entity_List",
+            "SKEL: ", "GCHANDLE", "FOV_BYPASS:", "RECOIL_CACHE:", "RECOIL_RESTORE:",
+            "CACHE: entity_size=", "capping at", "BN chain RECOVERED",
+            "CACHE: CR3 changed", "VisCheck: VisMode",
+            "CACHE name[", "CACHE prefab[", "CACHE UNMATCHED[", "CACHE loop DONE",
+            "CACHE PLAYER FALLBACK", "CACHE NPC DIAG", "CACHE WARNING",
+            "CLA_DIAG[", "CLA_MATCH[", "CLA_NOMATCH[", "INV_RESOLVE:", "INV_METHOD:",
+            "POS_DIAG:", "AIMBOT_WRITE[", "PE scan:", "ANYBRAIN:",
+            "PE scan coarse", "PE scan: fine", "PE scan: wide", "PE scan: finer",
+            "  basenetworkable:", "  wrapper_class", "  parent_sf", "  parent_class",
+            "  entity(BufferList", "  entity_array", "  LocalPlayer",
+            "--- MainCamera", "--- SingletonComponent", "--- Camera_c",
+            "BN chain SUCCESS!", "OffsetMgr] "
+        };
+        for (const char* p : skipPatterns) {
+            if (strstr(msg, p)) return;
+        }
         HANDLE h = CreateFileA(log_path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (h == INVALID_HANDLE_VALUE) return;
         SYSTEMTIME st;

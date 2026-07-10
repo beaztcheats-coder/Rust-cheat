@@ -37,6 +37,10 @@
 #include <cctype>
 #include <algorithm>
 #include <urlmon.h>
+
+static int g_drawStep = 0;
+static int g_drawCrashCount = 0;
+static int g_drawSkipFrames = 0;
 #include <Shlwapi.h>
 
 #pragma comment(lib, "d3dx11.lib")
@@ -964,6 +968,32 @@ namespace render {
             }
             LOG("Setup: ImGui() SUCCESS — overlay fully initialized");
             LOG("Setup: window_handle=0x%I64X fortnite_window=0x%I64X", (uint64_t)window_handle, (uint64_t)fortnite_window);
+
+            // Fullscreen detection — force borderless windowed if exclusive fullscreen detected
+            if (fortnite_window && IsWindow(fortnite_window)) {
+                RECT rc = {0};
+                if (GetWindowRect(fortnite_window, &rc)) {
+                    HMONITOR hMon = MonitorFromWindow(fortnite_window, MONITOR_DEFAULTTONEAREST);
+                    MONITORINFO mi = { sizeof(mi) };
+                    if (GetMonitorInfoW(hMon, &mi)) {
+                        int monW = mi.rcMonitor.right - mi.rcMonitor.left;
+                        int monH = mi.rcMonitor.bottom - mi.rcMonitor.top;
+                        LONG style = GetWindowLong(fortnite_window, GWL_STYLE);
+                        bool isFullscreen = ((rc.right - rc.left) >= monW && (rc.bottom - rc.top) >= monH && !(style & WS_OVERLAPPEDWINDOW));
+                        if (isFullscreen) {
+                            // Force borderless windowed — DWM must be active for overlay to render
+                            printf("  Game is in fullscreen — converting to borderless windowed.\n");
+                            LOG("Setup: Game in fullscreen — forcing borderless windowed.");
+                            SetWindowLong(fortnite_window, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+                            SetWindowPos(fortnite_window, NULL,
+                                mi.rcMonitor.left, mi.rcMonitor.top,
+                                monW, monH,
+                                SWP_FRAMECHANGED | SWP_NOZORDER);
+                        }
+                    }
+                }
+            }
+
             return RENDER_SETUP_SUCCESSFUL;
 
         }
@@ -1009,8 +1039,11 @@ namespace render {
                     continue;
                 }
 
-                io.MousePos.x = p_cursor.x;
-                io.MousePos.y = p_cursor.y;
+                // Convert screen coordinates to overlay-window-client-relative coordinates
+                // This fixes click offset when the overlay window is not at (0,0)
+                ScreenToClient(window_handle, &p_cursor);
+                io.MousePos.x = (float)p_cursor.x;
+                io.MousePos.y = (float)p_cursor.y;
 
                 if (GetAsyncKeyState(VK_LBUTTON)) {
                     io.MouseDown[0] = true;
@@ -1022,7 +1055,25 @@ namespace render {
                     io.MouseDown[0] = false;
                 }
 
-                render::c_render::Draw();
+                if (g_drawSkipFrames > 0) {
+                    g_drawSkipFrames--;
+                    Sleep(15);
+                } else {
+                    EXCEPTION_POINTERS* drawCrashEp = nullptr;
+                    __try {
+                        render::c_render::Draw();
+                    } __except (drawCrashEp = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER) {
+                        g_drawCrashCount++;
+                        LOG("CRASH in Draw()! count=%d step=%d code=0x%X addr=0x%p",
+                            g_drawCrashCount, g_drawStep, GetExceptionCode(),
+                            drawCrashEp ? drawCrashEp->ExceptionRecord->ExceptionAddress : nullptr);
+                        if (g_drawCrashCount >= 5) {
+                            LOG("CRASH in Draw() — limit reached, skipping 60 frames");
+                            g_drawCrashCount = 0;
+                            g_drawSkipFrames = 60;
+                        }
+                    }
+                }
             }
             ImGui_ImplDX11_Shutdown();
             ImGui_ImplWin32_Shutdown();
@@ -1152,15 +1203,26 @@ namespace render {
         //}
 
         auto Hijack() -> bool {
-            // Get screen size
-            int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-            int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+            // Get the monitor the game window is on — ensures overlay is created on the right screen
+            HMONITOR hMon = nullptr;
+            if (fortnite_window && IsWindow(fortnite_window)) {
+                hMon = MonitorFromWindow(fortnite_window, MONITOR_DEFAULTTONEAREST);
+            }
+            MONITORINFO mi = { sizeof(mi) };
+            int screenWidth, screenHeight;
+            if (hMon && GetMonitorInfoW(hMon, &mi)) {
+                screenWidth = mi.rcMonitor.right - mi.rcMonitor.left;
+                screenHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
+            } else {
+                screenWidth = GetSystemMetrics(SM_CXSCREEN);
+                screenHeight = GetSystemMetrics(SM_CYSCREEN);
+            }
 
             WNDCLASSEXW wc = { sizeof(WNDCLASSEX), CS_HREDRAW | CS_VREDRAW, WndProcHook, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, _T("onGuiClass"), NULL };
             ::RegisterClassEx(&wc);
 
             window_handle = CreateWindowEx(
-                WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW,
+                WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                 wc.lpszClassName,
                 L"ongaUI",
                 WS_POPUP,
@@ -1178,8 +1240,8 @@ namespace render {
             // Set alpha to 255 (fully opaque)
             SetLayeredWindowAttributes(window_handle, 0, 255, LWA_ALPHA);
 
-            // Show the window
-            ::ShowWindow(window_handle, SW_SHOWDEFAULT);
+            // Show the window — use SW_SHOW (not SW_SHOWDEFAULT which uses host process STARTUPINFO)
+            ::ShowWindow(window_handle, SW_SHOW);
             ::UpdateWindow(window_handle);
 
             // Register raw input for mouse wheel (works even without window focus)
@@ -1254,7 +1316,7 @@ namespace render {
             ESP::Skeleton = true;
             ESP::HealthBar = true;
             ESP::OFFArrows = false;
-            ESP::VisCheck = false;
+            ESP::VisCheck = true;
             ESP::TeamID = false;
             ESP::hotbar_text = false;
             ESP::DrawTextBackground = false;
@@ -1560,32 +1622,91 @@ namespace render {
         auto Draw() -> void {
             ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 0.f);
 
-            // Frame limiter — cap to ~120 FPS BEFORE matrix read (minimizes read-to-Present latency)
-            {
-                static ULONGLONG lastFrame = 0;
-                ULONGLONG now = GetTickCount64();
-                if (lastFrame > 0) {
-                    ULONGLONG elapsed = now - lastFrame;
-                    if (elapsed < 8) Sleep(8 - (DWORD)elapsed);
-                }
-                lastFrame = GetTickCount64();
+            static int drawFrameCount = 0;
+            static uintptr_t lastLoggedLP = 0;
+            uintptr_t currentLP = src ? (uintptr_t)src->LocalPlayer : 0;
+            bool lpChanged = (currentLP != lastLoggedLP);
+            bool logFrame = (drawFrameCount < 3) || lpChanged;
+            if (logFrame) {
+                LOG("DRAW[%d]: start (LP=0x%I64X)", drawFrameCount, (uint64_t)currentLP);
+                lastLoggedLP = currentLP;
             }
 
-            // Cache screen size once per frame (eliminates FindWindowA per WorldToScreen call)
+            // Frame limiter when idle (no LocalPlayer) — prevents 1000+ FPS overlay
+            // which causes GPU/window manager overload and EAC detection
+            if (!currentLP) {
+                Sleep(15);
+            }
+
+            // No frame limiter — Present() governs frame rate naturally.
+            // Camera matrix read in render thread via ReadFrameCameraMatrix().
+
+            // Force overlay to topmost every 60 frames — avoids z-fighting with Discord overlay
             {
-                HWND hw = FindWindowA("onGuiClass", nullptr);
-                if (hw) {
+                static int topmostTick = 0;
+                if (++topmostTick >= 60) {
+                    topmostTick = 0;
+                    SetWindowPos(window_handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                }
+            }
+
+            // Sync overlay window to game client area — pixel-perfect alignment
+            {
+                HWND hw = fortnite_window;
+                if (hw && IsWindow(hw)) {
                     RECT rc = {0};
                     GetClientRect(hw, &rc);
                     if (rc.right > 0 && rc.bottom > 0) {
                         g_ScreenW = rc.right;
                         g_ScreenH = rc.bottom;
                     }
+                    // Use ClientToScreen for exact client area position (no title bar offset)
+                    POINT pt = {0, 0};
+                    if (ClientToScreen(hw, &pt) && rc.right > 0 && rc.bottom > 0) {
+                        int gx = pt.x;
+                        int gy = pt.y;
+                        int gw = rc.right;
+                        int gh = rc.bottom;
+                        RECT oc = {0};
+                        if (GetWindowRect(window_handle, &oc)) {
+                            if (oc.left != gx || oc.top != gy || (oc.right - oc.left) != gw || (oc.bottom - oc.top) != gh) {
+                                SetWindowPos(window_handle, HWND_TOP, gx, gy, gw, gh, SWP_NOACTIVATE);
+                            }
+                        }
+                    }
                 }
                 if (g_ScreenW <= 0) g_ScreenW = GetSystemMetrics(SM_CXSCREEN);
                 if (g_ScreenH <= 0) g_ScreenH = GetSystemMetrics(SM_CYSCREEN);
+
+                // Resize swap chain back buffer when window dimensions change
+                // This is CRITICAL — without it, the back buffer stays at the initial size
+                // and D3D11 renders to a mismatched buffer, causing blank/garbled overlay
+                static int lastSwapW = 0;
+                static int lastSwapH = 0;
+                if (d3d_swap_chain && g_ScreenW > 0 && g_ScreenH > 0 &&
+                    (g_ScreenW != lastSwapW || g_ScreenH != lastSwapH)) {
+                    lastSwapW = g_ScreenW;
+                    lastSwapH = g_ScreenH;
+                    // Release render target view before resizing
+                    if (d3d_render_target) {
+                        d3d_device_ctx->OMSetRenderTargets(0, NULL, NULL);
+                        d3d_render_target->Release();
+                        d3d_render_target = nullptr;
+                    }
+                    HRESULT hr = d3d_swap_chain->ResizeBuffers(0, g_ScreenW, g_ScreenH, DXGI_FORMAT_UNKNOWN, 0);
+                    if (SUCCEEDED(hr)) {
+                        // Recreate render target view
+                        ID3D11Texture2D* pBackBuffer = nullptr;
+                        d3d_swap_chain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
+                        if (pBackBuffer) {
+                            d3d_device->CreateRenderTargetView(pBackBuffer, NULL, &d3d_render_target);
+                            pBackBuffer->Release();
+                        }
+                    }
+                }
             }
 
+            g_drawStep = 1;
             ImGui_ImplDX11_NewFrame();
             ImGui_ImplWin32_NewFrame();
 
@@ -1659,6 +1780,7 @@ namespace render {
                 g_RawMouseWheel = 0.0f;
             }
 
+            g_drawStep = 2;
             ImGui::NewFrame();
 
             // Global hotkey defaults (first frame)
@@ -1668,6 +1790,8 @@ namespace render {
                 EnsureHotkey("COMBAT.Aimbot", VK_F1, HK_HOLD);
                 hkInit = true;
             }
+
+            g_drawStep = 3;
 
             EnsureHotkeyRegistry();
             UpdateHotkeysFrame();
@@ -1679,24 +1803,42 @@ namespace render {
                 }
             }
 
-            // Shutdown: fire once on rising edge
+            // Shutdown: fire once on rising edge — restore ALL game memory immediately
             {
                 if (HotkeyPressed("global.shutdown")) {
                     MISC::ShutdownRequested = true;
-                    if (MISC::RecoilEnabled) {
-                        MISC::RecoilEnabled = false;
-                        if (hx) hx->do_misc();
-                    }
+                    MISC::RecoilEnabled = false;
+                    MISC::FovChanger = false;
+                    MISC::Zoom = false;
+                    MISC::BrightNight = false;
+                    MISC::AdminFlags = false;
+                    MISC::CombatMode = false;
+                    MISC::DebugCamera = false;
+                    SETTINGS::BattleMode = false;
+                    if (hx) __try { hx->do_misc(); } __except(EXCEPTION_EXECUTE_HANDLER) {}
                     PostMessageA(window_handle, WM_QUIT, 0, 0);
                 }
             }
 
             SETTINGS::MenuOpen = render_Menu;
+            {
+                LONG_PTR ex = GetWindowLongPtrW(window_handle, GWL_EXSTYLE);
+                if (render_Menu && (ex & WS_EX_TRANSPARENT)) {
+                    SetWindowLongPtrW(window_handle, GWL_EXSTYLE, ex & ~WS_EX_TRANSPARENT);
+                    // Force the style change to take effect immediately
+                    SetWindowPos(window_handle, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                else if (!render_Menu && !(ex & WS_EX_TRANSPARENT)) {
+                    SetWindowLongPtrW(window_handle, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT);
+                    SetWindowPos(window_handle, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+            }
             float targetAnim = render_Menu ? 1.0f : 0.0f;
             float speed = MENU_UI::DisableAnimations ? 1.0f : (ImGui::GetIO().DeltaTime * 14.0f * MENU_UI::AnimationSpeed);
             if (speed > 1.0f) speed = 1.0f;
             g_MenuAnim += (targetAnim - g_MenuAnim) * speed;
 
+            g_drawStep = 4;
             if (g_MenuAnim > 0.01f) {
 #ifdef BOMZA
                 BomzaMenu::Render();
@@ -1707,12 +1849,16 @@ namespace render {
 #endif
             }
 
+
             // Process hotkey toggles/holds for all bound features
+            g_drawStep = 5;
             ProcessHotkeys();
 
+            g_drawStep = 6;
             if(MISC::DrawFlags)
             DrawFlags();
 
+            g_drawStep = 7;
             if (AIMBOT::FovCircle)
             {
                 auto draw = ImGui::GetBackgroundDrawList();
@@ -1789,14 +1935,16 @@ namespace render {
                 if (currentLP && stableFrames < 90) {
                     stableFrames++;
                 } else {
+                    g_drawStep = 9;
                     g_ESPRenderer.Begin(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-                    Xheat::Do_Cheat();
+                    SafeDoCheat();
                     g_ESPRenderer.Flush();
                 }
             }
 
             // Hit indicator / crosshair rendering continues
 
+            g_drawStep = 10;
             if (RADAR::Enabled && src && src->LocalPlayer && (!SETTINGS::BattleMode || BATTLE::Radar)) {
                 auto* rdraw = ImGui::GetBackgroundDrawList();
                 float rSize = RADAR::Size;
@@ -1854,7 +2002,7 @@ namespace render {
 
                     // Single lock for all radar entity rendering
                     {
-                        std::lock_guard<std::mutex> lk(g_EspCacheMutex);
+                        std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex);
                         if (RADAR::ShowPlayers) {
                             for (const auto& entry : g_EspCache) {
                                 if (entry.second.isDead) continue;
@@ -1982,15 +2130,23 @@ namespace render {
 
                 ImGui::End();
             }
+            g_drawStep = 11;
             hotbar_list.clear();
 
+            g_drawStep = 12;
             ImGui::Render();
 
             const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
             d3d_device_ctx->OMSetRenderTargets(1, &d3d_render_target, nullptr);
             d3d_device_ctx->ClearRenderTargetView(d3d_render_target, clear_color_with_alpha);
             ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-            d3d_swap_chain->Present(0, 0); // No VSync â€” zero input lag
+            g_drawStep = 13;
+            d3d_swap_chain->Present(0, 0); // No VSync — zero input lag
+
+            // NOTE: Do NOT call SetWindowPos(HWND_TOPMOST) every frame — it causes z-fighting
+            // with Discord/Steam overlays. Topmost is re-asserted every 60 frames in Draw() above.
+            if (logFrame) LOG("DRAW[%d]: end", drawFrameCount);
+            drawFrameCount++;
         }
 
     };

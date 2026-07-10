@@ -10,7 +10,7 @@
 #include "../Cache/cache.hpp"
 
 extern std::unordered_map<uintptr_t, EspCacheData> g_EspCache;
-extern std::mutex g_EspCacheMutex;
+extern std::shared_mutex g_EspCacheMutex;
 extern std::unordered_map<uintptr_t, std::vector<Vector3>> g_Trails;
 extern std::mutex g_TrailsMutex;
 
@@ -25,8 +25,7 @@ ImFont* BeaztFontDesc = nullptr;
 ImVec2 ToImVec2(const Vector2& vec) {
     return ImVec2(vec.x, vec.y);
 }
-int screenWidth;
-int screenHeight;
+// g_ScreenW/g_ScreenH removed — use g_ScreenW/g_ScreenH (updated every frame from game window)
 
 static bool ScreenPointValid(const Vector2& p, int w, int h)
 {
@@ -78,10 +77,7 @@ static int g_SkeletonInterpCleanupTick = 0;
 void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCacheData& cached, const Matrix4x4& frameMatrix) {
     if (!Player || cached.isDead || !src->LocalPlayer) return;
 
-    if(!screenWidth) {
-        screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    }
+    // g_ScreenW/g_ScreenH are updated every frame in render.hpp from GetClientRect(game_window)
 
     Vector3 headPos = cached.headPos;
     Vector3 feetPos = cached.feetPos;
@@ -107,7 +103,12 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
 
     // Velocity-based position prediction (vs old fixed 0.3/0.7 lerp)
     {
-        static std::unordered_map<uintptr_t, Vector3> prevHead, prevFeet;
+        static std::unordered_map<uintptr_t, Vector3>* pPrevHead = nullptr;
+        static std::unordered_map<uintptr_t, Vector3>* pPrevFeet = nullptr;
+        if (!pPrevHead) pPrevHead = new std::unordered_map<uintptr_t, Vector3>();
+        if (!pPrevFeet) pPrevFeet = new std::unordered_map<uintptr_t, Vector3>();
+        auto& prevHead = *pPrevHead;
+        auto& prevFeet = *pPrevFeet;
         static int cleanupTick = 0;
 
         uint64_t now = GetTickCount64();
@@ -161,7 +162,7 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
 
     Vector2 headScreen = WorldToScreen(headPos, frameMatrix);
     Vector2 feetScreen = WorldToScreen(feetPos, frameMatrix);
-    if (!ScreenPointValid(headScreen, screenWidth, screenHeight) || !ScreenPointValid(feetScreen, screenWidth, screenHeight)) {
+    if (!ScreenPointValid(headScreen, g_ScreenW, g_ScreenH) || !ScreenPointValid(feetScreen, g_ScreenW, g_ScreenH)) {
         ImGui::PopFont();
         return;
     }
@@ -268,7 +269,7 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
         // DEPRECATED: health is server-side only in Rust, not readable from client memory
     }
     if (ESP::HeadCircle && drawHeadDist) {
-        if (ScreenPointValid(headScreen, screenWidth, screenHeight))
+        if (ScreenPointValid(headScreen, g_ScreenW, g_ScreenH))
             ImGui::GetBackgroundDrawList()->AddCircle(
                 ImVec2(headScreen.x, headScreen.y),
                 5.f + (200.f / (Distance + 1.f)),
@@ -316,13 +317,13 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
     }
 
     // Use cached inventory from slow thread (zero IOCTLs in render loop)
-    struct CachedInv { std::string belt[6]; std::string wear[5]; int ammo = -1; };
+    struct CachedInv { char belt[6][64] = {}; char wear[5][64] = {}; int ammo = -1; };
     CachedInv ex;
-    for (int i = 0; i < 6; i++) ex.belt[i] = cached.belt[i];
-    for (int i = 0; i < 5; i++) ex.wear[i] = cached.wear[i];
+    for (int i = 0; i < 6; i++) cacheSetStr(ex.belt[i], cached.belt[i]);
+    for (int i = 0; i < 5; i++) cacheSetStr(ex.wear[i], cached.wear[i]);
     ex.ammo = cached.ammo;
     bool hasBelt = false;
-    for (int i = 0; i < 6; i++) if (!ex.belt[i].empty()) { hasBelt = true; break; }
+    for (int i = 0; i < 6; i++) if (!cacheStrEmpty(ex.belt[i])) { hasBelt = true; break; }
 
     if (ESP::hotbar_text && hasBelt) {
         if (ESP::HotbarIcons) {
@@ -331,22 +332,22 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
             float iconSpacing = 2.0f;
             float totalW = 0;
             int iconCount = 0;
-            for (int i = 0; i < 6; ++i) if (!ex.belt[i].empty()) iconCount++;
+            for (int i = 0; i < 6; ++i) if (!cacheStrEmpty(ex.belt[i])) iconCount++;
             if (iconCount > 0) {
                 totalW = iconCount * (iconSize + iconSpacing) - iconSpacing;
                 float startX = headScreen.x - totalW * 0.5f;
                 auto* dl = ImGui::GetBackgroundDrawList();
                 for (int i = 0; i < 6; ++i) {
-                    if (ex.belt[i].empty()) continue;
-                    ID3D11ShaderResourceView* icon = g_ItemIcons.Get(ex.belt[i]);
+                    if (cacheStrEmpty(ex.belt[i])) continue;
+                    ID3D11ShaderResourceView* icon = g_ItemIcons.Get(std::string(ex.belt[i]));
                     if (icon) {
                         ImVec2 pos1(startX, bottomY);
                         ImVec2 pos2(startX + iconSize, bottomY + iconSize);
                         dl->AddImage((ImTextureID)icon, pos1, pos2);
                     } else {
                         // Fallback to text
-                        ImVec2 sz = CalcEspTextSize(ex.belt[i].c_str());
-                        DrawEspText(startX, bottomY, ESP::color::Weapon, ex.belt[i].c_str());
+                        ImVec2 sz = CalcEspTextSize(ex.belt[i]);
+                        DrawEspText(startX, bottomY, ESP::color::Weapon, ex.belt[i]);
                     }
                     startX += iconSize + iconSpacing;
                 }
@@ -354,19 +355,19 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
             }
         } else {
             for (int i = 0; i < 6; ++i) {
-                if (!ex.belt[i].empty()) DrawBottomLine(ex.belt[i], ESP::color::Weapon);
+                if (!cacheStrEmpty(ex.belt[i])) DrawBottomLine(std::string(ex.belt[i]), ESP::color::Weapon);
             }
         }
     }
     bool hasWear = false;
-    for (int i = 0; i < 5; i++) if (!ex.wear[i].empty()) { hasWear = true; break; }
+    for (int i = 0; i < 5; i++) if (!cacheStrEmpty(ex.wear[i])) { hasWear = true; break; }
     if (ESP::Clothing && hasWear) {
         DrawBottomLine(TR("-- Wear --"), ESP::color::Distance);
-        for (int i = 0; i < 5; ++i) if (!ex.wear[i].empty()) DrawBottomLine(ex.wear[i], ESP::color::Name);
+        for (int i = 0; i < 5; ++i) if (!cacheStrEmpty(ex.wear[i])) DrawBottomLine(std::string(ex.wear[i]), ESP::color::Name);
     }
     if (ESP::ItemList && hasBelt) {
         DrawBottomLine(TR("-- Belt --"), ESP::color::Distance);
-        for (int i = 0; i < 6; ++i) if (!ex.belt[i].empty()) DrawBottomLine(ex.belt[i], ESP::color::Weapon);
+        for (int i = 0; i < 6; ++i) if (!cacheStrEmpty(ex.belt[i])) DrawBottomLine(std::string(ex.belt[i]), ESP::color::Weapon);
     }
     if (ESP::AmmoBar && ex.ammo >= 0) {
         DrawBottomLine(TR("Ammo: ") + std::to_string(ex.ammo), ESP::color::Distance);
@@ -382,13 +383,13 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
         if (!va.Empty() && !localNeck.Empty()) {
             float ofw = 5.f;
             float angle = CalcAngle(localNeck, headPos).y - va.y - 90;
-            arc(screenWidth / 2, screenHeight / 2, 300.f, angle - ofw, angle + ofw, ESP::color::OFFArrowColor, 4.f);
+            arc(g_ScreenW / 2, g_ScreenH / 2, 300.f, angle - ofw, angle + ofw, ESP::color::OFFArrowColor, 4.f);
         }
     }
     if (ESP::SnapLines && drawSnapDist) {
-        float ox = (float)(screenWidth/2), oy = (float)screenHeight;
-        if (ESP::SnaplineMode == 3) oy = (float)(screenHeight * 0.1f);
-        else if (ESP::SnaplineMode == 1) oy = (float)(screenHeight * 0.9f);
+        float ox = (float)(g_ScreenW/2), oy = (float)g_ScreenH;
+        if (ESP::SnaplineMode == 3) oy = (float)(g_ScreenH * 0.1f);
+        else if (ESP::SnaplineMode == 1) oy = (float)(g_ScreenH * 0.9f);
         float st = (float)ESP::SnaplineThickness;
         if (ESP::SnaplineOutline)
             ImGui::GetBackgroundDrawList()->AddLine(ImVec2(ox, oy), ImVec2(Feet.x, Feet.y), IM_COL32(0,0,0,180), st + 2.f);
@@ -419,7 +420,7 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
         for (int i = 0; i < 15; i++) {
             if (bones[i].Empty()) continue;
             Vector2 sp = WorldToScreen(bones[i], frameMatrix);
-            if (!ScreenPointValid(sp, screenWidth, screenHeight)) continue;
+            if (!ScreenPointValid(sp, g_ScreenW, g_ScreenH)) continue;
             scr[i] = sp; ok[i] = true; cnt++;
         }
             static bool skelRenderDiag = false;
@@ -481,7 +482,7 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
             for (size_t i = 1; i < trails.size(); i++) {
                 Vector2 a = WorldToScreen(trails[i-1], frameMatrix);
                 Vector2 b = WorldToScreen(trails[i], frameMatrix);
-                if (ScreenPointValid(a, screenWidth, screenHeight) && ScreenPointValid(b, screenWidth, screenHeight)) {
+                if (ScreenPointValid(a, g_ScreenW, g_ScreenH) && ScreenPointValid(b, g_ScreenW, g_ScreenH)) {
                     float alpha = (float)i / (float)trails.size() * 0.5f;
                     ImU32 c = IM_COL32((int)(skelCol.Value.x*255),(int)(skelCol.Value.y*255),(int)(skelCol.Value.z*255),(int)(alpha*255));
                     dl->AddLine(ImVec2(a.x,a.y), ImVec2(b.x,b.y), c, 1.5f);
@@ -495,7 +496,7 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
 
 void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspCacheData& cached, const Matrix4x4& frameMatrix) {
     if (!Entity || cached.isDead || !src->LocalPlayer) return;
-    if (!screenWidth) { screenWidth = GetSystemMetrics(SM_CXSCREEN); screenHeight = GetSystemMetrics(SM_CYSCREEN); }
+    // g_ScreenW/g_ScreenH updated every frame in render.hpp
     Vector3 rootPos = cached.headPos;
     if (rootPos.Empty()) {
         auto headTf = Entity->Get_Transformation(BoneList::head);
@@ -519,9 +520,9 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
     headPos3D.y += 1.8f; // approximate head height above root
 
     Vector2 headScreen = WorldToScreen(headPos3D, frameMatrix);
-    if (!ScreenPointValid(headScreen, screenWidth, screenHeight)) return;
+    if (!ScreenPointValid(headScreen, g_ScreenW, g_ScreenH)) return;
     Vector2 feetScreen = WorldToScreen(feetPos3D, frameMatrix);
-    if (!ScreenPointValid(feetScreen, screenWidth, screenHeight)) {
+    if (!ScreenPointValid(feetScreen, g_ScreenW, g_ScreenH)) {
         feetScreen = headScreen;
         feetScreen.y += 95.f;
     }
@@ -589,7 +590,7 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
             for (int i = 0; i < 15; i++) {
                 if (bones[i].Empty()) continue;
                 Vector2 sp = WorldToScreen(bones[i], frameMatrix);
-                if (!ScreenPointValid(sp, screenWidth, screenHeight)) continue;
+                if (!ScreenPointValid(sp, g_ScreenW, g_ScreenH)) continue;
                 scr[i] = sp; ok[i] = true; cnt++;
             }
             if (cnt >= 4) {
@@ -618,7 +619,7 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
             if (!neck.Empty() && !headPos3D.Empty()) {
                 Vector2 n = WorldToScreen(neck, frameMatrix);
                 Vector2 hn = WorldToScreen(headPos3D, frameMatrix);
-                if (ScreenPointValid(n, screenWidth, screenHeight) && ScreenPointValid(hn, screenWidth, screenHeight)) {
+                if (ScreenPointValid(n, g_ScreenW, g_ScreenH) && ScreenPointValid(hn, g_ScreenW, g_ScreenH)) {
                     auto* d = ImGui::GetBackgroundDrawList();
                     d->AddLine(ImVec2(hn.x, hn.y), ImVec2(n.x, n.y), NPC_ESP::color::Skeleton);
                 }
@@ -626,9 +627,9 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
         }
     }
     if (NPC_ESP::SnapLines && drawSnapDist) {
-        float ox = (float)screenWidth * 0.5f, oy = (float)screenHeight * 0.5f;
-        if (NPC_ESP::SnaplineMode == 3) oy = (float)screenHeight * 0.1f;
-        else if (NPC_ESP::SnaplineMode == 1) oy = (float)screenHeight * 0.9f;
+        float ox = (float)g_ScreenW * 0.5f, oy = (float)g_ScreenH * 0.5f;
+        if (NPC_ESP::SnaplineMode == 3) oy = (float)g_ScreenH * 0.1f;
+        else if (NPC_ESP::SnaplineMode == 1) oy = (float)g_ScreenH * 0.9f;
         ImGui::GetBackgroundDrawList()->AddLine(ImVec2(ox, oy), ImVec2(feetScreen.x, feetScreen.y), NPC_ESP::color::Snaplines);
     }
     if (NPC_ESP::HeldItem && drawHeldDist) {
@@ -642,7 +643,7 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
 
 void Visuals::do_Animal_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspCacheData& cached, const Matrix4x4& frameMatrix) {
     if (!Entity || cached.isDead || !src->LocalPlayer) return;
-    if (!screenWidth) { screenWidth = GetSystemMetrics(SM_CXSCREEN); screenHeight = GetSystemMetrics(SM_CYSCREEN); }
+    // g_ScreenW/g_ScreenH updated every frame in render.hpp
     Vector3 pos = cached.headPos;
     if (pos.Empty()) return;
 
@@ -665,8 +666,8 @@ void Visuals::do_Animal_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const E
     Vector3 feetPos3D = pos;
     Vector2 headScreen = WorldToScreen(headPos3D, frameMatrix);
     Vector2 feetScreen = WorldToScreen(feetPos3D, frameMatrix);
-    if (!ScreenPointValid(headScreen, screenWidth, screenHeight)) return;
-    if (!ScreenPointValid(feetScreen, screenWidth, screenHeight)) {
+    if (!ScreenPointValid(headScreen, g_ScreenW, g_ScreenH)) return;
+    if (!ScreenPointValid(feetScreen, g_ScreenW, g_ScreenH)) {
         feetScreen = headScreen;
         feetScreen.y += 60.f;
     }
@@ -718,9 +719,9 @@ void Visuals::do_Animal_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const E
     }
     if (ANIMAL_ESP::SnapLines) {
         if (!ANIMAL_ESP::ESPAdvanced || Distance <= ANIMAL_ESP::AnimalSnaplineDist) {
-            float ox = (float)screenWidth * 0.5f, oy = (float)screenHeight * 0.5f;
-            if (ANIMAL_ESP::SnaplineMode == 3) oy = (float)screenHeight * 0.1f;
-            else if (ANIMAL_ESP::SnaplineMode == 1) oy = (float)screenHeight * 0.9f;
+            float ox = (float)g_ScreenW * 0.5f, oy = (float)g_ScreenH * 0.5f;
+            if (ANIMAL_ESP::SnaplineMode == 3) oy = (float)g_ScreenH * 0.1f;
+            else if (ANIMAL_ESP::SnaplineMode == 1) oy = (float)g_ScreenH * 0.9f;
             ImGui::GetBackgroundDrawList()->AddLine(ImVec2(ox, oy),
                 ImVec2(screen.x, screen.y), ANIMAL_ESP::color::Snaplines);
         }
@@ -732,8 +733,7 @@ void Visuals::do_Ghost_Visuals() {
     if (!ESP::VisGhost) return;
     if (!src || !src->LocalPlayer) return;
 
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    // g_ScreenW/g_ScreenH are global, updated every frame in render.hpp
     Vector3 lpPos;
     {
         std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex);
@@ -768,7 +768,7 @@ void Visuals::do_Ghost_Visuals() {
         Vector3 headPos = gd.lastPos; headPos.y += 1.8f;
         auto headScreen = WorldToScreen(headPos, frameMatrix);
         auto feetScreen = WorldToScreen(gd.lastPos, frameMatrix);
-        if (!ScreenPointValid(feetScreen, screenWidth, screenHeight) || !ScreenPointValid(headScreen, screenWidth, screenHeight)) continue;
+        if (!ScreenPointValid(feetScreen, g_ScreenW, g_ScreenH) || !ScreenPointValid(headScreen, g_ScreenW, g_ScreenH)) continue;
 
         float h = fabsf(feetScreen.y - headScreen.y);
         float w = h * 0.45f;
