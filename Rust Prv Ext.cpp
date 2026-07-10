@@ -296,6 +296,7 @@ void MainThreadImpl()
 {
     g_vehHandle = AddVectoredExceptionHandler(1, CrashVEH);
 
+<<<<<<< HEAD
     // DPI awareness — SetProcessDpiAwarenessContext fails silently in injected DLLs
     // (host process already set its own DPI awareness). This is intentional — no fallbacks
     // because loading shcore.dll or calling SetProcessDpiAwareness/SetProcessDPIAware
@@ -343,6 +344,39 @@ void MainThreadImpl()
         }
     }
 
+=======
+    // Delete ALL temp files at startup (except config + debug log for debug builds)
+    {
+        std::string dllDir = RuntimePaths::DllDirectory();
+        auto delFile = [&](const char* path) { DeleteFileA(path); };
+        auto delDll = [&](const char* name) { DeleteFileA((dllDir + name).c_str()); };
+
+        // DLL directory temp files
+        delDll("rust_decrypts.dat");
+        delDll("rust_mesh.tri");
+        delDll("cheat_dll_loaded.txt");
+        delDll("rust_debug_enabled.txt");
+        delDll("spoofer_debug.log");
+        delDll("spoof_seed.dat");
+
+        // C:\ temp files
+        delFile("C:\\rust_decrypts.dat");
+        delFile("C:\\rust_mesh.tri");
+        delFile("C:\\rust_meshes.tri");
+        delFile("C:\\rust_debug_enabled.txt");
+
+        // %TEMP% log files (debug build keeps current flavor's log — Logger::Init recreates it)
+        char tempPath[MAX_PATH] = {};
+        GetTempPathA(MAX_PATH, tempPath);
+        if (tempPath[0]) {
+            std::string tp(tempPath);
+            DeleteFileA((tp + "cheat_debug.log").c_str());
+            DeleteFileA((tp + "cheat_debug_bomza.log").c_str());
+            DeleteFileA((tp + "cheat_debug_bc.log").c_str());
+        }
+    }
+
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
     // Diagnostic marker in DLL directory (non-suspicious filename — NOT "cheat" in name)
     {
         HANDLE hDiag = CreateFileA(RuntimePaths::DiagnosticMarkerPath(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);

@@ -18,6 +18,10 @@ inline std::atomic<bool> g_shutting_down{ false };
 // Render thread does ~12 IOCTLs/frame (camera + aimbot), negligible concurrent load.
 // All other threads (cache/position/skeleton/misc) still use the mutex.
 thread_local bool g_render_thread = false;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
 
 
 #define IOCTL_DISPATCH CTL_CODE(FILE_DEVICE_UNKNOWN, 0x3C4F22, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -290,7 +294,7 @@ public:
         req.ReadWriteMemoryData.Buffer = (ULONG64)buffer;
         req.ReadWriteMemoryData.Size = size;
         req.ReadWriteMemoryData.isWrite = false;
-        req.ReadWriteMemoryData.noncachedread = true;
+        req.ReadWriteMemoryData.noncachedread = false;
 
         if (SendIoctl(&req))
         {
@@ -327,7 +331,11 @@ public:
         req.ReadWriteMemoryData.Buffer = (ULONG64)buffer;
         req.ReadWriteMemoryData.Size = size;
         req.ReadWriteMemoryData.isWrite = false;
+<<<<<<< HEAD
         req.ReadWriteMemoryData.noncachedread = true;
+=======
+        req.ReadWriteMemoryData.noncachedread = false;
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         DWORD bytesReturned = 0;
         return DeviceIoControl(hDriver, IOCTL_DISPATCH, &req, sizeof(REQUEST_DATA), &req, sizeof(REQUEST_DATA), &bytesReturned, nullptr)
             && bytesReturned == sizeof(REQUEST_DATA);
@@ -355,7 +363,7 @@ public:
         req.ReadWriteMemoryData.Buffer = (ULONG64)buffer;
         req.ReadWriteMemoryData.Size = size;
         req.ReadWriteMemoryData.isWrite = true;
-        req.ReadWriteMemoryData.noncachedread = true;
+        req.ReadWriteMemoryData.noncachedread = false;
 
         if (SendIoctl(&req))
         {

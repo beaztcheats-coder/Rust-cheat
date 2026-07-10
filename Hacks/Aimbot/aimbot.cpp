@@ -370,7 +370,11 @@ void aimbot::do_aimbot()
     if (g_BnStableCycles.load(std::memory_order_relaxed) < 3) return;
 
     // Early-out: skip the entire aimbot loop when no feature is active
+<<<<<<< HEAD
     if (!AIMBOT::Memory && !AIMBOT::TargetLine && !AIMBOT::TargetText
+=======
+    if (!AIMBOT::Memory && !AIMBOT::Silent && !AIMBOT::TargetLine && !AIMBOT::TargetText
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         && !AIMBOT::PredictionIndicator && !ESP::hotbar_text && !ESP::PlayerInventoryPanel) return;
 
     {
@@ -438,8 +442,13 @@ void aimbot::do_aimbot()
         }
     }
 
+<<<<<<< HEAD
     // Calculate angle for memory aimbot
     if (AIMBOT::Memory) {
+=======
+    // Calculate angle — shared between Memory aimbot and Silent aim
+    if (AIMBOT::Memory || AIMBOT::Silent) {
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         int bone = GetBestBone(BestEntity);
 
         // Get target position with prediction (handles velocity + gravity comp)
@@ -483,9 +492,15 @@ void aimbot::do_aimbot()
                 uint64_t handle = eyesRaw ? read<uint64_t>(eyesRaw + 0x18) : 0;
                 uintptr_t eyesResolved = handle ? decrypt::Il2cppGetHandle(handle) : 0;
                 const char* eyesSrc = eyesResolved ? "GCHandle" : "fallback";
+<<<<<<< HEAD
                 LOG("AIMBOT_WRITE[%d]: bone=%d angle=(%.1f,%.1f) cur=(%.1f,%.1f) localY=%.1f targetY=%.1f crouch=%d Mem=%d",
                     aim_count, bone, angle.x, angle.y, cur.x, cur.y,
                     localPos.y, targetPos.y, (int)lpCrouching, (int)AIMBOT::Memory);
+=======
+                LOG("AIMBOT_WRITE[%d]: bone=%d angle=(%.1f,%.1f) cur=(%.1f,%.1f) localY=%.1f targetY=%.1f eyes=%s Mem=%d Sil=%d",
+                    aim_count, bone, angle.x, angle.y, cur.x, cur.y,
+                    localPos.y, targetPos.y, eyesSrc, (int)AIMBOT::Memory, (int)AIMBOT::Silent);
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 aim_logged = true;
                 aim_count++;
             }
@@ -553,6 +568,25 @@ void aimbot::do_aimbot()
                             Vector3 clamped(currentAngle.x + deltaX, currentAngle.y + deltaY, currentAngle.z);
                             write<Vector3>(input + offsets::PlayerInput::bodyAngles, clamped);
                         }
+<<<<<<< HEAD
+=======
+                    }
+                }
+            }
+
+            // Silent aim — BodyRotation quaternion (no visible aim change)
+            // Works independently of Memory aimbot — only writes bodyRotation, not bodyAngles
+            if (AIMBOT::Silent) {
+                if (lpStillStable()) {
+                    // Use cached PlayerEyes pointer — eliminates 708-IOCTL GetComponentByName() per frame
+                    uintptr_t eyes = g_LocalPlayerEyesPtr.load(std::memory_order_relaxed);
+                    if (eyes && is_valid(eyes)) {
+                            float pr = angle.x * 3.141592f / 180.f;
+                            float yr = angle.y * 3.141592f / 180.f;
+                            float cy = cosf(yr * 0.5f), sy = sinf(yr * 0.5f);
+                            float cp = cosf(pr * 0.5f), sp = sinf(pr * 0.5f);
+                            write<Vector4>(eyes + offsets::PlayerEyes::bodyRotation, Vector4(cy * sp, sy * cp, sy * sp, cy * cp));
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                     }
                 }
             }

@@ -52,7 +52,11 @@ void cache::do_Cache() {
     const uint32_t threadEpoch = g_CacheThreadEpoch.load(std::memory_order_acquire);
 
     struct PrefabNameCacheEntry { uintptr_t key; char name[128]; uint64_t cycle; };
+<<<<<<< HEAD
     static PrefabNameCacheEntry s_prefabNameCache[1024];
+=======
+    static PrefabNameCacheEntry s_prefabNameCache[256];
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
     static int s_prefabNameCacheCount = 0;
 
     auto publishLocalPlayer = [&](Rust::BaseEntity* lp) {
@@ -369,11 +373,14 @@ void cache::do_Cache() {
 
         auto cycleStart = GetTickCount64();
 
+<<<<<<< HEAD
         // Reset prefab name cache each cycle — entries expire after 10 cycles but
         // the count was never decremented, causing the cache to fill up at 256 and
         // block all new entries. Resetting here ensures fresh cache each cycle.
         s_prefabNameCacheCount = 0;
 
+=======
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         // Compute max draw distance for early entity culling
         // Entities beyond ALL draw distances are skipped before classification — saves 5+ IOCTLs each
         float maxDrawDist = 0;
@@ -438,11 +445,17 @@ void cache::do_Cache() {
             g_CacheStep.store(60, std::memory_order_relaxed);
             uintptr_t objectClass = read<uintptr_t>(object + 0x20);
             if (!objectClass || !is_valid(objectClass)) continue;
+<<<<<<< HEAD
 
             g_CacheStep.store(70, std::memory_order_relaxed);
 
             // Cache by objectClass (GameObject pointer — unique per entity INSTANCE)
             // NOT Il2CppClass (shared per TYPE — causes berries to show as hemp etc.)
+=======
+
+            g_CacheStep.store(70, std::memory_order_relaxed);
+
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
             std::string buff;
             {
                 const char* cachedName = nullptr;
@@ -462,7 +475,11 @@ void cache::do_Cache() {
                     buff = ms.buffer;
                     buff = std::string(buff.c_str());
                     if (buff.empty()) continue;
+<<<<<<< HEAD
                     if (s_prefabNameCacheCount < 1024) {
+=======
+                    if (s_prefabNameCacheCount < 256) {
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                         s_prefabNameCache[s_prefabNameCacheCount].key = objectClass;
                         strncpy_s(s_prefabNameCache[s_prefabNameCacheCount].name, 128, buff.c_str(), 127);
                         s_prefabNameCache[s_prefabNameCacheCount].cycle = cacheCycleCount;
@@ -917,7 +934,11 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Stash_Color;
                     tempPrefabList.push_back(data);
                 }
+<<<<<<< HEAD
                 if (WORLD::Metal && metalOk && (low.find("ore_metal") != std::string::npos || low.find("metal-ore.prefab") != std::string::npos))
+=======
+                if (WORLD::Metal && metalOk && low.find("metal-ore.prefab") != std::string::npos )
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 {
                     Rust::PrefabData data;
                     data.name = TR("Metal Ore");
@@ -925,7 +946,11 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Metal_Color;
                     tempPrefabList.push_back(data);
                 }
+<<<<<<< HEAD
                 if (WORLD::Stone && stoneOk && (low.find("ore_stone") != std::string::npos || low.find("stone-ore.prefab") != std::string::npos))
+=======
+                if (WORLD::Stone && stoneOk && low.find("stone-ore.prefab") != std::string::npos)
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 {
                     Rust::PrefabData data;
                     data.name = TR("Stone Ore");
@@ -933,7 +958,11 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Stone_Color;
                     tempPrefabList.push_back(data);
                 }
+<<<<<<< HEAD
                 if (WORLD::Sulfer && sulfurOk && (low.find("ore_sulfur") != std::string::npos || low.find("sulfur-ore.prefab") != std::string::npos))
+=======
+                if (WORLD::Sulfer && sulfurOk && low.find("sulfur-ore.prefab") != std::string::npos )
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 {
                     Rust::PrefabData data;
                     data.name = TR("Sulfer Ore");

@@ -10,7 +10,11 @@ namespace offsets {
 	inline uint64_t Il2cppGetHandle = 0x10132020;           // morphine build 24091435 (gc_handles::array_rva)
 	inline uint64_t TOD_Sky_TypeInfo = 0x0FD0A5D0;         // morphine build 24091435
 	inline uint64_t Class_TOD_Sky_Static = 0x0FD0A5D0;    // morphine build 24091435 (same as TypeInfo)
+<<<<<<< HEAD
 	inline uint64_t EffectNetwork_Pointer = 0xFCAC040;   // morphine build 24091435 (static_type_info)
+=======
+	inline uint64_t EffectNetwork_Pointer = 0xFCABFC0;   // morphine build 24091435 (type_info)
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
 	inline uint64_t Class_SingletonComponent_UI_LoadingScreen = 0xFC7D388; // morphine build 24091435
 	inline uint64_t Class_SingletonComponent_MixerSnapshotManager__c = 0xFD0D1D0; // morphine build 24091435
 	// Diagnostic camera scan TypeInfo RVAs (only used when kCacheVerboseLogs is on)
@@ -75,7 +79,11 @@ namespace offsets {
 
  	namespace TOD_Sky_Static
  	{
+<<<<<<< HEAD
   	inline uint64_t instances = 0x8; // morphine build 24091435 (instance offset in static_fields)
+=======
+  		inline uint64_t instances = 0x18; // morphine desktop dump build 24069519
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
  	}
 
 	namespace TOD_AmbientParameters

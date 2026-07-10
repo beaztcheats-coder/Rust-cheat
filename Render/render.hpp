@@ -1641,6 +1641,7 @@ namespace render {
             // No frame limiter — Present() governs frame rate naturally.
             // Camera matrix read in render thread via ReadFrameCameraMatrix().
 
+<<<<<<< HEAD
             // Force overlay to topmost every 60 frames — avoids z-fighting with Discord overlay
             {
                 static int topmostTick = 0;
@@ -1652,6 +1653,13 @@ namespace render {
 
             // Sync overlay window to game client area — pixel-perfect alignment
             {
+=======
+            // Force overlay to topmost every frame — fixes fullscreen z-order issue
+            SetWindowPos(window_handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+            // Sync overlay window to game window position + cache screen size
+            {
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 HWND hw = fortnite_window;
                 if (hw && IsWindow(hw)) {
                     RECT rc = {0};
@@ -1660,6 +1668,7 @@ namespace render {
                         g_ScreenW = rc.right;
                         g_ScreenH = rc.bottom;
                     }
+<<<<<<< HEAD
                     // Use ClientToScreen for exact client area position (no title bar offset)
                     POINT pt = {0, 0};
                     if (ClientToScreen(hw, &pt) && rc.right > 0 && rc.bottom > 0) {
@@ -1671,6 +1680,19 @@ namespace render {
                         if (GetWindowRect(window_handle, &oc)) {
                             if (oc.left != gx || oc.top != gy || (oc.right - oc.left) != gw || (oc.bottom - oc.top) != gh) {
                                 SetWindowPos(window_handle, HWND_TOP, gx, gy, gw, gh, SWP_NOACTIVATE);
+=======
+                    // Sync overlay position to game window — prevents ESP misalignment in windowed mode
+                    RECT wr = {0};
+                    if (GetWindowRect(hw, &wr)) {
+                        int gx = wr.left;
+                        int gy = wr.top;
+                        int gw = wr.right - wr.left;
+                        int gh = wr.bottom - wr.top;
+                        RECT oc = {0};
+                        if (GetWindowRect(window_handle, &oc)) {
+                            if (oc.left != gx || oc.top != gy || (oc.right - oc.left) != gw || (oc.bottom - oc.top) != gh) {
+                                SetWindowPos(window_handle, HWND_TOPMOST, gx, gy, gw, gh, SWP_NOACTIVATE);
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                             }
                         }
                     }
@@ -2143,8 +2165,12 @@ namespace render {
             g_drawStep = 13;
             d3d_swap_chain->Present(0, 0); // No VSync — zero input lag
 
+<<<<<<< HEAD
             // NOTE: Do NOT call SetWindowPos(HWND_TOPMOST) every frame — it causes z-fighting
             // with Discord/Steam overlays. Topmost is re-asserted every 60 frames in Draw() above.
+=======
+            SetWindowPos(window_handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
             if (logFrame) LOG("DRAW[%d]: end", drawFrameCount);
             drawFrameCount++;
         }

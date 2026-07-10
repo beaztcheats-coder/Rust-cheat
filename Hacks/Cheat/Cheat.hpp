@@ -244,8 +244,13 @@ namespace Xheat {
         if (ESP::hotbar_text || ESP::PlayerInventoryPanel) {
             uintptr_t bestTgt = 0;
             float best = FLT_MAX;
+<<<<<<< HEAD
             float cx = (float)g_ScreenW * 0.5f;
             float cy = (float)g_ScreenH * 0.5f;
+=======
+            float cx = (float)screenWidth * 0.5f;
+            float cy = (float)screenHeight * 0.5f;
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
             float fovLimit = ESP::PlayerInventoryPanel ? 150.0f * 150.0f : FLT_MAX;
             for (auto* Player : entlist) {
                 if (!Player || !is_valid((uintptr_t)Player)) continue;
@@ -337,8 +342,13 @@ namespace Xheat {
                 float panelDist = lpPos.DistTo(tc.headPos);
                 if (panelDist <= ESP::draw_distance && !tc.isDead) {
                     float panelW = 230.0f;
+<<<<<<< HEAD
                     float panelX = (float)g_ScreenW - panelW - 10.0f;
                     ImGui::SetNextWindowPos(ImVec2(panelX, (float)g_ScreenH * 0.5f), ImGuiCond_Always, ImVec2(0.0f, 0.5f));
+=======
+                    float panelX = (float)screenWidth - panelW - 10.0f;
+                    ImGui::SetNextWindowPos(ImVec2(panelX, (float)screenHeight * 0.5f), ImGuiCond_Always, ImVec2(0.0f, 0.5f));
+>>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                     ImGui::SetNextWindowSize(ImVec2(panelW, 0), ImGuiCond_Always);
                     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.88f));
                     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.25f, 0.35f, 0.6f));
