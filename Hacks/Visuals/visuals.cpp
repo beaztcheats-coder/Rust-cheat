@@ -315,6 +315,9 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
     if (ESP::Weapon && drawWeaponDist && !weaponName.empty()) {
         DrawBottomLine(weaponName, ESP::color::Weapon);
     }
+    if (ESP::PlayerFlags && cached.playerFlags[0] != 0) {
+        DrawBottomLine(cached.playerFlags, ImColor(255, 100, 100, 255));
+    }
 
     // Use cached inventory from slow thread (zero IOCTLs in render loop)
     struct CachedInv { char belt[6][64] = {}; char wear[5][64] = {}; int ammo = -1; };
@@ -369,7 +372,7 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
         DrawBottomLine(TR("-- Belt --"), ESP::color::Distance);
         for (int i = 0; i < 6; ++i) if (!cacheStrEmpty(ex.belt[i])) DrawBottomLine(std::string(ex.belt[i]), ESP::color::Weapon);
     }
-    if (ESP::AmmoBar && ex.ammo >= 0) {
+    if (ESP::AmmoBar && ex.ammo > 0) {
         DrawBottomLine(TR("Ammo: ") + std::to_string(ex.ammo), ESP::color::Distance);
     }
     if (ESP::OFFArrows && drawOffArrowDist) {
@@ -396,22 +399,8 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
         ImGui::GetBackgroundDrawList()->AddLine(ImVec2(ox, oy), ImVec2(Feet.x, Feet.y), ESP::color::Snaplines, st);
     }
     if (ESP::Skeleton && drawSkelDist && skelValid) {
-        // Apply velocity prediction to skeleton bones (same as head/feet)
-        if (!velocity.Empty() && velocity.x == velocity.x && skelTick > 0) {
-            float dt = (float)(GetTickCount64() - skelTick) / 1000.0f;
-            if (dt > 0.0f && dt < 0.5f) {
-                float g = 0.0f;
-                if (!cached.isGrounded)
-                    g = 0.5f * 9.81f * dt * dt;
-                for (int i = 0; i < 15; i++) {
-                    if (bones[i].Empty()) continue;
-                    bones[i].x += velocity.x * dt;
-                    bones[i].y += velocity.y * dt;
-                    bones[i].z += velocity.z * dt;
-                    bones[i].y -= g;
-                }
-            }
-        }
+        // Velocity prediction is already applied via boneOffset (headPos_predicted - boneAnchorPos)
+        // — no additional per-bone prediction needed here
 
         // Bone interpolation now happens on the skeleton thread (12ms cycle)
         // — no per-bone lerp needed on the render thread anymore
@@ -496,27 +485,30 @@ void Visuals::do_Visuals(Rust::BaseEntity* Player, Vector3 lpPos, const EspCache
 
 void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspCacheData& cached, const Matrix4x4& frameMatrix) {
     if (!Entity || cached.isDead || !src->LocalPlayer) return;
-    // g_ScreenW/g_ScreenH updated every frame in render.hpp
-    Vector3 rootPos = cached.headPos;
-    if (rootPos.Empty()) {
-        auto headTf = Entity->Get_Transformation(BoneList::head);
-        if (headTf) rootPos = headTf->Get_Position();
+    // Use feetPos (root) as base — headPos is root+1.8 from position thread
+    Vector3 feetPos3D = cached.feetPos;
+    if (feetPos3D.Empty()) {
+        // Fallback: if feetPos invalid, use headPos and subtract offset
+        feetPos3D = cached.headPos;
+        if (!feetPos3D.Empty()) feetPos3D.y -= 1.8f;
     }
-    if (rootPos.Empty()) return;
+    if (feetPos3D.Empty()) {
+        auto headTf = Entity->Get_Transformation(BoneList::head);
+        if (headTf) feetPos3D = headTf->Get_Position();
+    }
+    if (feetPos3D.Empty()) return;
 
     // Apply velocity prediction to NPC position (same as Do_Cheat does for players)
     if (!cached.velocity.Empty() && cached.velocity.x == cached.velocity.x && cached.cacheTick > 0) {
         float predDt = (float)(GetTickCount64() - cached.cacheTick) * 0.001f;
         if (predDt > 0.0f && predDt < 0.5f) {
-            rootPos.x += cached.velocity.x * predDt;
-            rootPos.y += cached.velocity.y * predDt;
-            rootPos.z += cached.velocity.z * predDt;
+            feetPos3D.x += cached.velocity.x * predDt;
+            feetPos3D.y += cached.velocity.y * predDt;
+            feetPos3D.z += cached.velocity.z * predDt;
         }
     }
 
-    // rootPos from Get_ObjectPosition() is at feet/root level
-    Vector3 feetPos3D = rootPos;
-    Vector3 headPos3D = rootPos;
+    Vector3 headPos3D = feetPos3D;
     headPos3D.y += 1.8f; // approximate head height above root
 
     Vector2 headScreen = WorldToScreen(headPos3D, frameMatrix);
@@ -531,7 +523,7 @@ void Visuals::do_NPC_Visuals(Rust::BaseEntity* Entity, Vector3 lpPos, const EspC
     float w = h * 0.5f;
     float x = headScreen.x - w * 0.5f;
     float y = headScreen.y;
-    float Distance = lpPos.DistTo(rootPos);
+    float Distance = lpPos.DistTo(feetPos3D);
     ImColor col = NPC_ESP::color::Box;
 
     bool adv = NPC_ESP::ESPAdvanced;

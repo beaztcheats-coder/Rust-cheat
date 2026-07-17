@@ -1,4 +1,4 @@
-#include "cache.hpp"
+﻿#include "cache.hpp"
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
@@ -24,6 +24,74 @@ Vector3 g_LocalPlayerPos;
 Vector3 g_LocalNeckPos;
 Vector3 g_LocalBodyAngles;
 Vector3 g_CameraWorldPos;
+float g_GameTimeHour = -1.f;
+std::vector<RaidEvent> g_RaidEvents;
+std::mutex g_RaidMutex;
+std::vector<SavedStash> g_SavedStashes;
+std::mutex g_StashMutex;
+std::unordered_set<std::string> g_Friends;
+std::mutex g_FriendMutex;
+
+void LoadFriends() {
+    char path[MAX_PATH];
+    GetTempPathA(MAX_PATH, path);
+    lstrcatA(path, "rust_friends.dat");
+    HANDLE hf = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return;
+    char name[64];
+    DWORD br;
+    while (ReadFile(hf, name, 64, &br, NULL) && br == 64) {
+        name[63] = 0;
+        g_Friends.insert(std::string(name));
+    }
+    CloseHandle(hf);
+    LOG("FRIENDS: loaded %d friends", (int)g_Friends.size());
+}
+
+void SaveFriends() {
+    std::lock_guard<std::mutex> lk(g_FriendMutex);
+    char path[MAX_PATH];
+    GetTempPathA(MAX_PATH, path);
+    lstrcatA(path, "rust_friends.dat");
+    HANDLE hf = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return;
+    DWORD bw;
+    for (const auto& name : g_Friends) {
+        char buf[64] = {};
+        lstrcpynA(buf, name.c_str(), 63);
+        WriteFile(hf, buf, 64, &bw, NULL);
+    }
+    CloseHandle(hf);
+}
+
+void LoadSavedStashes() {
+    char path[MAX_PATH];
+    GetTempPathA(MAX_PATH, path);
+    lstrcatA(path, "rust_stashes.dat");
+    HANDLE hf = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return;
+    SavedStash s;
+    DWORD br;
+    while (ReadFile(hf, &s, sizeof(SavedStash), &br, NULL) && br == sizeof(SavedStash)) {
+        g_SavedStashes.push_back(s);
+    }
+    CloseHandle(hf);
+    LOG("STASH_PERSIST: loaded %d saved stashes", (int)g_SavedStashes.size());
+}
+
+void SaveStashesToFile() {
+    std::lock_guard<std::mutex> lk(g_StashMutex);
+    char path[MAX_PATH];
+    GetTempPathA(MAX_PATH, path);
+    lstrcatA(path, "rust_stashes.dat");
+    HANDLE hf = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return;
+    DWORD bw;
+    for (const auto& s : g_SavedStashes) {
+        WriteFile(hf, &s, sizeof(SavedStash), &bw, NULL);
+    }
+    CloseHandle(hf);
+}
 uint64_t g_LocalPlayerTeam = 0;
 bool g_LocalIsCrouching = false;
 std::mutex g_LocalPlayerDataMutex;
@@ -35,12 +103,17 @@ std::atomic<int> g_CacheStep{ 0 };
 std::atomic<uint32_t> g_CacheThreadEpoch{ 0 };
 std::atomic<uintptr_t> g_LocalPlayerAddr{ 0 };
 std::atomic<uint64_t> g_LocalPlayerGeneration{ 1 };
-std::atomic<uintptr_t> g_LocalPlayerEyesPtr{ 0 };
 std::atomic<uint64_t> g_FastRefreshHeartbeatMs{ 0 };
 std::atomic<uint32_t> g_FastRefreshEpoch{ 0 };
 std::atomic<uint64_t> g_SkeletonHeartbeatMs{ 0 };
 std::atomic<uint32_t> g_SkeletonEpoch{ 0 };
 uintptr_t g_HotbarTarget = 0;
+
+// Big map overlay state
+std::atomic<bool> g_MapOpen{ false };
+float g_WorldSize = 4500.f;
+float g_MapContentCx = 0, g_MapContentCy = 0, g_MapContentEx = 0, g_MapContentEy = 0;
+float g_MapViewCx = 0, g_MapViewCy = 0, g_MapViewEx = 0, g_MapViewEy = 0;
 
 namespace {
     constexpr bool kCacheVerboseLogs = false;
@@ -52,11 +125,7 @@ void cache::do_Cache() {
     const uint32_t threadEpoch = g_CacheThreadEpoch.load(std::memory_order_acquire);
 
     struct PrefabNameCacheEntry { uintptr_t key; char name[128]; uint64_t cycle; };
-<<<<<<< HEAD
     static PrefabNameCacheEntry s_prefabNameCache[1024];
-=======
-    static PrefabNameCacheEntry s_prefabNameCache[256];
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
     static int s_prefabNameCacheCount = 0;
 
     auto publishLocalPlayer = [&](Rust::BaseEntity* lp) {
@@ -105,10 +174,21 @@ void cache::do_Cache() {
             }
         }
 
+        static int consecutiveFails = 0;
         auto markUnavailable = [&]() {
             if (Drv && Drv->ioctl_blocked.load(std::memory_order_relaxed)) {
                 return;
             }
+            // Graceful degradation: only clear everything after multiple consecutive failures.
+            // Transient IOCTL hiccups (common on busy servers) no longer wipe all ESP data.
+            consecutiveFails++;
+            if (consecutiveFails < 5) {
+                // Decrement BnStableCycles gradually instead of zeroing — keeps ESP rendering
+                int stable = g_BnStableCycles.load(std::memory_order_relaxed);
+                if (stable > 3) g_BnStableCycles.store(stable - 3, std::memory_order_relaxed);
+                return;
+            }
+            // Persistent failure (5+ consecutive) — game likely crashed or CR3 changed
             publishLocalPlayer(nullptr);
             g_BnStableCycles.store(0, std::memory_order_relaxed);
 
@@ -210,7 +290,7 @@ void cache::do_Cache() {
             continue;
         }
         // Cap entity iteration to prevent excessive IOCTL cycles.
-        // 8000 covers all entities on any server (players + animals + NPCs + nearby items).
+        // 16000 covers all entities on any server (players + animals + NPCs + nearby items).
         if (entity_size > 8000) {
             static int capWarnTick = 0;
             if ((++capWarnTick % 30) == 0)
@@ -218,11 +298,11 @@ void cache::do_Cache() {
             entity_size = 8000;
         }
 
-        // Stability check: if entity_size dropped >40% from last successful cycle, skip walk
+        // Stability check: if entity_size dropped >60% from last successful cycle, skip walk
         // This prevents crashes when the game swaps/reorganizes the entity list
         static uint32_t lastStableSize = 0;
         static uint32_t stabilizationDelay = 0;
-        if (lastStableSize > 0 && entity_size < (uint32_t)(lastStableSize * 0.6f)) {
+        if (lastStableSize > 0 && entity_size < (uint32_t)(lastStableSize * 0.4f)) {
             markUnavailable();
             if (stabilizationDelay < 3) {
                 stabilizationDelay++;
@@ -268,6 +348,7 @@ void cache::do_Cache() {
             LOG("BN chain RECOVERED after %d failures", failCount);
             failCount = 0;
         }
+        consecutiveFails = 0;
 
         // Periodic CR3 re-validation: every ~3 cycles, refresh CR3 and verify process is alive
         if ((cacheCycleCount % 3) == 0 && Drv) {
@@ -341,7 +422,6 @@ void cache::do_Cache() {
         std::vector<Rust::BaseEntity*> tempNpcList;
         std::vector<Rust::BaseEntity*> tempAnimalList;
         std::vector<Rust::PrefabData> tempPrefabList;
-        std::vector<OccluderAABB> tempOccluders;
         std::unordered_map<uintptr_t, EspCacheData> tempEspCache;
         int classifiedPlayers = 0;
         int classifiedNpcs = 0;
@@ -373,14 +453,11 @@ void cache::do_Cache() {
 
         auto cycleStart = GetTickCount64();
 
-<<<<<<< HEAD
         // Reset prefab name cache each cycle — entries expire after 10 cycles but
         // the count was never decremented, causing the cache to fill up at 256 and
         // block all new entries. Resetting here ensures fresh cache each cycle.
         s_prefabNameCacheCount = 0;
 
-=======
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         // Compute max draw distance for early entity culling
         // Entities beyond ALL draw distances are skipped before classification — saves 5+ IOCTLs each
         float maxDrawDist = 0;
@@ -445,17 +522,11 @@ void cache::do_Cache() {
             g_CacheStep.store(60, std::memory_order_relaxed);
             uintptr_t objectClass = read<uintptr_t>(object + 0x20);
             if (!objectClass || !is_valid(objectClass)) continue;
-<<<<<<< HEAD
 
             g_CacheStep.store(70, std::memory_order_relaxed);
 
             // Cache by objectClass (GameObject pointer — unique per entity INSTANCE)
             // NOT Il2CppClass (shared per TYPE — causes berries to show as hemp etc.)
-=======
-
-            g_CacheStep.store(70, std::memory_order_relaxed);
-
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
             std::string buff;
             {
                 const char* cachedName = nullptr;
@@ -475,11 +546,7 @@ void cache::do_Cache() {
                     buff = ms.buffer;
                     buff = std::string(buff.c_str());
                     if (buff.empty()) continue;
-<<<<<<< HEAD
                     if (s_prefabNameCacheCount < 1024) {
-=======
-                    if (s_prefabNameCacheCount < 256) {
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                         s_prefabNameCache[s_prefabNameCacheCount].key = objectClass;
                         strncpy_s(s_prefabNameCache[s_prefabNameCacheCount].name, 128, buff.c_str(), 127);
                         s_prefabNameCache[s_prefabNameCacheCount].cycle = cacheCycleCount;
@@ -603,6 +670,7 @@ void cache::do_Cache() {
             bool isPanther = ANIMAL_ESP::Panther && low.find("panther") != std::string::npos;
             bool isTiger = ANIMAL_ESP::Tiger && low.find("tiger") != std::string::npos;
             bool isSnake = ANIMAL_ESP::Snake && low.find("snake") != std::string::npos;
+            bool isCrocodile = ANIMAL_ESP::Crocodile && low.find("crocodile") != std::string::npos;
             if (isBear) { isAnimal = true; animalType = "Bear"; }
             else if (isPolarBear) { isAnimal = true; animalType = "Polar Bear"; }
             else if (isWolf) { isAnimal = true; animalType = "Wolf"; }
@@ -613,6 +681,7 @@ void cache::do_Cache() {
             else if (isPanther) { isAnimal = true; animalType = "Panther"; }
             else if (isTiger) { isAnimal = true; animalType = "Tiger"; }
             else if (isSnake) { isAnimal = true; animalType = "Snake"; }
+            else if (isCrocodile) { isAnimal = true; animalType = "Crocodile"; }
             if (isAnimal && (low.find("trap") != std::string::npos || low.find("hide") != std::string::npos || low.find("skull") != std::string::npos || low.find("rug") != std::string::npos || low.find("meat") != std::string::npos || low.find("pelt") != std::string::npos || low.find("cooked") != std::string::npos || low.find("stew") != std::string::npos || low.find("trophy") != std::string::npos)) isAnimal = false;
 
             // Fallback: if prefab name didn't match player patterns, check IL2CPP class name.
@@ -669,7 +738,7 @@ void cache::do_Cache() {
                 int lifestate = *(int*)(playerBuf + 0x0);           // 0x298 - 0x298
                 float health = *(float*)(playerBuf + 0xC);          // 0x2A4 - 0x298
                 float maxHealth = *(float*)(playerBuf + 0x10);      // 0x2A8 - 0x298
-                uintptr_t msPtr = *(uintptr_t*)(playerBuf + 0x280); // 0x518 - 0x298 (ModelState)
+                uintptr_t msPtr = *(uintptr_t*)(playerBuf + 0x2A8); // 0x540 - 0x298 (ModelState)
                 uint64_t teamId = *(uint64_t*)(playerBuf + 0x2A0);  // 0x538 - 0x298 (CurrentTeam)
                 int pFlags = *(int*)(playerBuf + 0x420);             // 0x6B8 - 0x298 (PlayerFlags)
                 bool isDead = (lifestate == 1);
@@ -719,6 +788,8 @@ void cache::do_Cache() {
 
                 // Position is set here; velocity is updated by the position-only thread
                 ec.headPos = pos;
+                ec.headPos.y += 1.8f;
+                ec.feetPos = pos;
 
                 // BVH raycast overrides isVisible (but NOT isVisibleRaw, which stays as the game's flag for VisibleStrict)
                 if (ESP::VisCheck && ESP::VisMode > 0 && vischeck::g_VisCheckLoaded && Distance <= 400.f) {
@@ -741,10 +812,25 @@ void cache::do_Cache() {
                 ec.skeletonValid = false;
 
                 // Inventory scan: close players only, every 4th cycle, only if ESP toggles active
-                if (Distance <= 100.f && (ESP::hotbar_text || ESP::Clothing || ESP::ItemList || ESP::AmmoBar || ESP::PlayerInventoryPanel) && (cacheCycleCount % 4) == 0) {
+                if (Distance <= 100.f && (ESP::hotbar_text || ESP::Clothing || ESP::ItemList || ESP::AmmoBar || ESP::PlayerInventoryPanel || ESP::PlayerFlags) && (cacheCycleCount % 4) == 0) {
                     auto belt = Player->Get_Hotbar_list();
                     for (size_t i = 0; i < belt.size() && i < 6; i++) {
                         if (belt[i]) { auto bn = belt[i]->get_item_name(); cacheSetStr(ec.belt[i], bn.c_str()); }
+                    }
+
+                    // Player flags — check belt for explosives/rockets
+                    if (ESP::PlayerFlags) {
+                        ec.playerFlags[0] = 0;
+                        char* pf = ec.playerFlags;
+                        int pfLen = 0;
+                        for (int i = 0; i < 6; i++) {
+                            if (cacheStrEmpty(ec.belt[i])) continue;
+                            const char* s = ec.belt[i];
+                            if (strstr(s, "explosive.timed") && pfLen < 12) { pfLen += wsprintfA(pf + pfLen, pfLen > 0 ? " C4" : "C4"); }
+                            else if (strstr(s, "rocket.launcher") && pfLen < 12) { pfLen += wsprintfA(pf + pfLen, pfLen > 0 ? " RL" : "RL"); }
+                            else if (strstr(s, "satchel") && pfLen < 12) { pfLen += wsprintfA(pf + pfLen, pfLen > 0 ? " SAT" : "SAT"); }
+                            else if (strstr(s, "ammo.rocket") && pfLen < 12) { pfLen += wsprintfA(pf + pfLen, pfLen > 0 ? " RA" : "RA"); }
+                        }
                     }
                     uintptr_t inv = Player->ResolvePlayerInventory();
                     if (inv && is_valid(inv)) {
@@ -769,8 +855,9 @@ void cache::do_Cache() {
                     }
                     uintptr_t weapon = Player->Get_HeldWeapon();
                     if (weapon) {
-                        uintptr_t mag = read<uintptr_t>(weapon + offsets::BaseProjectile::primaryMagazine);
-                        if (mag && is_valid(mag)) ec.ammo = read<int>(mag + offsets::ItemMagazine::contents);
+                        // Use item::ammoCount (0x8C) — morphine confirmed offset
+                        int ac = read<int>(weapon + offsets::Item::AmmoCount);
+                        if (ac >= 0 && ac <= 9999) ec.ammo = ac;
                     }
                     ec.invTick = GetTickCount64();
                 }
@@ -933,12 +1020,25 @@ void cache::do_Cache() {
                     data.Position = EntityPosition;
                     data.Color = WORLD::color::Stash_Color;
                     tempPrefabList.push_back(data);
+
+                    // Persist stash position
+                    if (WORLD::StashPersist) {
+                        std::lock_guard<std::mutex> lk(g_StashMutex);
+                        bool found = false;
+                        for (const auto& s : g_SavedStashes) {
+                            float dx = s.position.x - EntityPosition.x;
+                            float dy = s.position.y - EntityPosition.y;
+                            float dz = s.position.z - EntityPosition.z;
+                            if (dx*dx + dy*dy + dz*dz < 9.f) { found = true; break; }
+                        }
+                        if (!found) {
+                            g_SavedStashes.push_back({ EntityPosition, GetTickCount64() });
+                            SaveStashesToFile();
+                            LOG("STASH_PERSIST: saved new stash at (%.1f, %.1f, %.1f)", EntityPosition.x, EntityPosition.y, EntityPosition.z);
+                        }
+                    }
                 }
-<<<<<<< HEAD
                 if (WORLD::Metal && metalOk && (low.find("ore_metal") != std::string::npos || low.find("metal-ore.prefab") != std::string::npos))
-=======
-                if (WORLD::Metal && metalOk && low.find("metal-ore.prefab") != std::string::npos )
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 {
                     Rust::PrefabData data;
                     data.name = TR("Metal Ore");
@@ -946,11 +1046,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Metal_Color;
                     tempPrefabList.push_back(data);
                 }
-<<<<<<< HEAD
                 if (WORLD::Stone && stoneOk && (low.find("ore_stone") != std::string::npos || low.find("stone-ore.prefab") != std::string::npos))
-=======
-                if (WORLD::Stone && stoneOk && low.find("stone-ore.prefab") != std::string::npos)
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 {
                     Rust::PrefabData data;
                     data.name = TR("Stone Ore");
@@ -958,11 +1054,7 @@ void cache::do_Cache() {
                     data.Color = WORLD::color::Stone_Color;
                     tempPrefabList.push_back(data);
                 }
-<<<<<<< HEAD
                 if (WORLD::Sulfer && sulfurOk && (low.find("ore_sulfur") != std::string::npos || low.find("sulfur-ore.prefab") != std::string::npos))
-=======
-                if (WORLD::Sulfer && sulfurOk && low.find("sulfur-ore.prefab") != std::string::npos )
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 {
                     Rust::PrefabData data;
                     data.name = TR("Sulfer Ore");
@@ -976,10 +1068,10 @@ void cache::do_Cache() {
                     data.Position = EntityPosition;
                     data.Color = WORLD::color::BodyBag_Color;
                     
-                    // Try to read player name from LootableCorpse._playerName (0x310)
+                    // Read player name from LootableCorpse._playerName (morphine: 0x318)
                     std::string corpseName = TR("Corpse");
                     if (entity && is_valid((uintptr_t)entity)) {
-                        uintptr_t nameStrPtr = read<uintptr_t>((uintptr_t)entity + 0x310);
+                        uintptr_t nameStrPtr = read<uintptr_t>((uintptr_t)entity + 0x318);
                         if (nameStrPtr && is_valid(nameStrPtr)) {
                             std::string pname = read_wstr(nameStrPtr + offsets::unity_string::first_char);
                             if (!pname.empty() && pname != "?") {
@@ -1012,12 +1104,16 @@ void cache::do_Cache() {
                     data.name = TR("MiniCopter");
                     data.Position = EntityPosition;
                     data.Color = WORLD::color::MiniCopter_Color;
+                    if (WORLD::VehicleHealth && entity && is_valid((uintptr_t)entity)) {
+                        data.health = read<float>((uintptr_t)entity + 0x2A4);
+                        data.maxHealth = read<float>((uintptr_t)entity + 0x2A8);
+                    }
                     tempPrefabList.push_back(data);
                 }
                 if (WORLD::Backpack && backpackOk && low.find("item_drop_backpack.prefab") != std::string::npos)
                 {
                     Rust::PrefabData data;
-                    data.name = TR("Backpack");
+                    data.name = TR("Body Bag");
                     data.Position = EntityPosition;
                     data.Color = WORLD::color::Backpack_Color;
                     tempPrefabList.push_back(data);
@@ -1028,6 +1124,10 @@ void cache::do_Cache() {
                     data.name = TR("Bradley APC");
                     data.Position = EntityPosition;
                     data.Color = WORLD::color::BradlyAPC;
+                    if (WORLD::VehicleHealth && entity && is_valid((uintptr_t)entity)) {
+                        data.health = read<float>((uintptr_t)entity + 0x2A4);
+                        data.maxHealth = read<float>((uintptr_t)entity + 0x2A8);
+                    }
                     tempPrefabList.push_back(data);
                 }
                 // --- New world entities ---
@@ -1085,25 +1185,37 @@ void cache::do_Cache() {
                 if (WORLD::CrateElite && crateEliteOk && low.find("crate_elite") != std::string::npos)
                     { Rust::PrefabData d; d.name="Elite Crate"; d.Position=EntityPosition; d.Color=WORLD::color::EliteCrate; tempPrefabList.push_back(d); }
                 if (WORLD::CrateLocked && crateLockedOk && low.find("codelockedhackablecrate") != std::string::npos)
-                    { Rust::PrefabData d; d.name="Locked Crate"; d.Position=EntityPosition; d.Color=WORLD::color::LockedCrate; tempPrefabList.push_back(d); }
+                {
+                    Rust::PrefabData d;
+                    d.name = "Locked Crate";
+                    d.Position = EntityPosition;
+                    d.Color = WORLD::color::LockedCrate;
+                    // Read hackSeconds (morphine build 24091435: 0x400)
+                    if (WORLD::CrateTimer && entity && is_valid((uintptr_t)entity)) {
+                        float hs = read<float>((uintptr_t)entity + 0x400);
+                        if (std::isfinite(hs) && hs >= 0.f && hs <= 900.f)
+                            d.hackSeconds = hs;
+                    }
+                    tempPrefabList.push_back(d);
+                }
                 if (WORLD::CrateMedical && (low.find("crate_normal_2_medical.prefab") != std::string::npos || low.find("crate_medical") != std::string::npos))
                     { Rust::PrefabData d; d.name="Med Crate"; d.Position=EntityPosition; d.Color=WORLD::color::MedicalCrate; tempPrefabList.push_back(d); }
                 if (WORLD::CrateFood && (low.find("crate_normal_2_food.prefab") != std::string::npos || low.find("crate_food") != std::string::npos))
                     { Rust::PrefabData d; d.name="Food Crate"; d.Position=EntityPosition; d.Color=WORLD::color::FoodCrate; tempPrefabList.push_back(d); }
                 if (WORLD::Rowboat && rowboatOk && low.find("rowboat.prefab") != std::string::npos)
-                    { Rust::PrefabData d; d.name="Rowboat"; d.Position=EntityPosition; d.Color=WORLD::color::Rowboat; tempPrefabList.push_back(d); }
+                    { Rust::PrefabData d; d.name="Rowboat"; d.Position=EntityPosition; d.Color=WORLD::color::Rowboat; if(WORLD::VehicleHealth&&entity&&is_valid((uintptr_t)entity)){d.health=read<float>((uintptr_t)entity+0x2A4);d.maxHealth=read<float>((uintptr_t)entity+0x2A8);} tempPrefabList.push_back(d); }
                 if (WORLD::RHIB && rhibOk && low.find("rhib.prefab") != std::string::npos)
                     { Rust::PrefabData d; d.name="RHIB"; d.Position=EntityPosition; d.Color=WORLD::color::RHIB; tempPrefabList.push_back(d); }
                 if (WORLD::Kayak && kayakOk && low.find("kayak.prefab") != std::string::npos)
                     { Rust::PrefabData d; d.name="Kayak"; d.Position=EntityPosition; d.Color=WORLD::color::Kayak; tempPrefabList.push_back(d); }
                 if (WORLD::Tugboat && tugboatOk && low.find("tugboat.prefab") != std::string::npos)
-                    { Rust::PrefabData d; d.name="Tugboat"; d.Position=EntityPosition; d.Color=WORLD::color::Tugboat; tempPrefabList.push_back(d); }
+                    { Rust::PrefabData d; d.name="Tugboat"; d.Position=EntityPosition; d.Color=WORLD::color::Tugboat; if(WORLD::VehicleHealth&&entity&&is_valid((uintptr_t)entity)){d.health=read<float>((uintptr_t)entity+0x2A4);d.maxHealth=read<float>((uintptr_t)entity+0x2A8);} tempPrefabList.push_back(d); }
                 if (WORLD::Submarine && submarineOk && (low.find("submarinesolo.entity.prefab") != std::string::npos || low.find("submarineduo.entity.prefab") != std::string::npos))
                     { Rust::PrefabData d; d.name="Submarine"; d.Position=EntityPosition; d.Color=WORLD::color::Submarine; tempPrefabList.push_back(d); }
                 if (WORLD::TransportHeli && transportHeliOk && low.find("scraptransporthelicopter.prefab") != std::string::npos)
-                    { Rust::PrefabData d; d.name="Transport Heli"; d.Position=EntityPosition; d.Color=WORLD::color::TransportHeli; tempPrefabList.push_back(d); }
+                    { Rust::PrefabData d; d.name="Transport Heli"; d.Position=EntityPosition; d.Color=WORLD::color::TransportHeli; if(WORLD::VehicleHealth&&entity&&is_valid((uintptr_t)entity)){d.health=read<float>((uintptr_t)entity+0x2A4);d.maxHealth=read<float>((uintptr_t)entity+0x2A8);} tempPrefabList.push_back(d); }
                 if (WORLD::AttackHeli && attackHeliOk && low.find("attackhelicopter.entity.prefab") != std::string::npos)
-                    { Rust::PrefabData d; d.name="Attack Heli"; d.Position=EntityPosition; d.Color=WORLD::color::AttackHeli; tempPrefabList.push_back(d); }
+                    { Rust::PrefabData d; d.name="Attack Heli"; d.Position=EntityPosition; d.Color=WORLD::color::AttackHeli; if(WORLD::VehicleHealth&&entity&&is_valid((uintptr_t)entity)){d.health=read<float>((uintptr_t)entity+0x2A4);d.maxHealth=read<float>((uintptr_t)entity+0x2A8);} tempPrefabList.push_back(d); }
                 if (WORLD::Balloon && balloonOk && low.find("hotairballoon.prefab") != std::string::npos)
                     { Rust::PrefabData d; d.name="Balloon"; d.Position=EntityPosition; d.Color=WORLD::color::Balloon; tempPrefabList.push_back(d); }
                 if (WORLD::Motorbike && motorbikeOk && low.find("motorbike.prefab") != std::string::npos && low.find("motorbike_sidecar") == std::string::npos)
@@ -1125,7 +1237,7 @@ void cache::do_Cache() {
                 if (WORLD::Workbench && low.find("recycler") != std::string::npos)
                     { Rust::PrefabData d; d.name="Recycler"; d.Position=EntityPosition; d.Color=WORLD::color::Workbench; tempPrefabList.push_back(d); }
                 if (WORLD::MiniCopter && copterOk && low.find("modularcar") != std::string::npos)
-                    { Rust::PrefabData d; d.name="Modular Car"; d.Position=EntityPosition; d.Color=WORLD::color::MiniCopter_Color; tempPrefabList.push_back(d); }
+                    { Rust::PrefabData d; d.name="Modular Car"; d.Position=EntityPosition; d.Color=WORLD::color::MiniCopter_Color; if(WORLD::VehicleHealth&&entity&&is_valid((uintptr_t)entity)){d.health=read<float>((uintptr_t)entity+0x2A4);d.maxHealth=read<float>((uintptr_t)entity+0x2A8);} tempPrefabList.push_back(d); }
                 if (WORLD::Workbench && (low.find("researchtable") != std::string::npos || low.find("repairbench") != std::string::npos || low.find("mixingtable") != std::string::npos || low.find("refinery") != std::string::npos || low.find("cookingworkbench") != std::string::npos))
                     { Rust::PrefabData d; d.name="Crafting Station"; d.Position=EntityPosition; d.Color=WORLD::color::Workbench; tempPrefabList.push_back(d); }
                 if (WORLD::DroppedItem && low.find("(world)") != std::string::npos )
@@ -1232,17 +1344,56 @@ void cache::do_Cache() {
             }
         }
 
-        entity_mutex.lock();
-        entity_List.swap(tempList);
-        entity_mutex.unlock();
+        // Merge entity lists instead of swap — keeps entities missed this cycle
+        // for 1 extra cycle (grace period). Prevents flickering on busy servers.
+        {
+            std::unordered_set<uintptr_t> newSet;
+            for (auto* e : tempList) newSet.insert((uintptr_t)e);
+            static std::vector<Rust::BaseEntity*>* pPrevPlayerList = nullptr;
+            if (!pPrevPlayerList) pPrevPlayerList = new std::vector<Rust::BaseEntity*>();
+            static std::vector<Rust::BaseEntity*>* pPrevNpcList = nullptr;
+            if (!pPrevNpcList) pPrevNpcList = new std::vector<Rust::BaseEntity*>();
+            static std::vector<Rust::BaseEntity*>* pPrevAnimalList = nullptr;
+            if (!pPrevAnimalList) pPrevAnimalList = new std::vector<Rust::BaseEntity*>();
+            auto& prevPlayerList = *pPrevPlayerList;
+            auto& prevNpcList = *pPrevNpcList;
+            auto& prevAnimalList = *pPrevAnimalList;
 
-        npc_mutex.lock();
-        npc_List.swap(tempNpcList);
-        npc_mutex.unlock();
+            entity_mutex.lock();
+            std::vector<Rust::BaseEntity*> mergedPlayers = tempList;
+            for (auto* e : prevPlayerList) {
+                if (newSet.find((uintptr_t)e) == newSet.end() && is_valid((uintptr_t)e))
+                    mergedPlayers.push_back(e);
+            }
+            entity_List.swap(mergedPlayers);
+            entity_mutex.unlock();
 
-        animal_mutex.lock();
-        animal_List.swap(tempAnimalList);
-        animal_mutex.unlock();
+            std::unordered_set<uintptr_t> npcSet;
+            for (auto* e : tempNpcList) npcSet.insert((uintptr_t)e);
+            npc_mutex.lock();
+            std::vector<Rust::BaseEntity*> mergedNpcs = tempNpcList;
+            for (auto* e : prevNpcList) {
+                if (npcSet.find((uintptr_t)e) == npcSet.end() && is_valid((uintptr_t)e))
+                    mergedNpcs.push_back(e);
+            }
+            npc_List.swap(mergedNpcs);
+            npc_mutex.unlock();
+
+            std::unordered_set<uintptr_t> animalSet;
+            for (auto* e : tempAnimalList) animalSet.insert((uintptr_t)e);
+            animal_mutex.lock();
+            std::vector<Rust::BaseEntity*> mergedAnimals = tempAnimalList;
+            for (auto* e : prevAnimalList) {
+                if (animalSet.find((uintptr_t)e) == animalSet.end() && is_valid((uintptr_t)e))
+                    mergedAnimals.push_back(e);
+            }
+            animal_List.swap(mergedAnimals);
+            animal_mutex.unlock();
+
+            prevPlayerList = tempList;
+            prevNpcList = tempNpcList;
+            prevAnimalList = tempAnimalList;
+        }
 
         prefab_mutex.lock();
         prefab_List.swap(tempPrefabList);
@@ -1300,12 +1451,34 @@ void cache::do_Cache() {
                     g_EspCache[k] = v;
                 }
             }
-            // Remove stale entries (players who left)
+            // Remove stale entries — grace period of 3 cycles.
+            // Entities missed this cycle get a miss counter; only erase after 3 consecutive misses.
+            // This prevents flickering when the cache cycle misses an entity due to IOCTL timing.
+            static std::unordered_map<uintptr_t, int>* pCacheMissCount = nullptr;
+            if (!pCacheMissCount) pCacheMissCount = new std::unordered_map<uintptr_t, int>();
+            auto& cacheMissCount = *pCacheMissCount;
             for (auto it = g_EspCache.begin(); it != g_EspCache.end(); ) {
-                if (newKeys.find(it->first) == newKeys.end())
-                    it = g_EspCache.erase(it);
-                else
+                if (newKeys.find(it->first) == newKeys.end()) {
+                    int& misses = cacheMissCount[it->first];
+                    misses++;
+                    if (misses > 3) {
+                        uintptr_t key = it->first;
+                        it = g_EspCache.erase(it);
+                        cacheMissCount.erase(key);
+                    } else {
+                        ++it;
+                    }
+                } else {
+                    cacheMissCount[it->first] = 0;
                     ++it;
+                }
+            }
+            // Clean up miss counts for entities no longer in cache
+            for (auto mit = cacheMissCount.begin(); mit != cacheMissCount.end(); ) {
+                if (g_EspCache.find(mit->first) == g_EspCache.end())
+                    mit = cacheMissCount.erase(mit);
+                else
+                    ++mit;
             }
         }
 
@@ -1324,7 +1497,7 @@ void cache::do_PositionRefresh() {
     static bool posLog = false;
 
     while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
         if (threadEpoch != g_FastRefreshEpoch.load(std::memory_order_acquire)) {
             LOG("POS: epoch change detected, exiting old worker (epoch=%u)", threadEpoch);
@@ -1349,7 +1522,6 @@ void cache::do_PositionRefresh() {
         }
 
         if (!src->LocalPlayer || !is_valid((uintptr_t)src->LocalPlayer)) {
-            g_LocalPlayerEyesPtr.store(0, std::memory_order_relaxed);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
         }
@@ -1358,19 +1530,7 @@ void cache::do_PositionRefresh() {
             continue;
         }
 
-        // Cache LocalPlayer's PlayerEyes pointer when generation changes
-        // This eliminates 708-IOCTL GetComponentByName() call every frame in silent aim
-        {
-            static uint64_t lastEyesGen = 0;
-            uint64_t curGen = g_LocalPlayerGeneration.load(std::memory_order_acquire);
-            if (curGen != lastEyesGen) {
-                lastEyesGen = curGen;
-                uintptr_t eyes = src->LocalPlayer->GetPlayerEyes();
-                g_LocalPlayerEyesPtr.store(eyes, std::memory_order_relaxed);
-                if (eyes) LOG("POS: cached LocalPlayer PlayerEyes=0x%I64X (gen=%llu)", eyes, curGen);
-            }
-        }
-
+        // Cache LocalPlayer position
         auto posCycleStart = GetTickCount64();
 
         Vector3 localPos = src->LocalPlayer->Get_ObjectPosition();
@@ -1561,6 +1721,7 @@ void cache::do_SkeletonRefresh() {
     struct BoneCacheEntry {
         uintptr_t key;
         Vector3 bones[15];
+        Vector3 anchorPos;
         uint64_t lastReadMs;
         bool valid;
     };
@@ -1577,7 +1738,7 @@ void cache::do_SkeletonRefresh() {
     static int s_cleanupTick = 0;
 
     while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
         if (threadEpoch != g_SkeletonEpoch.load(std::memory_order_acquire)) {
             LOG("SKEL: epoch change detected, exiting old worker (epoch=%u)", threadEpoch);
@@ -1695,6 +1856,10 @@ void cache::do_SkeletonRefresh() {
 
             BoneCacheEntry bc;
             bc.key = (uintptr_t)Player;
+            Vector3 anchorRoot = Player->Get_ObjectPosition_Fast();
+            if (anchorRoot.Empty()) anchorRoot = Player->Get_ObjectPosition();
+            bc.anchorPos = anchorRoot;
+            if (!bc.anchorPos.Empty()) bc.anchorPos.y += 1.8f;
             int validBones = 0;
             for (int b = 0; b < 15; b++) {
                 Vector3 bp;
@@ -1734,7 +1899,7 @@ void cache::do_SkeletonRefresh() {
                 if (it != g_EspCache.end()) {
                     for (int b = 0; b < 15; b++)
                         it->second.bones[b] = bc.bones[b];
-                    it->second.boneAnchorPos = it->second.headPos;
+                    it->second.boneAnchorPos = bc.anchorPos;
                     it->second.skeletonValid = true;
                     it->second.skeletonTick = bc.lastReadMs;
                     if (!bc.bones[2].Empty())

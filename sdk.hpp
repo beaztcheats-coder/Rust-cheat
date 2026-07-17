@@ -6,7 +6,6 @@
 #include <xmmintrin.h>
 #include <emmintrin.h>
 #include "skcrypt.hpp"
-#include "Occlusion.hpp"
 #include <map>
 #include <array>
 #include <unordered_map>
@@ -20,42 +19,11 @@
 #include "Logger.hpp"
 
 #define TEST_BITD(value, bit) ((value) & (1 << (bit)))
-//#define LODWORD(l) ((DWORD)(l))
-//typedef unsigned long _DWORD;
 
-//inline uint64_t __PAIR64__(uint32_t high, uint32_t low) {
-//    return ((uint64_t)high << 32) | low;
-//}
-//
-//template<class T> T __ROL__(T value, int count) {
-//    const uintptr_t nbits = sizeof(T) * 8;
-//    if (count > 0) {
-//        count %= nbits;
-//        T high = value >> (nbits - count);
-//        if (T(-1) < 0) high &= ~((T(-1) << count));
-//        value <<= count;
-//        value |= high;
-//    }
-//    else {
-//        count = -count % nbits;
-//        T low = value << (nbits - count);
-//        value >>= count;
-//        value |= low;
-//    }
-//    return value;
-//}
-
-//inline uint32_t __ROR4__(uint32_t value, int count) { return __ROL__((uint32_t)value, -count); }
 inline uint64_t GameAssembly;
 inline uint64_t UnityPlayer;
-inline uint64_t RustClient;
-
-inline std::string getASCIIName(std::wstring name) {
-    return std::string(name.begin(), name.end());
-}
 
 struct monostr { char buffer[128]; };
-struct dynamic_array { uint64_t base; uint64_t mem_id; uint64_t sz; uint64_t cap; };
 
 // ============================================================
 // Auto-generated decrypt namespace patch from Morphine
@@ -72,36 +40,6 @@ struct dynamic_array { uint64_t base; uint64_t mem_id; uint64_t sz; uint64_t cap
 // ============================================================
 // Auto-generated decrypt namespace patch from Morphine
 // Build: sha-dumper
-// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
-// ============================================================
-
-// ============================================================
-// Auto-generated decrypt namespace patch from Morphine
-// Build: 23824285
-// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
-// ============================================================
-
-// ============================================================
-// Auto-generated decrypt namespace patch from Morphine
-// Build: 23824285
-// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
-// ============================================================
-
-// ============================================================
-// Auto-generated decrypt namespace patch from Morphine
-// Build: 23824285
-// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
-// ============================================================
-
-// ============================================================
-// Auto-generated decrypt namespace patch from Morphine
-// Build: sha-dumper
-// Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
-// ============================================================
-
-// ============================================================
-// Auto-generated decrypt namespace patch from Morphine
-// Build: 24020771
 // Includes: Il2cppGetHandle, type-aware read helpers, decrypt functions
 // ============================================================
 
@@ -249,7 +187,7 @@ namespace decrypt {
         return value;
     }
 
-    // networkable_key (client_entities): add-rol-add (build 24091435)
+    // networkable_key (client_entities): rol-xor-sub (build 24181174)
     inline uintptr_t networkable_key(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -258,9 +196,9 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = x + OffsetManager::DecryptCfg.nk_add1; // ADD
-            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.nk_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.nk_rol)); // ROL
-            uint32_t v3 = v2 + OffsetManager::DecryptCfg.nk_add2; // ADD
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.nk_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk_rol)); // ROL
+            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.nk_xor; // XOR
+            uint32_t v3 = v2 - OffsetManager::DecryptCfg.nk_sub; // SUB
             *data = v3;
             data++;
             --count;
@@ -270,7 +208,7 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
-    // networkable_key2 (entity_list): rol-sub-xor-add (build 24091435)
+    // networkable_key2 (entity_list): rol-add-rol (build 24181174)
     inline uintptr_t networkable_key2(uint64_t a1)
     {
         uint64_t value = read<uint64_t>(a1 + 0x18);
@@ -279,11 +217,10 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = (x << OffsetManager::DecryptCfg.nk2_rol) | (x >> (32 - OffsetManager::DecryptCfg.nk2_rol)); // ROL
-            uint32_t v2 = v1 - OffsetManager::DecryptCfg.nk2_sub; // SUB
-            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.nk2_xor; // XOR
-            uint32_t v4 = v3 + OffsetManager::DecryptCfg.nk2_add; // ADD
-            *data = v4;
+            uint32_t v1 = (x << OffsetManager::DecryptCfg.nk2_rol1) | (x >> (32 - OffsetManager::DecryptCfg.nk2_rol1)); // ROL
+            uint32_t v2 = v1 + OffsetManager::DecryptCfg.nk2_add; // ADD
+            uint32_t v3 = (v2 << OffsetManager::DecryptCfg.nk2_rol2) | (v2 >> (32 - OffsetManager::DecryptCfg.nk2_rol2)); // ROL
+            *data = v3;
             data++;
             --count;
         } while (count);
@@ -292,7 +229,7 @@ namespace decrypt {
         return (value & 0x7) == 0 ? value : 0;
     }
 
-    // cl_active_item: xor-rol-add, count=1 (build 24091435)
+    // cl_active_item: add-rol-xor, count=1 (build 24181174)
     inline uint64_t decrypt_ClActiveItem(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -301,9 +238,9 @@ namespace decrypt {
         uint32_t count = 1;
         do {
             uint32_t x = *data;
-            uint32_t v1 = x ^ OffsetManager::DecryptCfg.cla_xor; // XOR
+            uint32_t v1 = x + OffsetManager::DecryptCfg.cla_add; // ADD
             uint32_t v2 = (v1 << OffsetManager::DecryptCfg.cla_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.cla_rol)); // ROL
-            uint32_t v3 = v2 + OffsetManager::DecryptCfg.cla_add; // ADD
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.cla_xor; // XOR
             *data = v3;
             data++;
             --count;
@@ -311,7 +248,7 @@ namespace decrypt {
         return value;
     }
 
-    // player_inventory: rol-xor-add-rol (build 24091435)
+    // player_inventory: xor-rol-xor (build 24181174)
     inline uint64_t decrypt_inventory_pointer(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -320,18 +257,17 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = (x << OffsetManager::DecryptCfg.inv_rol1) | (x >> (32 - OffsetManager::DecryptCfg.inv_rol1)); // ROL
-            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.inv_xor; // XOR
-            uint32_t v3 = v2 + OffsetManager::DecryptCfg.inv_add; // ADD
-            uint32_t v4 = (v3 << OffsetManager::DecryptCfg.inv_rol2) | (v3 >> (32 - OffsetManager::DecryptCfg.inv_rol2)); // ROL
-            *data = v4;
+            uint32_t v1 = x ^ OffsetManager::DecryptCfg.inv_xor1; // XOR
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.inv_rol) | (v1 >> (32 - OffsetManager::DecryptCfg.inv_rol)); // ROL
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.inv_xor2; // XOR
+            *data = v3;
             data++;
             --count;
         } while (count);
         return value;
     }
 
-    // player_eyes: sub-xor-add-rol (build 24091435)
+    // player_eyes: add-rol-xor-rol (build 24181174)
     inline uint64_t decrypt_eyes(uint64_t raw_value)
     {
         if (!raw_value) return 0;
@@ -340,10 +276,10 @@ namespace decrypt {
         uint32_t count = 2;
         do {
             uint32_t x = *data;
-            uint32_t v1 = x - OffsetManager::DecryptCfg.ey_sub; // SUB
-            uint32_t v2 = v1 ^ OffsetManager::DecryptCfg.ey_xor; // XOR
-            uint32_t v3 = v2 + OffsetManager::DecryptCfg.ey_add; // ADD
-            uint32_t v4 = (v3 << OffsetManager::DecryptCfg.ey_rol) | (v3 >> (32 - OffsetManager::DecryptCfg.ey_rol)); // ROL
+            uint32_t v1 = x + OffsetManager::DecryptCfg.ey_add; // ADD
+            uint32_t v2 = (v1 << OffsetManager::DecryptCfg.ey_rol1) | (v1 >> (32 - OffsetManager::DecryptCfg.ey_rol1)); // ROL
+            uint32_t v3 = v2 ^ OffsetManager::DecryptCfg.ey_xor; // XOR
+            uint32_t v4 = (v3 << OffsetManager::DecryptCfg.ey_rol2) | (v3 >> (32 - OffsetManager::DecryptCfg.ey_rol2)); // ROL
             *data = v4;
             data++;
             --count;
@@ -351,19 +287,19 @@ namespace decrypt {
         return value;
     }
 
-    // decrypt_fov: add-rol-sub (build 24091435)
+    // decrypt_fov: rol-add-xor (build 24181174)
     inline uint32_t decrypt_fov(uint32_t val) {
-        val += OffsetManager::DecryptCfg.fov_add1;
         val = (val << OffsetManager::DecryptCfg.fov_rol) | (val >> (32 - OffsetManager::DecryptCfg.fov_rol));
-        val -= OffsetManager::DecryptCfg.fov_sub;
+        val += OffsetManager::DecryptCfg.fov_add;
+        val ^= OffsetManager::DecryptCfg.fov_xor;
         return val;
     }
 
-    // encrypt_fov: reverse — add-ror-sub (build 24091435)
+    // encrypt_fov: reverse — xor-sub-ror (build 24181174)
     inline uint32_t encrypt_fov(uint32_t val) {
-        val += OffsetManager::DecryptCfg.fov_sub;
+        val ^= OffsetManager::DecryptCfg.fov_xor;
+        val -= OffsetManager::DecryptCfg.fov_add;
         val = (val >> OffsetManager::DecryptCfg.fov_rol) | (val << (32 - OffsetManager::DecryptCfg.fov_rol));
-        val -= OffsetManager::DecryptCfg.fov_add1;
         return val;
     }
 
@@ -375,15 +311,6 @@ namespace decrypt {
  // namespace decrypt
  // namespace decrypt
 
-
-// TODO: CONSOLESYSTEM offset unknown for this patch - admin flag feature disabled
-// class ConsoleSystem_Index
-// {
-// public:
-//     static ConsoleSystem_Index* GetConsoleSystem() { ... }
-//     void BlockCommands() { ... }
-// };
-// inline ConsoleSystem_Index* ConsoleSystemIndex;
 
 class Rust {
 public:
@@ -422,10 +349,6 @@ public:
             uintptr_t interp = read<uint64_t>(lerp + offsets::BaseEntity::posChain0);
             if (!interp || !is_valid(interp)) return Get_ObjectPosition();
             return read<Vector3>(interp + offsets::BaseEntity::posFinal);
-        }
-
-        Bounds Get_Bounds() {
-            return read<Bounds>((uintptr_t)this + offsets::BaseEntity::bounds);
         }
 
         // Cached transform pointers — avoids re-resolving transform_internal + relation_array
@@ -606,57 +529,6 @@ public:
                 if (!unk || !is_valid(unk)) return "Empty";
                 return read_wstr(unk + offsets::unity_string::first_char);
             }
-
-            bool is_weapon() {
-                static const std::vector<std::string> weaponitems = {
-                    (std::string)skCrypt("rifle"),
-                    (std::string)skCrypt("pistol"),
-                    (std::string)skCrypt("lmg"),
-                    (std::string)skCrypt("shotgun"),
-                    (std::string)skCrypt("smg")
-                };
-                auto ws = this->get_item_name();
-                std::string ItemName(ws.begin(), ws.end());
-                for (const auto& item : weaponitems) {
-                    if (ItemName.find(skCrypt("eoka")) != std::string::npos) return false;
-                    if (ItemName.find(item) != std::string::npos) return true;
-                }
-                return false;
-            }
-
-            bool is_melee() {
-                static const std::vector<std::string> meele_items = {
-                    (std::string)skCrypt("rock"),
-                    (std::string)skCrypt("hatchet"),
-                    (std::string)skCrypt("stone.pickaxe"),
-                    (std::string)skCrypt("stonehatchet"),
-                    (std::string)skCrypt("pickaxe"),
-                    (std::string)skCrypt("hammer.salvage"),
-                    (std::string)skCrypt("icepick.salvag"),
-                    (std::string)skCrypt("axe.salvaged"),
-                    (std::string)skCrypt("pitchfork"),
-                    (std::string)skCrypt("mace"),
-                    (std::string)skCrypt("spear.stone"),
-                    (std::string)skCrypt("spear.wooden"),
-                    (std::string)skCrypt("machete"),
-                    (std::string)skCrypt("bone.club"),
-                    (std::string)skCrypt("paddle"),
-                    (std::string)skCrypt("salvaged.sword"),
-                    (std::string)skCrypt("salvaged.cleav"),
-                    (std::string)skCrypt("knife.combat"),
-                    (std::string)skCrypt("knife.butcher"),
-                    (std::string)skCrypt("knife.bone"),
-                    (std::string)skCrypt("hammer"),
-                    (std::string)skCrypt("torch"),
-                    (std::string)skCrypt("sickle")
-                };
-
-                std::string ItemName = this->get_item_name();
-                for (const auto& item : meele_items) {
-                    if (ItemName.find(item) != std::string::npos) return true;
-                }
-                return false;
-            }
         };
 
         std::string GetName() {
@@ -689,7 +561,7 @@ public:
             if (!this) return false;
             // Read raw isVisible flag at BaseEntity+0x150 (1 byte)
             // This is Unity's rendering visibility flag — set by the game's occlusion culling system
-            return read<uint8_t>((uintptr_t)this + 0x150) != 0;
+            return read<uint8_t>((uintptr_t)this + offsets::BaseEntity::isVisible) != 0;
         }
 
         bool IsVisibleFiltered(bool rawVisible) {
@@ -752,18 +624,6 @@ public:
                 return rawVisible && st.stableVisible;
             }
             return st.stableVisible;
-        }
-
-        bool IsVisible() {
-            bool rawVisible = IsVisibleRawFlag();
-            return IsVisibleFiltered(rawVisible);
-        }
-
-        bool IsVisibleForAimbot() {
-            bool filtered = IsVisible();
-            if (!AIMBOT::VisibleStrict) return filtered;
-            bool rawVisible = IsVisibleRawFlag();
-            return rawVisible && filtered;
         }
 
         Transformation* Get_Transformation(int bone) {
@@ -1047,7 +907,6 @@ public:
             return nullptr;
         }
 
-
         std::vector<HeldItem*> Get_Hotbar_list() {
             std::vector<HeldItem*> item;
             uintptr_t inv = ResolvePlayerInventory();
@@ -1087,6 +946,9 @@ public:
         std::string name;
         Vector3 Position;
         ImColor Color;
+        float health = -1.f;
+        float maxHealth = -1.f;
+        float hackSeconds = -1.f;
     };
 
     BaseEntity* LocalPlayer = NULL;
@@ -1096,259 +958,6 @@ inline std::vector<Rust::BaseEntity*> entity_List;
 inline std::vector<Rust::BaseEntity*> npc_List;
 inline std::vector<Rust::BaseEntity*> animal_List;
 inline std::vector<Rust::PrefabData> prefab_List;
-
-inline std::map<std::string, std::tuple<float, float, float, float>> recoil_values = {
-    { "rifle.ak", { 1.5f, 2.5f, -2.5f, -3.5f } },
-    { "rifle.ak.ice", { 1.5f, 2.5f, -2.5f, -3.5f } },
-    { "rifle.ak.diver", { 1.5f, 2.5f, -2.5f, -3.5f } },
-    { "smg.mp5", { -1.0f, 1.0f, -1.0f, -3.0f } },
-    { "lmg.m249", { 1.25f, 2.25f, -3.0f, -4.0f } },
-    { "pistol.semiauto", { -1.0f, 1.0f, -2.0f, -2.5f } },
-    { "hmlmg", { -1.25f, -2.5f, -3.0f, -4.0f } },
-    { "rifle.m39", { 1.5f, 2.5f, -3.0f, -4.0f } },
-    { "rifle.lr300", { -1.0f, 1.0f, -2.0f, -3.0f } },
-    { "smg.thompson", { -1.0f, 1.0f, -1.5f, -2.0f } },
-    { "smg.2", { -1.0f, 1.0f, -1.5f, -2.0f } },
-    { "rifle.semiauto", { -0.5f, 0.5f, -2.0f, -3.0f } },
-    { "pistol.m92", { -1.0f, 1.0f, -7.0f, -8.0f } }
-};
-
-inline std::map<std::string, std::tuple<float, float, float, float>> recoil_values2 = {
-    { "shotgun.double", { 4.0f, 8.0f, -10.0f, -14.0f } },
-    { "pistol.revolver", { -1.0f, 1.0f, -3.0f, -6.0f } },
-    { "pistol.prototype17", { -1.0f, 2.0f, -15.0f, -16.0f } },
-    { "pistol.python", { -2.0f, 2.0f, -15.0f, -16.0f } },
-    { "pistol.nailgun", { -1.0f, 1.0f, -3.0f, -6.0f } },
-    { "rifle.bolt", { -4.0f, 4.0f, -2.0f, -3.0f } },
-    { "rifle.l96", { -2.0f, 2.0f, -1.0f, -1.5f } },
-    { "shotgun.spas12", { 4.0f, 8.0f, -10.0f, -14.0f } },
-    { "shotgun.waterpipe", { 4.0f, 8.0f, -10.0f, -14.0f } },
-    { "shotgun.pump", { 4.0f, 8.0f, -10.0f, -14.0f } }
-};
-
-inline std::map<std::wstring, float> bullets = {
-    { L"ammo.rifle", 1.0f },
-    { L"ammo.rifle.hv", 1.2f },
-    { L"ammo.rifle.explosive", 0.49f },
-    { L"ammo.rifle.incendiary", 0.55f },
-    { L"ammo.pistol", 1.0f },
-    { L"ammo.pistol.hv", 1.33333f },
-    { L"ammo.pistol.fire", 0.75f },
-    { L"arrow.wooden", 1.0f },
-    { L"arrow.hv", 1.6f },
-    { L"arrow.fire", 0.8f },
-    { L"arrow.bone", 0.9f },
-    { L"ammo.handmade.shell", 1.0f },
-    { L"ammo.shotgun.slug", 2.25f },
-    { L"ammo.shotgun.fire", 1.0f },
-    { L"ammo.shotgun", 2.25f },
-    { L"ammo.nailgun.nails", 1.f }
-};
-
-inline std::wstring magazine_shortname = L"";
-
-const inline float __fastcall ProjectileSpeed_Normal(Rust::BaseEntity::HeldItem* item, float dist) {
-    auto weaponshortnamea = item->get_item_name();
-    std::wstring weaponshortname(weaponshortnamea.begin(), weaponshortnamea.end());
-
-    const float default_speed = 300.0f;
-    const float bullet_multiplier = bullets[magazine_shortname];
-    if (weaponshortname == std::wstring(skCrypt(L"rifle.ak")) || weaponshortname == std::wstring(skCrypt(L"rifle.ak.ice"))) {
-        if (dist <= 0.f) return 375.9f * bullet_multiplier;
-        else if (dist <= 150.f) return 386.f * bullet_multiplier;
-        else if (dist <= 200.f) return 390.f * bullet_multiplier;
-        else if (dist <= 250.f) return 400.f * bullet_multiplier;
-        else if (dist <= 300.0f) return 410.f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"hmlmg"))) return 500 * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"rifle.lr300"))) return 340.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"rifle.bolt"))) return 579.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"rifle.l96"))) return 1126.0f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"rifle.m39"))) return 445.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"rifle.semiauto"))) return 358.0f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"lmg.m249"))) return 450.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"smg.thompson"))) {
-        if (dist <= 180.f) return 270.f * bullet_multiplier;
-        else if (dist <= 204.f) return 250.f * bullet_multiplier;
-        else if (dist <= 250.f) return 245.f * bullet_multiplier;
-        else if (dist <= 350.f) return 230.f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"smg.2"))) {
-        if (dist <= 160.f) return 220.f * bullet_multiplier;
-        else if (dist <= 200.f) return 195.f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"smg.mp5"))) return 240.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"pistol.prototype17"))) {
-        if (dist <= 110.f) return 300.f * bullet_multiplier;
-        else if (dist <= 169.f) return 290.f * bullet_multiplier;
-        else if (dist <= 170.f) return 280.f * bullet_multiplier;
-        else if (dist <= 180.f) return 275.f * bullet_multiplier;
-        else if (dist <= 190.f) return 270.f * bullet_multiplier;
-        else if (dist <= 200.f) return 265.f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"pistol.python"))) return 300.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"pistol.semiauto"))) return 300.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"pistol.revolver"))) return 270.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"pistol.m92"))) return 300.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"pistol.eoka"))) return 90.f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"pistol.nailgun"))) {
-        if (dist <= 60.f) return 59.f * bullet_multiplier;
-        else if (dist <= 85.f) return 58.3f * bullet_multiplier;
-        else return 57.8f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"crossbow"))) {
-        if (dist <= 83.f) return 90.f * bullet_multiplier;
-        else if (dist <= 100.f) return 88.f * bullet_multiplier;
-        else if (dist <= 150.f) return 86.f * bullet_multiplier;
-        else return 86.f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"bow.compound"))) {
-        if (dist <= 90.f) return 120.f * bullet_multiplier;
-        else if (dist <= 150.F) return 115.76f * bullet_multiplier;
-        else return 115.5f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"bow.hunting"))) {
-        if (dist <= 41.f) return 60.f * bullet_multiplier;
-        else if (dist <= 82.f) return 58.f * bullet_multiplier;
-        else if (dist <= 102.f) return 57.5f * bullet_multiplier;
-        else if (dist <= 112.f) return 57.3f * bullet_multiplier;
-        else if (dist <= 127.f) return 57.f * bullet_multiplier;
-        else if (dist <= 146.f) return 56.5f * bullet_multiplier;
-        else if (dist <= 153.f) return 56.3f * bullet_multiplier;
-        else if (dist <= 163.f) return 56.f * bullet_multiplier;
-        else if (dist <= 172.f) return 55.7f * bullet_multiplier;
-        else if (dist <= 178.f) return 55.5f * bullet_multiplier;
-        else if (dist <= 184.f) return 55.3f * bullet_multiplier;
-        else if (dist <= 189.f) return 55.1f * bullet_multiplier;
-        else if (dist <= 196.f) return 54.9f * bullet_multiplier;
-        else if (dist <= 201.f) return 54.7f * bullet_multiplier;
-        else if (dist <= 206.f) return 54.5f * bullet_multiplier;
-        else if (dist <= 210.f) return 54.3f * bullet_multiplier;
-        else if (dist <= 215.f) return 54.1f * bullet_multiplier;
-        else if (dist <= 220.f) return 53.9f * bullet_multiplier;
-        else if (dist <= 225.1f) return 53.7f * bullet_multiplier;
-        else if (dist <= 230.1f) return 53.5f * bullet_multiplier;
-        else if (dist <= 233.1f) return 53.3f * bullet_multiplier;
-        else if (dist <= 237.1f) return 53.1f * bullet_multiplier;
-        else if (dist <= 241.1f) return 52.9f * bullet_multiplier;
-        else if (dist <= 244.1f) return 52.7f * bullet_multiplier;
-        else if (dist <= 248.1f) return 52.5f * bullet_multiplier;
-        else if (dist <= 252.1f) return 52.3f * bullet_multiplier;
-        else if (dist <= 255.1f) return 52.1f * bullet_multiplier;
-        else if (dist <= 500.f) return 50.f * bullet_multiplier;
-    }
-    if (weaponshortname == std::wstring(skCrypt(L"shotgun.pump"))) return 100.0f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"shotgun.spas12"))) return 100.0f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"shotgun.waterpipe"))) return 100.0f * bullet_multiplier;
-    if (weaponshortname == std::wstring(skCrypt(L"shotgun.doublebarrel"))) return 100.0f * bullet_multiplier;
-    return default_speed;
-}
-
-const inline Vector3 __fastcall Prediction2(Rust::BaseEntity::HeldItem* item, const Vector3& LP_Pos, Vector3 Velocity, Vector3 BonePos) {
-    const float __fastcall Dist = Calc3D_Dist(LP_Pos, BonePos);
-    if (Dist > 0.001f) {
-        const float __fastcall BulletTime = Dist / ProjectileSpeed_Normal(item, Dist);
-        const Vector3 __fastcall vel = Velocity;
-        Vector3 __fastcall PredictVel;
-        PredictVel.x = vel.x * BulletTime * 0.75f;
-        PredictVel.y = vel.y * BulletTime * 0.75f;
-        PredictVel.z = vel.z * BulletTime * 0.75f;
-
-        BonePos.x += PredictVel.x;
-        BonePos.y += PredictVel.y;
-        BonePos.z += PredictVel.z;
-        BonePos.y += (4.905f * BulletTime * BulletTime);
-    }
-    return BonePos;
-}
-
-//inline std::string GetName(uintptr_t a) {
-//    uintptr_t player_name_ptr = read<uintptr_t>(a + 0x270);
-//    if (!player_name_ptr) return skCrypt("?").decrypt();
-//    std::string player_name_wstr = read_wstr(player_name_ptr + 0x14);
-//    return player_name_wstr;
-//}
-
-inline void GetComponentsInChildren(std::uintptr_t game_object, std::vector<std::uintptr_t>& renderers, int depth = 0, bool hands = false) {
-    if (depth > 16) return;
-    const auto component_list = read<std::uint64_t>(game_object + 0x20);
-    if (!component_list || !is_valid(component_list)) return;
-
-    const auto component_size = read<int>(game_object + 0x30);
-    if (!component_size || component_size >= 256) return;
-
-    for (int idx{ 0 }; idx < component_size; ++idx) {
-        const auto component = read<std::uint64_t>(component_list + (0x10 * idx + 0x8));
-        if (!component) continue;
-
-        const auto component_ptr = read<std::uint64_t>(component + 0x28);
-        if (!component_ptr) continue;
-
-        const auto component_name_ptr = read<std::uint64_t>(component_ptr + 0x0);
-        if (!component_name_ptr) continue;
-
-        const auto component_name = read<std::uint64_t>(component_name_ptr + 0x10);
-        if (!component_name) continue;
-
-        auto name = readstring(component_name);
-
-        if (name == ("SkinnedMeshRenderer") || name == ("MeshRenderer")) renderers.push_back(component);
-
-        if (name == ("Transform")) {
-            const auto child_list = read<std::uint64_t>(component + 0x70);
-            if (!child_list) continue;
-
-            const auto child_size = read<int>(component + 0x80);
-            if (!child_size) continue;
-
-            for (int i{ 0 }; i < child_size; ++i) {
-                const auto child_transform = read<std::uint64_t>(child_list + (0x8 * i));
-                if (!child_transform) continue;
-
-                const auto child_game_object = read<std::uint64_t>(child_transform + 0x20);
-                if (!child_game_object) continue;
-
-                const auto child_object_name = read<std::uint64_t>(child_game_object + 0x50);
-                if (!child_object_name) continue;
-
-                const auto child_name = readstring(child_object_name);
-
-                if (child_name.find(("holosight")) != std::string::npos) continue;
-
-
-                GetComponentsInChildren(child_game_object, renderers, depth + 1);
-            }
-        }
-    }
-}
-
-inline void ProcessSkinnedMeshRenderer(uintptr_t renderer, int weaponmaterial) {
-    if (!renderer || !is_valid(renderer)) return;
-
-    for (std::uint32_t idx{ 0 }; idx < 2; idx++) {
-        const auto renderEntry = read<uintptr_t>(renderer + 0x20 + (idx * 0x8));
-        if (!renderEntry || !is_valid(renderEntry)) continue;
-
-        const auto untity_object = read<uintptr_t>(renderEntry + 0x10);
-        if (!untity_object || !is_valid(untity_object)) continue;
-
-        const auto mat_list = read<dynamic_array>(untity_object + 0x140);
-        if (mat_list.sz < 1 || mat_list.sz > 5) continue;
-        if (!mat_list.base || !is_valid(mat_list.base)) continue;
-
-        for (std::uint32_t midx{ 0 }; midx < mat_list.sz; midx++) {
-            uintptr_t writeAddr = mat_list.base + (midx * 0x4);
-            if (is_valid(writeAddr))
-                write<unsigned int>(writeAddr, weaponmaterial);
-        }
-    }
-}
-
-
-inline bool IsPlayerScoped(Rust::BaseEntity* Player) {
-    if (!Player || !is_valid((uintptr_t)Player)) return false;
-    return read<bool>((uintptr_t)Player + offsets::BaseProjectile::HasADS);
-}
 
 namespace fs = std::filesystem;
 inline std::vector<std::string> hotbar_list;

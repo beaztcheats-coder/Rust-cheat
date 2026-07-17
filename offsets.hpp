@@ -1,22 +1,18 @@
-#pragma once
+﻿#pragma once
 #include <Windows.h>
 #include <iostream>
 #include "imgui/imgui.h"
 #include <vector>
 
 namespace offsets {
-	inline uint64_t basenetworkable_pointer = 0x0FC72970; // morphine build 24091435
-	inline uint64_t camera_pointer = 0x0FC68100;           // morphine build 24091435 (MainCamera)
-	inline uint64_t Il2cppGetHandle = 0x10132020;           // morphine build 24091435 (gc_handles::array_rva)
-	inline uint64_t TOD_Sky_TypeInfo = 0x0FD0A5D0;         // morphine build 24091435
-	inline uint64_t Class_TOD_Sky_Static = 0x0FD0A5D0;    // morphine build 24091435 (same as TypeInfo)
-<<<<<<< HEAD
-	inline uint64_t EffectNetwork_Pointer = 0xFCAC040;   // morphine build 24091435 (static_type_info)
-=======
-	inline uint64_t EffectNetwork_Pointer = 0xFCABFC0;   // morphine build 24091435 (type_info)
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
-	inline uint64_t Class_SingletonComponent_UI_LoadingScreen = 0xFC7D388; // morphine build 24091435
-	inline uint64_t Class_SingletonComponent_MixerSnapshotManager__c = 0xFD0D1D0; // morphine build 24091435
+	inline uint64_t basenetworkable_pointer = 0xFB71410; // morphine build 24181174
+	inline uint64_t camera_pointer = 0xFBE49A0;           // morphine build 24181174 (MainCamera)
+	inline uint64_t Il2cppGetHandle = 0x10088B40;           // morphine build 24181174 (gc_handles::array_rva)
+	inline uint64_t TOD_Sky_TypeInfo = 0xFC0CE40;         // morphine build 24181174
+	inline uint64_t Class_TOD_Sky_Static = 0xFC0CE40;    // morphine build 24181174 (same as TypeInfo)
+	inline uint64_t EffectNetwork_Pointer = 0xFBFD480;   // morphine build 24181174 (static_type_info)
+	inline uint64_t Class_SingletonComponent_UI_LoadingScreen = 0xFC76D38; // morphine build 24181174
+	inline uint64_t Class_SingletonComponent_MixerSnapshotManager__c = 0xFC32768; // morphine build 24181174
 	// Diagnostic camera scan TypeInfo RVAs (only used when kCacheVerboseLogs is on)
 	inline uint64_t cam_typeinfo_singleton = 0xE2D5CC8;    // SingletonComponent<MainCamera>
 	inline uint64_t cam_typeinfo_camera_c = 0xE2C3EC8;      // Camera_c
@@ -42,21 +38,17 @@ namespace offsets {
 		inline uint64_t  static_fields = 0xB8;
 		inline uint64_t  wrapper_class = 0x8;
 		inline uint64_t  parent_static_fields = 0x10;
-		inline uint64_t  entity = 0x20;         // morphine build 24091435 — entities offset in parent_class
-		inline uint64_t  children = 0x70;      // morphine build 24091435
-		inline uint64_t  encrypted_handle = 0x18;
-	}
+ 		inline uint64_t  entity = 0x10;         // morphine build 24181174 — entities offset in parent_class
+ 		inline uint64_t  children = 0x88;      // morphine build 24181174
+ 	}
 
   namespace BaseCamera
   {
   	inline uint64_t  static_fields = 0xB8;   // Il2CppClass::static_fields
-  	inline uint64_t  wrapper_class = 0x38;   // morphine build 24091435 — camera_object/instance offset in static_fields
+  	inline uint64_t  wrapper_class = 0x38;   // morphine build 24181174 — camera_object/instance offset in static_fields
   	inline uint64_t  entity = 0x10;          // UC dump: native Camera deref from IL2CPP wrapper
   	inline uint64_t  viewMatrix = 0x2FC;     // fefe4444 #24841 + diagnostic confirmed (-0.4139)
   	inline uint64_t  projectionMatrix = 0x18C; // old UC dump — verify with diagnostic
-  	inline uint64_t  parent_static_fields = 0x0;
-  	inline uint64_t  matrix = 0x2FC;          // alias for viewMatrix
-  		inline uint64_t  culling_mask = 0x3E8;     // validict build 24037537
   	inline uint64_t  world_position = 0x444;  // fefe4444 #24841
   	inline uint64_t  field_of_view = 0x170;   // v1mper + temopzso #24865 + old UC dump
   }
@@ -79,11 +71,7 @@ namespace offsets {
 
  	namespace TOD_Sky_Static
  	{
-<<<<<<< HEAD
-  	inline uint64_t instances = 0x8; // morphine build 24091435 (instance offset in static_fields)
-=======
-  		inline uint64_t instances = 0x18; // morphine desktop dump build 24069519
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
+  	inline uint64_t instances = 0x20; // morphine build 24181174 (instance offset in static_fields)
  	}
 
 	namespace TOD_AmbientParameters
@@ -103,32 +91,24 @@ namespace BaseCombatEntity {
 	inline uint64_t model = 0x1A8;
 }
 
-	namespace BaseNetworkable2
-	{
-		inline uint64_t parent_entity = 0x38;
-		inline uint64_t prefab_id = 0x54;
-	}
+ 	namespace BaseNetworkable2
+ 	{
+ 		inline uint64_t prefab_id = 0x54;
+ 	}
 
 namespace BasePlayer {
-	inline uint64_t PlayerEyes = 0x490;        // morphine build 24091435
-	inline uint64_t PlayerInventory = 0x3a0;   // morphine build 24091435
-	inline uint64_t PlayerInput = 0x338;       // morphine build 24091435
-	inline uint64_t PlayerModel = 0x3d8;       // morphine build 24091435
+	inline uint64_t PlayerEyes = 0x380;        // morphine build 24181174
+	inline uint64_t PlayerInventory = 0x548;   // morphine build 24181174
+	inline uint64_t PlayerInput = 0x2D0;       // morphine build 24181174
+	inline uint64_t PlayerModel = 0x6D8;       // morphine build 24181174
 	inline uint64_t ModelTransform = 0x1A8;
-	inline uint64_t PlayerFlags = 0x6B8;       // morphine build 24091435 (unchanged)
-	inline uint64_t ClActiveItem = 0x568;      // morphine build 24091435 (unchanged)
-	inline uint64_t BaseMovement = 0x5b8;      // morphine build 24091435
-	inline uint64_t DisplayName = 0x2e8;       // morphine build 24091435
-	inline uint64_t ModelState = 0x518;  // morphine build 24091435 (verify)
-	inline uint64_t Mounted = 0x5c0;           // morphine build 24091435
-	inline uint64_t BeltDirect = 0x7b8;        // morphine build 24091435
-	inline uint64_t CurrentTeam = 0x538;       // morphine build 24091435 (unchanged)
-	inline uint64_t WeaponMoveSpeedScale = 0x798; // morphine build 24091435 (unchanged)
-	inline uint64_t ClothingBlocksAiming = 0x79C; // morphine build 24091435 (unchanged)
-	inline uint64_t SteamID = 0x558;           // morphine build 24091435 (verify)
-	inline uint64_t PlayerRigidbody = 0x520;   // morphine build 24091435
-	inline uint64_t Frozen = 0x388;            // morphine build 24091435 (unchanged)
-	inline uint64_t CurrentGesture = 0x3f0;    // morphine build 24091435
+	inline uint64_t PlayerFlags = 0x6B8;       // morphine build 24181174 (unchanged)
+	inline uint64_t ClActiveItem = 0x568;      // morphine build 24181174 (unchanged)
+	inline uint64_t BaseMovement = 0x4F8;      // morphine build 24181174
+	inline uint64_t DisplayName = 0x3E0;       // morphine build 24181174
+	inline uint64_t ModelState = 0x540;  // morphine build 24181174
+ 	inline uint64_t Mounted = 0x5c0;           // morphine build 24181174
+ 	inline uint64_t CurrentTeam = 0x538;       // morphine build 24181174 (unchanged)
   }
 
 // Morphine: base_player_flags — used for admin/sleeping/wounded checks
@@ -141,6 +121,7 @@ namespace base_player_flags {
     constexpr uint64_t IsDeveloper = 0x80;
     constexpr uint64_t Connected = 0x100;
     constexpr uint64_t ThirdPersonViewmode = 0x400;
+    constexpr uint64_t Mounted = 0x800;  // bit 11 — not in morphine dump, standard Rust value
 }
 
 // Morphine: unity_string — Il2Cpp string layout
@@ -151,7 +132,7 @@ namespace unity_string {
 
   namespace ModelState
   {
-      constexpr uint64_t flags = 0x0;            // morphine build 24087225 model_state.flags
+       constexpr uint64_t flags = 0x34;            // morphine build 24181174 model_state.flags
       constexpr uint64_t Flying    = 0x40;      // bit 6: freecam flying mode
       constexpr uint64_t OnGround  = 0x04;      // bit 2
       constexpr uint64_t Sleeping  = 0x08;      // bit 3
@@ -161,24 +142,24 @@ namespace unity_string {
 
   namespace PlayerInventory
   {
-      inline uint64_t Belt = 0x58;        // morphine build 24091435 containerBelt
-      inline uint64_t Wear = 0x78;        // morphine build 24091435 containerWear
-      inline uint64_t Main = 0x30;        // morphine build 24091435 containerMain
-      inline uint64_t loot = 0x48;        // morphine build 24091435 loot
+      inline uint64_t Belt = 0x38;        // morphine build 24181174 containerBelt
+      inline uint64_t Wear = 0x58;        // morphine build 24181174 containerWear
+      inline uint64_t Main = 0x30;        // morphine build 24181174 containerMain
+      inline uint64_t loot = 0x48;        // morphine build 24181174 loot
       constexpr uint64_t BeltFallback1 = 0x78;  // containerWear fallback
       constexpr uint64_t BeltFallback2 = 0x30;  // containerMain fallback
   }
 
   namespace ItemContainer
   {
-      constexpr uint64_t ItemList = 0x60; // morphine build 24091435 item_list
+      constexpr uint64_t ItemList = 0x48; // morphine build 24181174 item_list
       constexpr uint64_t ItemListFallback = 0x10; // Fallback when primary fails
   }
 
     namespace PlayerModel
    	{
-    	inline uint64_t SkinnedMultiMesh = 0x420; // morphine build 24091435 _multiMesh
-       		inline uint64_t is_npc = 0x00000490;           // morphine build 24091435 isNpc
+    	inline uint64_t SkinnedMultiMesh = 0x3D0; // morphine build 24181174 _multiMesh
+       		inline uint64_t is_npc = 0x4D0;           // morphine build 24181174 isNpc
       		inline uint64_t position = 0x000002F8;         // morphine build 24087225 player_model.position
       		inline uint64_t velocity = 0x0000031C;         // morphine build 24087225 player_model.newVelocity
       		inline uint64_t visible = 0x000000C4;           // morphine build 24087225 visibility
@@ -186,19 +167,15 @@ namespace unity_string {
       		inline uint64_t rootBone = 0x00000098;          // morphine build 24087225
       		inline uint64_t headBone = 0x000000F8;          // morphine build 24087225 (verify)
       		inline uint64_t eyeBone = 0x00000120;          // morphine build 24087225 (verify)
-   	}
-
-  	namespace SkinnedMultiMesh
-  	{
-   		constexpr uint64_t RendererList = 0x50; // morphine build 24069519
-  	}
+    }
 
     namespace Item
     {
-        constexpr uint64_t ItemDefinition = 0xA8;       // morphine build 24091435 itemdefinition
-        constexpr uint64_t ItemId = 0xB8;               // morphine build 24091435 uid
-        constexpr uint64_t HeldEntity_1 = 0xA8;         // morphine build 24091435 held_entity
-        constexpr uint64_t Amount = 0x24;               // morphine build 24091435 amount
+        constexpr uint64_t ItemDefinition = 0xB0;       // morphine build 24181174 itemdefinition
+        constexpr uint64_t ItemId = 0xA0;               // morphine build 24181174 uid
+        constexpr uint64_t HeldEntity_1 = 0x78;         // morphine build 24181174 held_entity
+        constexpr uint64_t Amount = 0x84;               // morphine build 24181174 amount
+        constexpr uint64_t AmmoCount = 0x8C;            // morphine build 24181174 ammoCount
         constexpr uint64_t ItemIdFallback1 = 0x38;
         constexpr uint64_t ItemIdFallback2 = 0x70;
     }
@@ -215,7 +192,7 @@ namespace unity_string {
   namespace HeldEntity
   {
       constexpr uint64_t ownerItemUID = 0x000002D0;        // morphine build 24069519 (unchanged)
-       constexpr uint64_t viewModel = 0x000002C8;           // morphine build 24091435
+       constexpr uint64_t viewModel = 0x240;           // morphine build 24181174
   }
 
   namespace Model
@@ -257,29 +234,6 @@ namespace unity_string {
       constexpr uint64_t internalBurstFireRateScale = 0x430; // validict build 24037537
   }
 
-  namespace BaseProjectileExt
-  {
-      constexpr uint64_t camera_punches = 0x2A8;
-      constexpr uint64_t viewmodel_instance = 0x1E8;
-      constexpr uint64_t magazine = 0x3A8;
-      constexpr uint64_t aim_sway = 0x3C8;
-      constexpr uint64_t aim_sway_speed = 0x3CC;
-       constexpr uint64_t sight_aim_cone_scale = 0x45C;  // morphine build 24087225
-       constexpr uint64_t hip_aim_cone_scale = 0x464;   // morphine build 24087225
-      constexpr uint64_t string_hold_duration_max = 0x4C0; // validict build 24037537
-  }
-
-  namespace PlayerWalkMovement
-  {
-      constexpr uint64_t GroundAngle = 0x70;
-      constexpr uint64_t GroundAngleNew = 0x78;
-      constexpr uint64_t GroundTime = 0x80;
-      constexpr uint64_t JumpTime = 0x88;
-      constexpr uint64_t LandTime = 0x90;
-      constexpr uint64_t GravityMultiplier = 0x98;
-      constexpr uint64_t TargetMovement = 0x128;
-  }
-
   namespace BaseMovement2
   {
       constexpr uint64_t admin_cheat = 0x20;
@@ -290,7 +244,7 @@ namespace unity_string {
   {
       constexpr uint64_t flags = 0x1B0;
       constexpr uint64_t model = 0x1A8;         // BaseEntity.model (Model)
-      constexpr uint64_t positionLerp = 0x1c8;    // morphine build 24087225
+       constexpr uint64_t positionLerp = 0x108;    // morphine build 24181174
       constexpr uint64_t bounds = 0x17C;         // Unity Bounds {center(12) + extents(12)} — 24 bytes
       constexpr uint64_t isVisible = 0x150;      // BaseEntity.isVisible — confirmed working build 24037537
       constexpr uint64_t isAnimatorVisible = 0x151; // BaseEntity.isAnimatorVisible (always 1)
@@ -306,9 +260,9 @@ namespace unity_string {
 
   namespace FOV
   {
-      inline uint64_t ConVar_Graphics = 0xFCF2C10;  // morphine build 24091435
+      inline uint64_t ConVar_Graphics = 0xFBB2578;  // morphine build 24181174
       constexpr uint64_t fovField = 0x560;
-      constexpr uint64_t fovWrite = 0x110;           // morphine build 24091435 convar_graphics::fov
+       constexpr uint64_t fovWrite = 0x40;            // morphine build 24181174 convar_graphics::fov (updated — was 0xB8)
       constexpr uint64_t cameraFovBypass = 0x170;
 	}
 
@@ -330,17 +284,29 @@ namespace unity_string {
        constexpr uint64_t contents = 0x1c; // morphine build 24087225
   }
 
-  namespace EffectNetwork
-  {
-      constexpr uint64_t static_fields = 0xB8;  // morphine build 24087225
-      constexpr uint64_t instance = 0x8;        // morphine build 24087225
-       constexpr uint64_t hitPosition = 0x90;    // morphine build 24091435
-  }
+   namespace EffectNetwork
+   {
+       constexpr uint64_t static_fields = 0xB8;  // morphine build 24181174
+       constexpr uint64_t instance = 0x8;        // morphine build 24181174 (MAX of 2 effect-typed static fields, 0x0 fallback in misc.cpp)
+        constexpr uint64_t hitPosition = 0x84;    // morphine build 24181174
+   }
 
-  namespace convar_admin
+   namespace mapview
+   {
+       constexpr uint64_t RVA_RustWorld = 0xFB602D0;       // morphine build 24181174
+       constexpr uint64_t RVA_MapInterface = 0xFC23CF8;     // morphine build 24181174
+       constexpr uint64_t static_fields_off = 0xB8;
+       constexpr uint64_t World_Size_off = 0xC4;
+       constexpr uint64_t MI_Instance_off = 0x8;
+       constexpr uint64_t MI_View_off = 0x60;
+       constexpr uint64_t MV_scrollRect_off = 0x40;
+       constexpr uint64_t SR_ContentBounds = 0x90;   // Bounds {Vector3 center, Vector3 extents}
+       constexpr uint64_t SR_ViewBounds = 0xA8;      // Bounds {Vector3 center, Vector3 extents}
+       constexpr uint64_t RawImage_UVRect = 0xE8;
+   }
+
+  namespace BuildingPrivlidge
   {
-       constexpr uint64_t convar_admin = 0xFC816A8; // morphine build 24091435
-      constexpr uint64_t playerIds = 0x20;          // morphine build 24087225
   }
 
   namespace TOD_AmbientParameters
@@ -391,13 +357,12 @@ namespace unity_string {
 	inline bool VisGhost = false;
 	inline int VisMode = 0;            // 0=Raw (no std::unordered_map — safe for manually mapped DLL)
 	inline int VisSamples = 3;         // 3 samples = max 200ms response (was 8 = 600ms)
-	inline int VisHoldMs = 0;          // no sticky visible — instant transition
-	inline float OccluderDist = 200.f; // max distance to read occluder AABBs
-	inline bool TeamID = false;
+ 	inline int VisHoldMs = 0;          // no sticky visible — instant transition
+ 	inline bool TeamID = false;
+ 	inline bool PlayerFlags = false;
 	inline int SnaplineMode = 0;
-	inline bool MovementTrails = false;
-	inline bool BulletTracers = false;
-	inline bool ShowVisibility = false;
+ 	inline bool MovementTrails = false;
+ 	inline bool ShowVisibility = false;
 	inline float TracerThickness = 1.5f;
 	inline ImColor TracerColor = { 97, 138, 200, 255 };
 	inline bool TracerOutline = true;
@@ -499,6 +464,7 @@ namespace WORLD {
 	inline float draw_tc = 300.f;
 	inline float draw_vending = 300.f;
 	inline bool Stash = false;
+	inline bool StashPersist = false;
 	inline bool BodyBag = false;
 	inline bool Turret = true;
 	inline bool Stone = true;
@@ -554,6 +520,10 @@ namespace WORLD {
 	inline bool CargoShip = false;
 	inline bool SupplyDrop = false;
 	inline float draw_supplydrop = 400.f;
+	inline bool VehicleHealth = true;
+	inline bool RaidESP = false;
+	inline float draw_raid = 500.f;
+	inline bool CrateTimer = true;
 	namespace color {
 		inline ImColor Distance_Color = { 255,255,255,255 };
 		inline ImColor Hemp_Color = { 80,180,80,255 };
@@ -676,6 +646,7 @@ namespace ANIMAL_ESP {
 	inline bool Panther = true;
 	inline bool Tiger = true;
 	inline bool Snake = true;
+	inline bool Crocodile = true;
 	namespace color {
 		inline ImColor Box = { 200,180,80,255 };
 		inline ImColor Name = { 200,190,160,255 };
@@ -716,6 +687,26 @@ namespace BATTLE {
 	inline bool Animals = false;
 	inline bool Radar = false;
 }
+namespace BIGMAP {
+	inline bool ShowPlayers = true;
+	inline bool ShowNPCs = true;
+	inline bool ShowAnimals = true;
+	inline bool ShowOres = true;
+	inline bool ShowHemp = true;
+	inline bool ShowStashes = true;
+	inline bool ShowTCs = true;
+	inline bool ShowCrates = false;
+	inline bool ShowVehicles = false;
+	inline bool ShowTurrets = false;
+	inline bool ShowNames = true;
+	inline bool ShowDistance = false;
+	inline float DotSize = 5.f;
+	inline ImColor PlayerColor = { 255, 50, 50, 255 };
+	inline ImColor TeammateColor = { 0, 200, 100, 255 };
+	inline ImColor SleeperColor = { 150, 150, 150, 255 };
+	inline ImColor NpcColor = { 255, 165, 0, 255 };
+	inline ImColor AnimalColor = { 255, 255, 0, 255 };
+}
 namespace AIMBOT {
 	inline bool Memory = false;
 	inline bool FovCircle = false;
@@ -726,9 +717,8 @@ namespace AIMBOT {
 	inline float SMOOTHING = 5.f;
 	inline float TargetLineThickness = 2.0f;
 	inline bool KeepTarget = false;
-	inline int BoneSelector = 53;
-	inline bool Silent = false;       // BodyRotation quaternion � no visible aim change
-	inline int BonePriority = 0;     // 0=Head, 1=Neck, 2=Chest, 3=Pelvis, 4=ClosestToCrosshair, 5=Smart
+ 	inline int BoneSelector = 53;
+ 	inline int BonePriority = 0;     // 0=Head, 1=Neck, 2=Chest, 3=Pelvis, 4=ClosestToCrosshair, 5=Smart
 	inline float PredictionScale = 0.0f;
 	inline bool SpinWrites = true;
 	inline bool VisibleOnly = false;
@@ -743,11 +733,12 @@ namespace AIMBOT {
 	inline ImColor FovColor = { 255, 255, 255, 60 };
 	inline bool PredictionIndicator = true;
 	inline bool HumanizeEnabled = false;
-	inline float JitterAmount = 1.0f;
-	inline float OvershootAmount = 2.0f;
-	inline float SmoothingVariance = 0.15f;
-	inline float MissProbability = 0.02f;
-	namespace color {
+ 	inline float JitterAmount = 1.0f;
+ 	inline float OvershootAmount = 2.0f;
+ 	inline float SmoothingVariance = 0.15f;
+ 	inline float MissProbability = 0.02f;
+
+namespace color {
 		inline ImColor TargetLine = { 255,255,255,255 };
 		inline ImColor TargetText = { 255,255,255,255 };
 	}
@@ -756,136 +747,42 @@ namespace AIMBOT {
 namespace MISC {
 	inline bool CheatEnabled = true;
 	inline bool ShutdownRequested = false;
-	inline bool NoMeleeCoolDown = false;
 	inline bool ChangeBurst = false;
-	inline bool QuickBurst = false;
-	inline float BURSTAMOUNT = 0.4f;
 	inline bool RecoilEnabled = true;
 	inline float RecoilModifier = 100.f;
 	inline bool RecoilVariance = false;
 	inline float RecoilFloor = 0.25f;
-	inline bool AntiAnybrain = true;
-	inline bool SilentShot = false;
 	inline bool FovChanger = false;
 	inline float FovAmount = 100.0f;
 	inline bool Zoom = false;
 	inline float ZoomAmount = 100.0f;
-	inline bool usetouchUnderWater = false;
-	inline bool MiniGunMagicBullet = false;
+	inline bool NoSway = false;
+	inline bool ForceAutomatic = false;
 	inline bool Timechanger = false;
 	inline bool BrightNight = false;
 	inline float lightIntensity = 25.f;
 	inline float ambientMultiplier = 4.f;
 	inline float AmbientSaturation = 1.0f;
 	inline int timevalue = 12;
-
-	// --- Environment modifiers ---
-	inline bool Rayleigh = false;
-	inline float RayleighVal = 1.0f;
-	inline bool Mie = false;
-	inline float MieVal = 1.0f;
-	inline bool BrightnessEnv = false;
-	inline float BrightnessEnvVal = 1.0f;
-	inline bool StarMod = false;
-	inline float StarSize = 1.0f;
-	inline float StarBrightness = 1.0f;
-	inline bool MeshMod = false;
-	inline float MeshSize = 1.0f;
-	inline float MeshBrightness = 1.0f;
-	inline bool RemoveTrees = false;
-	inline bool RemoveGrass = false;
-	inline bool RemoveWater = false;
-	inline bool RemoveSky = false;
-	inline bool RemoveLayersActive = false;
-	inline bool AspectRatio = false;
-	inline float AspectRatioVal = 1.777f;
-	// TOD color changers
-	inline bool TodColors = false;
-	inline bool TodSunMoon = false;   inline ImColor TodSunMoonCol = { 255,200,100,255 };
-	inline bool TodLight = false;     inline ImColor TodLightCol = { 255,255,200,255 };
-	inline bool TodRay = false;       inline ImColor TodRayCol = { 100,180,255,255 };
-	inline bool TodSky = false;       inline ImColor TodSkyCol = { 80,150,255,255 };
-	inline bool TodCloud = false;     inline ImColor TodCloudCol = { 200,200,220,255 };
-	inline bool TodFog = false;       inline ImColor TodFogCol = { 180,190,200,255 };
-	inline bool TodAmbient = false;   inline ImColor TodAmbientCol = { 100,120,160,255 };
-	// Removed: fast_bullet (legacy path wrote default velocity_scale only).
-	inline bool DebugCamera = false;
-	inline float DebugCameraTimer = 0.0f;
-	inline bool AdminFlags = false;        // sets PlayerFlags.IsAdmin every frame
-	inline bool DebugCamAdminFlags = false; // sets Flying + freezes body (used with DebugCamera)
+ 	inline bool DebugCamera = false;
+ 	inline float DebugCameraTimer = 0.0f;
+ 	inline bool DebugCameraNative = false;
+ 	inline bool AdminFlags = false;
 	inline bool CombatMode = false;
 	inline int CrosshairStyle = 0;
 	inline float CrosshairSize = 4.f;
 	inline ImColor CrosshairColor = { 0, 255, 0, 255 };
-	inline bool ShowServerTime = false;
 	inline bool DrawFlags = false;
-	inline bool ShowEspRangeOverlay = true;
-	inline ImVec4 UsernameBackgroundColour = RGBAs(255, 255, 255, 255);
-	inline ImVec4 DistanceBackgroundColor = RGBAs(255, 255, 255, 255);
-
-	// --- Weapon mods (ported from pre-Unity6) ---
-	inline bool NoSpread = false;
-	inline float SpreadScale = 100.f;   // 100=no change, 0=no spread
-	inline bool Automatic = false;
-	inline bool Aimsway = false;
-	inline bool NoPunch = false;
-	inline bool RapidFire = false;
-	inline float FireRateScale = 1.f;   // fire rate multiplier
-	inline bool SuperMelee = false;
-	inline bool InstantBow = false;
-	inline bool HitSound = false;
-
-	// --- New weapon exploits ---
-	inline bool InstantEoka = false;
-	inline bool FastBow = false;
-	inline bool NoPullback = false;
-	inline bool InstantCompound = false;
-	inline bool Longhand = false;
-	inline bool NoHeavySlow = false;
-
-	// --- ViewModel exploits ---
-	inline bool NoAnim = false;
-	inline bool NoBob = false;
-	inline bool NoSway = false;
-	inline bool NoLower = false;
-
-	// --- Movement / util (ported from pre-Unity6) ---
-	inline bool AlwaysSprint = false;
-	inline bool omniSprint = false;
-	inline bool JumpShot = false;
-	inline bool WalkonWalls = false;
-	inline bool NoFall = false;
-	inline bool ShootInAir = false;
-	inline bool ReducedGravity = false;
-	inline float GravityValue = 0.5f;
-	inline bool MoonJump = false;
-	inline bool Spinbot = false;
-	inline bool mincoptershoot = false;
-	inline bool AimWhileHeavy = false;
-	inline bool FASTHORSE = false;
-	inline bool Fly = false;
-	inline int FlyKey = VK_MENU;
-	inline float FlySpeed = 5.0f;
-	inline bool FlySafeMode = false;
-	inline bool HighJump = false;
-	inline float HighJumpAngle = 85.0f;
-	inline bool SpeedHack = false;
-	inline int SpeedKey;
-	inline float SpeedValue = 1.25f;
-	// --- New movement exploits ---
-	inline bool Spiderman = false;
-	inline bool WalkOnWater = false;
-	inline bool InfJump = false;
-	inline bool NoWearOverlay = false;
+	inline float FireRateScale = 1.f;
 }
 namespace SETTINGS {
-	inline bool Vsync = false;
 	inline bool BattleMode = false;
-	inline bool Crosshair = false;
-	inline float ROTSPEED = 0.3f;
 	inline bool AdminFlag = false;
 	inline bool MenuOpen = false;
-	inline int Language = 0; // 0=English, 1=French
+	inline int Language = 0;
+	inline bool ShowTime = false;
+	inline bool FeatureIndicators = false;
+	inline bool PlayerList = false;
 }
 
 namespace MENU_UI {
@@ -915,10 +812,3 @@ namespace MENU_FX {
 	inline float BackgroundOpacity = 0.55f;
 }
 
-namespace ANYBRAIN {
-	inline uint64_t static_cache_rva = 0x0;
-	constexpr uint64_t sdkLoaded_offset = 0x20;
-	constexpr uint64_t static_fields_offset = 0xB8;
-	inline uint64_t update_rva = 0x0; // STALE — re-run Frida on build 24037537 to get new RVA
-	inline bool neutralized = false;
-}

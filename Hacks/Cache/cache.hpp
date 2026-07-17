@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <atomic>
 #include <cstring>
+#include <string>
+#include <unordered_set>
 
 // Helper functions for char array fields (replaces std::string — eliminates heap allocations)
 inline void cacheSetStr(char* dst, const char* src) {
@@ -35,6 +37,7 @@ struct EspCacheData {
     char animalType[32] = {};
     char belt[6][64] = {};
     char wear[5][64] = {};
+    char playerFlags[16] = {};
     int ammo = -1;
     bool skeletonValid = false;
     bool isDead = false;
@@ -42,7 +45,6 @@ struct EspCacheData {
     bool isWounded = false;
     bool isVisible = false;
     bool isVisibleRaw = false;
-    bool isAabbOccluded = false;
     bool isCrouching = false;
     bool isGrounded = true;
     float health = 0.f;
@@ -65,6 +67,29 @@ extern Vector3 g_CameraWorldPos;
 extern uint64_t g_LocalPlayerTeam;
 extern bool g_LocalIsCrouching;
 extern std::mutex g_LocalPlayerDataMutex;
+extern float g_GameTimeHour;
+
+struct RaidEvent {
+    Vector3 position;
+    uint64_t timestamp;
+    int count;
+};
+extern std::vector<RaidEvent> g_RaidEvents;
+extern std::mutex g_RaidMutex;
+
+struct SavedStash {
+    Vector3 position;
+    uint64_t timestamp;
+};
+extern std::vector<SavedStash> g_SavedStashes;
+extern std::mutex g_StashMutex;
+void LoadSavedStashes();
+void SaveStashesToFile();
+
+extern std::unordered_set<std::string> g_Friends;
+extern std::mutex g_FriendMutex;
+void LoadFriends();
+void SaveFriends();
 
 struct GhostData {
     Vector3 lastPos;
@@ -82,13 +107,16 @@ extern std::mutex g_GhostCacheMutex;
     extern std::atomic<uint32_t> g_CacheThreadEpoch;
 extern std::atomic<uintptr_t> g_LocalPlayerAddr;
 extern std::atomic<uint64_t> g_LocalPlayerGeneration;
-// Cached LocalPlayer PlayerEyes pointer — resolved in position thread, used by silent aim
-// Eliminates 708-IOCTL GetComponentByName() call every frame in aimbot
-extern std::atomic<uintptr_t> g_LocalPlayerEyesPtr;
 extern std::atomic<uint64_t> g_FastRefreshHeartbeatMs;
 extern std::atomic<uint32_t> g_FastRefreshEpoch;
 extern std::atomic<uint64_t> g_SkeletonHeartbeatMs;
 extern std::atomic<uint32_t> g_SkeletonEpoch;
+
+// Big map overlay state — written by render thread (ReadMapState), read by DrawMapOverlay
+extern std::atomic<bool> g_MapOpen;
+extern float g_WorldSize;
+extern float g_MapContentCx, g_MapContentCy, g_MapContentEx, g_MapContentEy;
+extern float g_MapViewCx, g_MapViewCy, g_MapViewEx, g_MapViewEy;
 
 // Hotbar target — computed once per frame by Do_Cheat, read by do_Visuals
 extern uintptr_t g_HotbarTarget;

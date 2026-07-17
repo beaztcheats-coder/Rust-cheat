@@ -283,70 +283,39 @@ Requirements:
 
 ## Updating for New Game Patches
 
-When Rust updates, use the master update pipeline to automatically fetch new offsets and decrypts:
+When Rust updates, use the morphine-dumper2 + conversion script to get new offsets and decrypts:
 
-### Quick Update (automated)
+### Step 1: Dump offsets (inject morphine-dumper2 into Rust)
 ```
-1. cd tools\masterupdate
-2. getnewoffsets.bat     # Fetches Morphine + sha-dumper, generates patches
-3. update_now.bat      # Applies patches + builds DLL
-4. Inject and test
-```
-
-### Manual Update (via opencode)
-```
-1. cd tools\masterupdate
-2. getnewoffsets.bat
-3. Paste output\super_prompt.txt into opencode
-4. opencode applies all changes
-5. Build with build_vsharp.bat (or build_lite.bat / build_private.bat)
+1. Start Rust, load into any server (can be empty/creative)
+2. Inject tools\morphine-dumper2\build\Release\morphine-dumper.dll
+3. Wait ~30 seconds for dump to complete (console shows progress)
+4. Press END to unload the dumper
+5. Collect morphine-dumper_output.h from Desktop
 ```
 
-See `tools/masterupdate/README.md` for full pipeline documentation.
-
----
-
-## Dumper Tools
-
-### Il2CppDumper (tools/dumper/)
-Static IL2CPP offset dumper. Works offline against dumped GameAssembly.dll + global-metadata.dat.
-
+### Step 2: Convert to cheat format
 ```
-Usage:
-  Il2CppDumper.exe <GameAssembly.dll> <global-metadata.dat> <output_dir>
-  Or just run dump_offsets.bat from repo root.
-
-Output:
-  dump.cs        — C# class/field dumps with offsets
-  script.json    — JSON metadata (methods, strings, addresses)
-  il2cpp.h       — C header with struct definitions
-  DummyDll/      — restored .NET DLL stubs
-
-Scripts (tools/dumper/scripts/):
-  ida.py, ida_py3.py                    — IDA Pro method/string labeling
-  ida_with_struct.py, ida_with_struct_py3.py — IDA Pro with type signatures
-  ghidra.py, ghidra_wasm.py             — Ghidra method/string labeling
-  ghidra_with_struct.py                 — Ghidra with C type signatures
-  il2cpp_header_to_ghidra.py            — Convert il2cpp.h to Ghidra-compatible format
+tools\update.bat                          (auto-finds file on Desktop)
+tools\update.bat "C:\path\to\file.h"      (specify custom path)
 ```
 
-### Frida IL2CPP Bridge (tools/frida/)
-Runtime field dumper. Attaches to live RustClient.exe process.
+This generates:
+- `rust_decrypts.dat` — 21 decrypt constants (runtime override, NO recompile needed)
+- `updated_offsets.txt` — all offsets mapped to cheat namespace names
 
+### Step 3: Apply updates
 ```
-Prerequisites:
-  - RustClient.exe running WITHOUT EAC
-  - Python 3.14 with frida pip package
-  - frida-il2cpp-bridge at C:\frida-il2cpp\
-  - Run: .\tools\frida\frida_dump.bat
-
-Output: F:\github\rust\frida_dump.txt (all assemblies, classes, fields)
-
-Scripts:
-  dump_full.js      — Full IL2CPP bridge dump (ES module)
-  dump_il2cpp.js   — Raw memory field dumper (no bridge, reads Il2CppClass directly)
-  frida_run.py     — Python Frida host (attaches, loads bridge, captures output)
+1. Copy rust_decrypts.dat to DLL directory (runtime decrypt override)
+2. Review updated_offsets.txt — update offsets.hpp if any static pointers / field offsets changed
+3. Update GameAssembly timestamp in Driver.hpp if changed
+4. Rebuild all 4 DLL flavors
 ```
+
+### What does NOT need updating (Unity internals, hardcoded):
+- BaseEntity::isVisible (0x150), posChain offsets (0x20/0x8/0x28/0x90), objRef (0x10)
+- ItemMagazine::contents (0x1C), fallback offsets
+- These only change with Unity engine version upgrades, not game patches
 
 ---
 

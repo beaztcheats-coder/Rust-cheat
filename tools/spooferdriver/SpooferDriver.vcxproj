@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-1234-5678-ABCD-111111111111}</ProjectGuid>
+    <RootNamespace>SpooferDriver</RootNamespace>
+    <ProjectName>SpooferDriver</ProjectName>
+    <WindowsTargetPlatformVersion>10.0.28000.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <WDK_ROOT>C:\Program Files (x86)\Windows Kits\10</WDK_ROOT>
+    <WDK_VERSION>10.0.28000.0</WDK_VERSION>
+    <WDK_INC>$(WDK_ROOT)\Include\$(WDK_VERSION)</WDK_INC>
+    <WDK_LIB>$(WDK_ROOT)\Lib\$(WDK_VERSION)</WDK_LIB>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>SpooferDriver</TargetName>
+    <TargetExt>.sys</TargetExt>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <NMakeBuildCommandLine>"$(ProjectDir)build.bat" Debug</NMakeBuildCommandLine>
+    <NMakeCleanCommandLine>del /Q "$(OutDir)$(TargetName).*" "$(IntDir)*.obj" 2&gt;nul</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>del /Q "$(OutDir)$(TargetName).*" "$(IntDir)*.obj" 2&gt;nul &amp;&amp; "$(ProjectDir)build.bat" Debug</NMakeReBuildCommandLine>
+    <NMakeOutput>$(OutDir)$(TargetName)$(TargetExt)</NMakeOutput>
+    <NMakePreprocessorDefinitions>_AMD64_;_WIN64;DBG=1;DEPRECATE_DDK_FUNCTIONS=1</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)include;$(WDK_INC)\km;$(WDK_INC)\km\crt;$(WDK_INC)\shared</NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <NMakeBuildCommandLine>"$(ProjectDir)build.bat" Release</NMakeBuildCommandLine>
+    <NMakeCleanCommandLine>del /Q "$(OutDir)$(TargetName).*" "$(IntDir)*.obj" 2&gt;nul</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>del /Q "$(OutDir)$(TargetName).*" "$(IntDir)*.obj" 2&gt;nul &amp;&amp; "$(ProjectDir)build.bat" Release</NMakeReBuildCommandLine>
+    <NMakeOutput>$(OutDir)$(TargetName)$(TargetExt)</NMakeOutput>
+    <NMakePreprocessorDefinitions>_AMD64_;_WIN64;DEPRECATE_DDK_FUNCTIONS=1</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)include;$(WDK_INC)\km;$(WDK_INC)\km\crt;$(WDK_INC)\shared</NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClCompile Include="src\entry.c" />
+    <ClCompile Include="src\monitor_spoof.c" />
+    <ClCompile Include="src\spoof_engine.c" />
+    <ClCompile Include="src\descriptor_patch.c" />
+    <ClCompile Include="src\dispatch_hook.c" />
+    <ClCompile Include="src\registry_intercept.c" />
+    <ClCompile Include="src\utils.c" />
+    <ClCompile Include="src\tpm_spoof.c" />
+    <ClCompile Include="src\gpu_spoof.c" />
+    <ClCompile Include="src\ntoskrnl_mac_scan.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\spoofer.h" />
+    <ClInclude Include="include\shared.h" />
+    <ClInclude Include="include\classpnp_internal.h" />
+    <ClInclude Include="include\spoof_engine.h" />
+    <ClInclude Include="include\tpm.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="build.bat" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

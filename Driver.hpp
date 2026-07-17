@@ -8,6 +8,7 @@
 #include <psapi.h>
 #include <winternl.h>
 #include <mutex>
+#include "skcrypt.hpp"
 #include "globals.h"
 #include "Logger.hpp"
 
@@ -18,10 +19,6 @@ inline std::atomic<bool> g_shutting_down{ false };
 // Render thread does ~12 IOCTLs/frame (camera + aimbot), negligible concurrent load.
 // All other threads (cache/position/skeleton/misc) still use the mutex.
 thread_local bool g_render_thread = false;
-<<<<<<< HEAD
-=======
-
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
 
 
 #define IOCTL_DISPATCH CTL_CODE(FILE_DEVICE_UNKNOWN, 0x3C4F22, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -159,19 +156,19 @@ public:
 
     // IOCTL failure tracking — prevents BSOD from stale CR3 after game closes
     std::atomic<int> ioctl_fail_count{ 0 };
-    static constexpr int IOCTL_FAIL_LIMIT = 500;        // block reads when fail count exceeds this
+    static constexpr int IOCTL_FAIL_LIMIT = 500;         // block reads when fail count exceeds this
     std::atomic<bool> ioctl_blocked{ false };
     std::atomic<uint64_t> ioctl_blocked_time{ 0 };
     std::atomic<uint64_t> ioctl_last_decay_time{ 0 };
     static constexpr ULONGLONG IOCTL_DECAY_INTERVAL_MS = 500;
-    static constexpr int IOCTL_DECAY_AMOUNT = 50;        // was 10 — 5x faster recovery
+    static constexpr int IOCTL_DECAY_AMOUNT = 50;         // original safe decay rate
     static constexpr ULONGLONG IOCTL_BLOCK_DURATION_MS = 500; // was 1000 — shorter blocks
     static constexpr uint32_t IOCTL_MAX_SIZE = 0x100000;
     std::atomic<bool> silent_reads{ false };
 
     DriverInterface()
     {
-        hDriver = CreateFileW(L"\\\\.\\Bfo64", GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        hDriver = CreateFileW(skCrypt(L"\\\\.\\Bfo64").decrypt(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     }
 
     ~DriverInterface()
@@ -259,6 +256,28 @@ public:
         return false;
     }
 
+    // User-mode fallback: find process base via OpenProcess + VirtualQueryEx
+    // Used when the driver's GetBase IOCTL fails (EAC blocking PsLookupProcessByProcessId)
+    // Same APIs that get_module uses successfully — does NOT trigger EAC.
+    bool GetProcessBaseUsermode(uint64_t pid, uintptr_t& baseAddress)
+    {
+        baseAddress = 0;
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, (DWORD)pid);
+        if (!hProc || hProc == INVALID_HANDLE_VALUE) return false;
+        MEMORY_BASIC_INFORMATION mbi{};
+        uintptr_t current = 0;
+        while (VirtualQueryEx(hProc, reinterpret_cast<void*>(current), &mbi, sizeof(mbi))) {
+            if (mbi.Type == MEM_IMAGE) {
+                baseAddress = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+                CloseHandle(hProc);
+                return true;
+            }
+            current = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+        }
+        CloseHandle(hProc);
+        return false;
+    }
+
     void DecayFailCount()
     {
         uint64_t now = GetTickCount64();
@@ -331,11 +350,7 @@ public:
         req.ReadWriteMemoryData.Buffer = (ULONG64)buffer;
         req.ReadWriteMemoryData.Size = size;
         req.ReadWriteMemoryData.isWrite = false;
-<<<<<<< HEAD
         req.ReadWriteMemoryData.noncachedread = true;
-=======
-        req.ReadWriteMemoryData.noncachedread = false;
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         DWORD bytesReturned = 0;
         return DeviceIoControl(hDriver, IOCTL_DISPATCH, &req, sizeof(REQUEST_DATA), &req, sizeof(REQUEST_DATA), &bytesReturned, nullptr)
             && bytesReturned == sizeof(REQUEST_DATA);
@@ -401,12 +416,10 @@ public:
     static constexpr uint64_t FINDPROC_CACHE_MS = 500;
 
     INT32 find_process(LPCTSTR process_name) {
-        // If process is dead, invalidate cache and return 0
         if (g_process_dead.load(std::memory_order_relaxed)) {
             findproc_cached_pid.store(0, std::memory_order_relaxed);
             return 0;
         }
-        // Return cached PID if checked recently
         uint64_t now = GetTickCount64();
         uint64_t last = findproc_last_check_ms.load(std::memory_order_relaxed);
         if (now - last < FINDPROC_CACHE_MS) {
@@ -414,6 +427,7 @@ public:
             if (cached != 0) return cached;
         }
 
+        // Use CreateToolhelp32Snapshot — EnumProcesses+OpenProcess fails on EAC-protected processes
         PROCESSENTRY32 pt;
         HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         INT32 foundPid = 0;
@@ -428,23 +442,6 @@ public:
                 } while (Process32Next(hsnap, &pt));
             }
             CloseHandle(hsnap);
-
-            // Fallback: also check for Rust.exe if looking for RustClient.exe
-            if (!foundPid && lstrcmpi(process_name, L"RustClient.exe") == 0) {
-                hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-                if (hsnap != INVALID_HANDLE_VALUE) {
-                    pt.dwSize = sizeof(PROCESSENTRY32);
-                    if (Process32First(hsnap, &pt)) {
-                        do {
-                            if (!lstrcmpi(pt.szExeFile, L"Rust.exe")) {
-                                foundPid = pt.th32ProcessID;
-                                break;
-                            }
-                        } while (Process32Next(hsnap, &pt));
-                    }
-                    CloseHandle(hsnap);
-                }
-            }
         }
 
         findproc_cached_pid.store(foundPid, std::memory_order_relaxed);
@@ -556,7 +553,7 @@ public:
         // PE scan fallback — uses ReadMemory_Raw (noncachedread=false)
         // Binary search approach: 1GB coarse scan → 64KB fine scan in hit region
         {
-            constexpr uint32_t GA_TIMESTAMP = 0x6A4CF525;
+            constexpr uint32_t GA_TIMESTAMP = 0x6A54B05A;
             // When skipAddr is set (searching for UnityPlayer), use lower size threshold
             // UnityPlayer.dll is ~50-100MB, GameAssembly.dll is ~268MB
             uint32_t sizeThreshold = skipAddr ? 0x1000000 : 0x10000000;

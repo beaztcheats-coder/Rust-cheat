@@ -2,7 +2,7 @@
 #include "../imgui/imgui.h"
 #include "../offsets.hpp"
 #include "../Config.hpp"
-#include "../tracers.hpp"
+#include "../sdk.hpp"
 
 namespace vischeck {
     extern bool g_VisCheckLoaded;
@@ -798,10 +798,9 @@ inline void PresetLegit() {
     ESP::RemoveSleepers = true; ESP::RemoveWounded = true;
     ESP::draw_distance = 200.f;
     AIMBOT::Memory = false; MISC::RecoilModifier = 0.f;
-    MISC::NoSpread = false; MISC::Automatic = false;
     AIMBOT::HumanizeEnabled = true; AIMBOT::JitterAmount = 1.5f; AIMBOT::OvershootAmount = 3.f;
     AIMBOT::SmoothingVariance = 0.15f; AIMBOT::MissProbability = 0.02f;
-    MISC::RecoilVariance = true; MISC::RecoilFloor = 0.25f; MISC::AntiAnybrain = true;
+    MISC::RecoilVariance = true; MISC::RecoilFloor = 0.25f;
     RADAR::Enabled = true;
     WORLD::Stone = true; WORLD::Metal = true; WORLD::Sulfer = true; WORLD::Hemp = true;
     WORLD::Stash = true; WORLD::DroppedItem = true; WORLD::Backpack = true;
@@ -831,8 +830,8 @@ inline void PresetAggressive() {
     AIMBOT::IgnoreSleepers = true; AIMBOT::IgnoreWounded = true;
     AIMBOT::SMOOTHING = 3.f; AIMBOT::FovSize = 120;
     AIMBOT::FovCircle = true; AIMBOT::TargetLine = true;
-    MISC::RecoilModifier = 100.f; MISC::NoSpread = true;
-    AIMBOT::HumanizeEnabled = false; MISC::RecoilVariance = false; MISC::AntiAnybrain = true;
+    MISC::RecoilModifier = 100.f;
+    AIMBOT::HumanizeEnabled = false; MISC::RecoilVariance = false;
     RADAR::Enabled = true;
     WORLD::Stone = true; WORLD::Metal = true; WORLD::Sulfer = true; WORLD::Hemp = true;
     WORLD::Stash = true; WORLD::DroppedItem = true; WORLD::Backpack = true;
@@ -1041,7 +1040,9 @@ inline void PageCombat() {
         SettingRowGrid("Recoil Mod %", nullptr, &MISC::RecoilModifier, 0.f, 100.f, "%.0f%%");
         SettingRowGrid("Recoil Variance", &MISC::RecoilVariance, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Randomizes recoil scale +-10% per write.", true);
         SettingRowGrid("Recoil Floor", nullptr, &MISC::RecoilFloor, 0.10f, 0.50f, "%.2f");
-    }, CardHeight(4, true));
+        SettingRowGrid("No Sway", &MISC::NoSway, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Removes weapon sway. Visual only, server never checks.", true);
+        SettingRowGrid("Force Automatic", &MISC::ForceAutomatic, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Full-auto on semi weapons. Server enforces fire rate.", true);
+    }, CardHeight(5, true));
     Card("Humanization", [&]() {
         SettingRowGrid("Humanize Aim", &AIMBOT::HumanizeEnabled, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Adds jitter/overshoot to aimbot for anti-AI detection.", true);
         SettingRowGrid("Jitter Amount", nullptr, &AIMBOT::JitterAmount, 0.f, 5.f, "%.1f deg");
@@ -1049,9 +1050,6 @@ inline void PageCombat() {
         SettingRowGrid("Smooth Variance", nullptr, &AIMBOT::SmoothingVariance, 0.f, 0.50f, "%.2f");
         SettingRowGrid("Miss Probability", nullptr, &AIMBOT::MissProbability, 0.f, 0.10f, "%.2f");
     }, CardHeight(5, true));
-    Card("Anti-Cheat", [&]() {
-        SettingRowGrid("Anti Anybrain", &MISC::AntiAnybrain, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, nullptr, "Disables Anybrain SDK data collection. Requires Frida RVA.", true);
-    }, CardHeight(1, true));
     ImGui::EndChild();
 
     ImGui::SameLine(0, cols.gap);
@@ -1177,7 +1175,7 @@ inline void PageESP() {
             SettingRowGrid("Box Invisible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::Invisible);
             SettingRowGrid("Skel Visible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::SkeletonVisible);
             SettingRowGrid("Skel Invisible", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::SkeletonInvisible);
-        }, CardHeight(5, true));
+    }, CardHeight(6, true));
         Card("Filters", [&]() {
             SettingRowGrid("Hide Wounded", &ESP::RemoveWounded);
             SettingRowGrid("Hide Sleepers", &ESP::RemoveSleepers);
@@ -1185,7 +1183,7 @@ inline void PageESP() {
             SettingRowGrid("Teammate Color", nullptr, nullptr,0,0,"", nullptr,0,0, &ESP::color::Teammate);
             SettingRowGrid("Highlight Wounded", &ESP::HighlightWounded, nullptr,0,0,"", nullptr,0,0, &ESP::color::Wounded);
             SettingRowGrid("Highlight Sleepers", &ESP::HighlightSleepers, nullptr,0,0,"", nullptr,0,0, &ESP::color::Sleepers);
-        }, CardHeight(6, true));
+    }, CardHeight(7, true));
         Card("Info & Text", [&]() {
             SettingRowGrid("Snaplines", &ESP::SnapLines, nullptr,0,0,"", nullptr,0,0, &ESP::color::Snaplines);
             SettingRowGrid("Snapline Outline", &ESP::SnaplineOutline);
@@ -1197,6 +1195,7 @@ inline void PageESP() {
             SettingRowGrid("Distance", &ESP::Distance, nullptr,0,0,"", nullptr,0,0, &ESP::color::Distance);
             SettingRowGrid("Held Item", &ESP::Weapon, nullptr,0,0,"", nullptr,0,0, &ESP::color::Weapon);
             SettingRowGrid("Team ID", &ESP::TeamID);
+            SettingRowGrid("Player Flags", &ESP::PlayerFlags);
             SettingRowGrid("Hotbar Text", &ESP::hotbar_text);
             SettingRowGrid("Inventory Panel", &ESP::PlayerInventoryPanel);
         }, CardHeight(10, true));
@@ -1273,7 +1272,8 @@ inline void PageESP() {
             SettingRowGrid("Panther", &ANIMAL_ESP::Panther);
             SettingRowGrid("Tiger", &ANIMAL_ESP::Tiger);
             SettingRowGrid("Snake", &ANIMAL_ESP::Snake);
-        }, CardHeight(10, true));
+            SettingRowGrid("Crocodile", &ANIMAL_ESP::Crocodile);
+        }, CardHeight(11, true));
         ImGui::EndChild();
     } else {
         // ── World ESP ──
@@ -1304,7 +1304,7 @@ inline void PageESP() {
         // Calculate column heights
         float leftColH = CardHeight(4, true, true) + CardHeight(4, true) + CardHeight(4, true) + CardHeight(6, true) + CardHeight(2, true) + 5 * CARD_GAP;
         float vehCardH = 380.0f;
-        float rightColH = vehCardH + CardHeight(9, true) + CardHeight(10, true) + 3 * CARD_GAP;
+        float rightColH = vehCardH + CardHeight(9, true) + CardHeight(11, true) + 3 * CARD_GAP;
         float colH = (std::max)(leftColH, rightColH);
 
         float availW = ImGui::GetContentRegionAvail().x;
@@ -1324,10 +1324,14 @@ inline void PageESP() {
         }, CardHeight(4, true), (WORLD::StonePickup?1:0)+(WORLD::MetalPickup?1:0)+(WORLD::SulfurPickup?1:0)+(WORLD::WoodPickup?1:0));
         Card("Loot", [&]() {
             WorldEntityRow("Stash", &WORLD::Stash, &WORLD::draw_stash, WORLD::color::Stash_Color);
+            SettingRowGrid("Stash Persist", &WORLD::StashPersist);
             WorldEntityRow("Corpse", &WORLD::BodyBag, &WORLD::draw_corpse, WORLD::color::BodyBag_Color);
-            WorldEntityRow("Backpack", &WORLD::Backpack, &WORLD::draw_backpack, WORLD::color::Backpack_Color);
+            WorldEntityRow("Body Bag", &WORLD::Backpack, &WORLD::draw_backpack, WORLD::color::Backpack_Color);
             WorldEntityRow("Dropped Items", &WORLD::DroppedItem, &WORLD::draw_dropped, WORLD::color::DroppedItem_Color);
-        }, CardHeight(4, true), (WORLD::Stash?1:0)+(WORLD::BodyBag?1:0)+(WORLD::Backpack?1:0)+(WORLD::DroppedItem?1:0));
+            SettingRowGrid("Raid ESP", &WORLD::RaidESP);
+            SettingRowGrid("Raid Dist", nullptr, &WORLD::draw_raid, 100.f, 2000.f, "%.0f m");
+            SettingRowGrid("Crate Timer", &WORLD::CrateTimer);
+        }, CardHeight(8, true), (WORLD::Stash?1:0)+(WORLD::BodyBag?1:0)+(WORLD::Backpack?1:0)+(WORLD::DroppedItem?1:0));
         Card("Traps", [&]() {
             WorldEntityRow("Auto Turret", &WORLD::Turret, &WORLD::draw_turret, WORLD::color::Turret_Color);
             WorldEntityRow("Shotgun Trap", &WORLD::ShotGunTrap, &WORLD::draw_shotguntrap, WORLD::color::ShotGunTrap_Color);
@@ -1365,6 +1369,8 @@ inline void PageESP() {
             WorldEntitySimple("Shark", &WORLD::Shark, WORLD::color::Shark);
             WorldEntitySimple("Cargo Ship", &WORLD::CargoShip, WORLD::color::CargoShip);
             WorldEntitySimple("Supply Drop", &WORLD::SupplyDrop, WORLD::color::SupplyDrop);
+            ImGui::Separator();
+            SettingRowGrid("Vehicle Health", &WORLD::VehicleHealth);
             ImGui::EndChild();
         }, vehCardH, (WORLD::MiniCopter?1:0)+(WORLD::BradlyAPC?1:0)+(WORLD::Rowboat?1:0)+(WORLD::RHIB?1:0)+(WORLD::Kayak?1:0)+(WORLD::Submarine?1:0)+(WORLD::Tugboat?1:0)+(WORLD::TransportHeli?1:0)+(WORLD::AttackHeli?1:0)+(WORLD::Balloon?1:0)+(WORLD::Motorbike?1:0)+(WORLD::Snowmobile?1:0), "Vehicle ESP visibility, range, and color.");
         Card("Barrels & Crates", [&]() {
@@ -1430,9 +1436,34 @@ inline void PageRadar() {
         SettingRowGrid("Border Color", nullptr, nullptr,0,0,"", nullptr,0,0, &RADAR::BorderColor);
     }, CardHeight(5, true));
     ImGui::EndChild();
-}
 
-// ── Visuals — 3 auto-height cards, 2-col ──
+    // Big Map section
+    ImGui::Dummy(ImVec2(0, 8));
+    ImGui::TextColored(ImColor(200, 200, 220, 255), "Big Map Overlay (auto-shows when in-game map is open with G)");
+    auto cols2 = BeginTwoCol(CARD_GAP, 0.5f);
+    ImGui::BeginChild("##bmapL", ImVec2(cols2.leftW, 0), false);
+    Card("Big Map Entities", [&]() {
+        SettingRowGrid("Players", &BIGMAP::ShowPlayers);
+        SettingRowGrid("NPCs", &BIGMAP::ShowNPCs);
+        SettingRowGrid("Animals", &BIGMAP::ShowAnimals);
+        SettingRowGrid("Ores", &BIGMAP::ShowOres);
+        SettingRowGrid("Hemp", &BIGMAP::ShowHemp);
+        SettingRowGrid("Stashes", &BIGMAP::ShowStashes);
+    }, CardHeight(6, true));
+    ImGui::EndChild();
+    ImGui::SameLine(0, cols2.gap);
+    ImGui::BeginChild("##bmapR", ImVec2(cols2.rightW, 0), false);
+    Card("Big Map Extra", [&]() {
+        SettingRowGrid("TCs", &BIGMAP::ShowTCs);
+        SettingRowGrid("Crates", &BIGMAP::ShowCrates);
+        SettingRowGrid("Vehicles", &BIGMAP::ShowVehicles);
+        SettingRowGrid("Turrets/Traps", &BIGMAP::ShowTurrets);
+        SettingRowGrid("Show Names", &BIGMAP::ShowNames);
+        SettingRowGrid("Show Distance", &BIGMAP::ShowDistance);
+        SettingRowGrid("Dot Size", nullptr, &BIGMAP::DotSize, 2.f, 15.f, "%.0f");
+    }, CardHeight(7, true));
+    ImGui::EndChild();
+}
 inline void PageVisuals() {
     auto cols = BeginTwoCol(CARD_GAP, 0.55f);
     ImGui::BeginChild("##visL", ImVec2(cols.leftW, 0), false);
@@ -1448,7 +1479,10 @@ inline void PageVisuals() {
         SettingRowGrid("Crosshair Size", nullptr, &MISC::CrosshairSize, 1.f, 10.f, "%.1f");
         SettingRowGrid("Crosshair Color", nullptr, nullptr,0,0,"", nullptr,0,0, &MISC::CrosshairColor);
         SettingRowGrid("Screen Info", &MISC::DrawFlags);
-    }, CardHeight(4, true));
+        SettingRowGrid("Show Time", &SETTINGS::ShowTime);
+        SettingRowGrid("Feature Indicators", &SETTINGS::FeatureIndicators);
+        SettingRowGrid("Player List", &SETTINGS::PlayerList);
+    }, CardHeight(6, true));
     ImGui::EndChild();
     ImGui::SameLine(0, cols.gap);
     ImGui::BeginChild("##visR", ImVec2(cols.rightW, 0), false);
@@ -1469,17 +1503,19 @@ inline void PageUtility() {
     Card("Tools", [&]() {
         SettingRowGrid("Admin Flags", &MISC::AdminFlags, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, "UTIL.AdminFlags", "Writes IsAdmin flag. Very high risk.", true);
         SettingRowGrid("Battle Mode", &SETTINGS::BattleMode, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, "UTIL.BattleMode");
+        SettingRowGrid("Mark Friend", nullptr, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, "UTIL.MarkFriend", "Toggle friend on player at crosshair. Friends excluded from aimbot.", true);
     }, CardHeight(2, true));
     Card("Debug Camera", [&]() {
+        SettingRowGrid("Debug Camera", &MISC::DebugCamera, nullptr,0,0,"", nullptr,0,0, nullptr, nullptr,nullptr,0, "UTIL.DebugCam", "Enables Admin Flags automatically. Then press F1 and type: debugcamera", true);
         if (BeaztFontDesc) ImGui::PushFont(BeaztFontDesc);
         ImGui::PushStyleColor(ImGuiCol_Text, C_TEXT_SEC);
-        ImGui::TextWrapped("Bind UTIL.DebugCam in Config > Keybinds.");
-        ImGui::Dummy(ImVec2(0, 2));
-        ImGui::TextWrapped("- Requires Admin Flags");
-        ImGui::TextWrapped("- 50s timeout, auto-disables");
+        ImGui::TextWrapped("1. Toggle ON (auto-enables Admin)");
+        ImGui::TextWrapped("2. Press F1 to open console");
+        ImGui::TextWrapped("3. Type: debugcamera");
+        ImGui::TextWrapped("4. Press Enter — WASD to fly");
         ImGui::PopStyleColor();
         if (BeaztFontDesc) ImGui::PopFont();
-    }, 130.0f);
+    }, 170.0f);
     ImGui::EndChild();
     ImGui::SameLine(0, cols.gap);
     ImGui::BeginChild("##utiR", ImVec2(cols.rightW, 0), false);
@@ -1491,6 +1527,20 @@ inline void PageUtility() {
         SettingRowGrid("Animal ESP", &BATTLE::Animals);
         SettingRowGrid("Radar", &BATTLE::Radar);
     }, CardHeight(6, true));
+    Card("Big Map Overlay", [&]() {
+        ImGui::TextColored(ImColor(200, 200, 220, 255), "Auto-shows ESP on in-game map (press G)");
+        ImGui::Separator();
+        SettingRowGrid("Players", &BIGMAP::ShowPlayers);
+        SettingRowGrid("NPCs", &BIGMAP::ShowNPCs);
+        SettingRowGrid("Animals", &BIGMAP::ShowAnimals);
+        SettingRowGrid("Ores", &BIGMAP::ShowOres);
+        SettingRowGrid("Hemp", &BIGMAP::ShowHemp);
+        SettingRowGrid("Stashes", &BIGMAP::ShowStashes);
+        SettingRowGrid("TCs", &BIGMAP::ShowTCs);
+        SettingRowGrid("Crates", &BIGMAP::ShowCrates);
+        SettingRowGrid("Show Names", &BIGMAP::ShowNames);
+        SettingRowGrid("Dot Size", nullptr, &BIGMAP::DotSize, 2.f, 15.f, "%.0f");
+    }, CardHeight(10, true));
     ImGui::EndChild();
 }
 

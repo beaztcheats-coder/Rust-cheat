@@ -1,0 +1,258 @@
+======================================================================
+Updated Offsets from morphine-dumper2
+======================================================================
+Build: 24181174
+GameAssembly timestamp: 0x6A54B05A
+
+This file contains all offsets extracted from the morphine-dumper2 output,
+mapped to the cheat's namespace::field naming convention.
+Use this to manually update offsets.hpp, or use rust_decrypts.dat for
+runtime decrypt override (no recompile needed).
+
+======================================================================
+DECRYPT CONSTANTS (rust_decrypts.dat)
+======================================================================
+
+  client_entities:
+    nk_rol = 0x15  (rol)
+    nk_xor = 0xDA053B90  (xor)
+    nk_sub = 0x4D1B2722  (sub)
+
+  entity_list:
+    nk2_rol1 = 0x6  (rol)
+    nk2_add = 0xC52F0932  (add)
+    nk2_rol2 = 0x16  (rol)
+
+  clActiveItem:
+    cla_add = 0x5A0D1F9B  (add)
+    cla_rol = 0x19  (rol)
+    cla_xor = 0xAFFC2B31  (xor)
+
+  PlayerInventory:
+    inv_xor1 = 0x6562778  (xor)
+    inv_rol = 0x6  (rol)
+    inv_xor2 = 0x7EC38BFC  (xor)
+
+  PlayerEyes:
+    ey_add = 0xBCFC6DA8  (add)
+    ey_rol1 = 0x13  (rol)
+    ey_xor = 0x73437527  (xor)
+    ey_rol2 = 0xA  (rol)
+
+  decrypt_fov:
+    fov_rol = 0x3  (rol)
+    fov_add = 0x1180A466  (add)
+    fov_xor = 0x91BFA9C2  (xor)
+
+======================================================================
+STATIC POINTERS (update in offsets.hpp)
+======================================================================
+
+  ga_timestamp = 0x6A54B05A  // GameAssembly timestamp (for PE scan)
+  il2cpp_get_handle = 0x10088B40  // Il2cppGetHandle gc_handles array RVA
+  basenetworkable_pointer = 0xFB71410  // BaseNetworkable TypeInfo RVA
+  camera_pointer = 0xFBE49A0  // MainCamera TypeInfo RVA
+  tod_sky_typeinfo = 0xFC0CE40  // TOD_Sky Static TypeInfo RVA
+  playereyes_typeinfo = 0xFD387E0  // PlayerEyes TypeInfo RVA (unused)
+  # playerinv_typeinfo — NOT FOUND in dumper output  // PlayerInventory TypeInfo RVA (unused)
+  playermodel_typeinfo = 0xFC3A518  // PlayerModel TypeInfo RVA (unused)
+  baseplayer_typeinfo = 0xFBE98B0  // BasePlayer TypeInfo RVA (unused)
+  baseentity_typeinfo = 0xFC1E710  // BaseEntity TypeInfo RVA (unused)
+  basecombatent_typeinfo = 0xFC1A178  // BaseCombatEntity TypeInfo RVA (unused)
+  # modelstate_typeinfo — NOT FOUND in dumper output  // ModelState TypeInfo RVA (unused)
+  # playerinput_typeinfo — NOT FOUND in dumper output  // PlayerInput TypeInfo RVA (unused)
+  # baseproj_typeinfo — NOT FOUND in dumper output  // BaseProjectile TypeInfo RVA (unused)
+  # heldentity_typeinfo — NOT FOUND in dumper output  // HeldEntity TypeInfo RVA (unused)
+  # autoturret_typeinfo — NOT FOUND in dumper output  // AutoTurret TypeInfo RVA (unused)
+  item_typeinfo = 0xFBB91C8  // Item TypeInfo RVA (unused)
+  itemid_typeinfo = 0xFBB90B0  // ItemId TypeInfo RVA (unused)
+  ui_loadingscreen_typeinfo = 0xFC76D38  // UI_LoadingScreen singleton RVA
+  mixersnapshot_typeinfo = 0xFC32768  // MixerSnapshotManager singleton RVA
+  effectnetwork_pointer = 0xFBFD480  // EffectNetwork static_type_info RVA
+  effectnetwork_typeinfo = 0xFBF9080  // EffectNetwork type_info RVA (unused)
+  convar_graphics = 0xFBB2578  // ConVar_Graphics RVA
+  tod_sky_typeinfo = 0xFC0CE40  // TOD_Sky Static TypeInfo RVA (duplicate)
+
+======================================================================
+FIELD OFFSETS (update in offsets.hpp)
+======================================================================
+
+  namespace BaseNetworkable {
+    static_fields = 0xb8;  // static_fields offset
+    wrapper_class = 0x8;  // wrapper_class offset
+    parent_static_fields = 0x10;  // parent_static_fields offset
+    entity = 0x10;  // entities offset in parent_class
+    children = 0x88;  // children list offset
+  namespace BaseNetworkable2 {
+    prefab_id = 0x54;  // prefabID offset
+  namespace BaseNetworkable {
+    encrypted_handle = 0x18;  // encrypted handle offset (unused)
+  namespace BaseCamera {
+    static_fields = 0xb8;  // static_fields offset
+    wrapper_class = 0x38;  // camera_object/instance offset
+    entity = 0x10;  // native Camera deref offset
+    viewMatrix = 0x2fc;  // view matrix offset
+    projectionMatrix = 0x18c;  // projection matrix offset
+    world_position = 0x444;  // world position offset
+    field_of_view = 0x170;  // field of view offset
+    culling_mask = 0x3e8;  // culling mask (unused — RemoveLayers removed)
+  namespace BasePlayer {
+    ClActiveItem = 0x568;  // ClActiveItem offset
+    PlayerEyes = 0x380;  // PlayerEyes offset
+    PlayerInventory = 0x548;  // PlayerInventory offset
+    PlayerInput = 0x2d0;  // PlayerInput offset
+    PlayerModel = 0x6d8;  // PlayerModel offset
+    PlayerFlags = 0x6b8;  // PlayerFlags offset
+    BaseMovement = 0x4f8;  // BaseMovement offset
+    DisplayName = 0x3e0;  // DisplayName offset
+    CurrentTeam = 0x538;  // CurrentTeam offset
+    Mounted = 0x5c0;  // Mounted offset
+    // ModelState — NOT FOUND  // ModelState offset
+    // ModelTransform — NOT FOUND  // ModelTransform offset
+  namespace BaseCombatEntity {
+    Lifestate = 0x298;  // Lifestate offset
+    Health = 0x2a4;  // Health offset
+    MaxHealth = 0x2a8;  // MaxHealth offset
+    model = 0x1a8;  // model offset
+    skeletonProperties = 0x220;  // skeletonProperties (unused)
+    baseProtection = 0x228;  // baseProtection (unused)
+  namespace BaseEntity {
+    positionLerp = 0x1c8;  // positionLerp offset
+    bounds = 0x17c;  // bounds offset
+    flags = 0x1b0;  // flags offset
+    model = 0x1a8;  // model offset
+  namespace PlayerInventory {
+    Belt = 0x38;  // Belt container offset
+    Wear = 0x58;  // Wear container offset
+    Main = 0x30;  // Main container offset
+    loot = 0x48;  // loot container offset
+  namespace ItemContainer {
+    ItemList = 0x48;  // ItemList offset
+    flags = 0x7c;  // flags (unused)
+  namespace Item {
+    ItemDefinition = 0xb0;  // ItemDefinition offset
+    ItemId = 0xa0;  // ItemId offset
+    Amount = 0xe0;  // Amount offset
+    HeldEntity_1 = 0x78;  // HeldEntity offset
+  namespace ItemDefinition {
+    itemid = 0x20;  // itemid offset
+    shortname = 0x28;  // shortname offset
+    displayName = 0x40;  // displayName offset
+    category = 0x58;  // category offset
+    stackable = 0x78;  // stackable offset
+  namespace PlayerModel {
+    SkinnedMultiMesh = 0x3d0;  // SkinnedMultiMesh offset
+    is_npc = 0x468;  // isNpc offset
+    position = 0x2f8;  // position offset
+    velocity = 0x31c;  // velocity offset
+    visible = 0xc4;  // visible offset
+    boneTransforms = 0x98;  // boneTransforms offset
+  namespace Model {
+    boneTransforms = 0x50;  // boneTransforms offset
+    rootBone = 0x28;  // rootBone offset
+    headBone = 0x30;  // headBone offset
+    eyeBone = 0x38;  // eyeBone offset
+  namespace HeldEntity {
+    ownerItemUID = 0x2d0;  // ownerItemUID offset
+    viewModel = 0x240;  // viewModel offset
+  namespace RecoilProperties {
+    RecoilYawMin = 0x18;  // RecoilYawMin offset
+    RecoilYawMax = 0x1c;  // RecoilYawMax offset
+    RecoilPitchMin = 0x20;  // RecoilPitchMin offset
+    RecoilPitchMax = 0x24;  // RecoilPitchMax offset
+    AimconeCurveScale = 0x60;  // AimconeCurveScale offset
+    NewRecoilOverride = 0x80;  // NewRecoilOverride offset
+  namespace BaseProjectile {
+    recoil = 0x3f0;  // recoil offset
+    primaryMagazine = 0x3c8;  // primaryMagazine offset
+    AimCone = 0x400;  // AimCone offset
+    HipAimCone = 0x404;  // HipAimCone offset
+    HasADS = 0x41c;  // HasADS offset
+    automatic = 0x380;  // automatic offset
+    is_reloading = 0x3d0;  // is_reloading offset
+    reload_time = 0x3c0;  // reload_time offset
+    velocity_scale = 0x37c;  // velocity_scale offset
+    aimSway = 0x3e8;  // aimSway offset
+    aimSwaySpeed = 0x3ec;  // aimSwaySpeed offset
+    StancePenalty = 0x418;  // StancePenalty offset
+    SightAimConeScale = 0x45c;  // SightAimConeScale offset
+    AimconePenalty = 0x408;  // AimconePenalty offset
+    isBurstWeapon = 0x427;  // isBurstWeapon offset
+    canChangeFireModes = 0x428;  // canChangeFireModes offset
+    internalBurstFireRateScale = 0x430;  // internalBurstFireRateScale (unused)
+  namespace BaseMovement2 {
+    admin_cheat = 0x20;  // admin_cheat offset
+    target_movement = 0x128;  // target_movement offset
+  namespace TOD_Sky_Static {
+    instances = 0x20;  // instances offset in static_fields
+  namespace TOD_Sky {
+    CycleParameters = 0x40;  // CycleParameters offset
+    NightParameters = 0x60;  // NightParameters offset
+    AmbientParameters = 0x98;  // AmbientParameters offset
+    timeSinceAmbientUpdate = 0x23c;  // timeSinceAmbientUpdate offset
+  namespace TOD_NightParameters {
+    AmbientMultiplier = 0x5c;  // AmbientMultiplier offset
+  namespace TOD_AmbientParameters {
+    Saturation = 0x14;  // Saturation offset
+    // UpdateInterval — NOT FOUND  // UpdateInterval offset
+  namespace PlayerInput {
+    bodyAngles = 0x44;  // bodyAngles offset
+    yaw = 0x60;  // yaw offset
+  namespace PlayerEyes {
+    viewOffset = 0x40;  // viewOffset offset
+    bodyRotation = 0x50;  // bodyRotation offset
+    headPosition = 0x60;  // headPosition offset
+  namespace FOV {
+    fovWrite = 0xb8;  // FOV write offset (convar_graphics::fov)
+  namespace EffectNetwork {
+    static_fields = 0xb8;  // static_fields offset
+    instance = 0x8;  // instance offset
+    hitPosition = 0x84;  // hitPosition offset
+  namespace ModelState {
+    Flying = 0x40;  // Flying bit position
+    OnGround = 0x4;  // OnGround bit position
+    Sleeping = 0x8;  // Sleeping bit position (unused)
+    Mounted = 0x200;  // Mounted bit position (unused)
+    // Ducked — NOT FOUND  // Ducked bit position
+  namespace BaseEntity {
+    posChain0 = 0x18;  // transform pos_base_off
+    posFinal = 0x90;  // transform root_pos_off
+    posChain2 = 0x28;  // transform access_struct_off
+  }
+
+======================================================================
+OFFSETS NOT IN DUMPER (hardcoded — Unity internals, rarely change)
+======================================================================
+
+  BaseEntity::isVisible        = 0x150   // Unity occlusion flag
+  BaseEntity::isAnimatorVisible= 0x151   // Unity animator flag
+  BaseEntity::isShadowVisible  = 0x152   // Unity shadow flag
+  BaseEntity::objRef           = 0x10    // Unity Object.m_CachedPtr
+  BaseEntity::posChain0        = 0x20    // Unity transform chain
+  BaseEntity::posChain1        = 0x20
+  BaseEntity::posChain2        = 0x8
+  BaseEntity::posChain3        = 0x28
+  BaseEntity::posFinal         = 0x90
+  ItemMagazine::contents       = 0x1C
+  PlayerInventory::BeltFallback1 = 0x78  // = Wear (fallback)
+  PlayerInventory::BeltFallback2 = 0x30  // = Main (fallback)
+  ItemContainer::ItemListFallback = 0x10
+  Item::ItemIdFallback1        = 0x38
+  Item::ItemIdFallback2        = 0x70
+
+======================================================================
+INSTRUCTIONS
+======================================================================
+
+1. DECRYPTS: Copy rust_decrypts.dat to DLL directory or C:\
+   The cheat loads this at startup (OffsetManager::LoadDecryptConfig).
+   No recompile needed — decrypts are runtime-overridable.
+
+2. STATIC POINTERS: Update offsets.hpp with the new RVA values.
+   These MUST be recompiled into the DLL (not runtime-overridable).
+
+3. FIELD OFFSETS: Update offsets.hpp with new offset values.
+   These MUST be recompiled into the DLL.
+
+4. HARDcoded offsets (Unity internals) do NOT change with game updates,
+   only with Unity engine version upgrades. Safe to leave as-is.

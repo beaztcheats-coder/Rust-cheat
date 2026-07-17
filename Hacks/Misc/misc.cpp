@@ -4,6 +4,7 @@
 #include "../../OffsetManager.hpp"
 #include <windows.h>
 #include <chrono>
+#include <algorithm>
 
 std::mutex misc::s_miscMutex;
 
@@ -139,7 +140,7 @@ static uintptr_t ResolveTodSkyPtr()
             uint64_t nightTest = read<uint64_t>(directSky + offsets::TOD_Sky::NightParameters);
             if (nightTest && is_valid(nightTest)) {
                 float am = read<float>(nightTest + offsets::TOD_NightParameters::AmbientMultiplier);
-                if (am >= 0.0f && am <= 10.0f && std::isfinite(am)) {
+                if (am >= 0.0f && am <= 100.0f && std::isfinite(am)) {
                     gTodSkyPtr = (uintptr_t)directSky;
                     gTodSkySetMs = GetTickCount64();
                     if (tod_diag_count < 3) {
@@ -191,7 +192,7 @@ static uintptr_t ResolveTodSkyPtr()
                 uint64_t nightTest = read<uint64_t>(sky + offsets::TOD_Sky::NightParameters);
                 if (nightTest && is_valid(nightTest)) {
                     float am = read<float>(nightTest + offsets::TOD_NightParameters::AmbientMultiplier);
-                    if (am >= 0.0f && am <= 10.0f && std::isfinite(am)) {
+                    if (am >= 0.0f && am <= 100.0f && std::isfinite(am)) {
                     gTodSkyPtr = (uintptr_t)sky;
                     gTodSkySetMs = GetTickCount64();
                         if (tod_diag_count < 3) {
@@ -228,13 +229,13 @@ auto FovChanger_Bypass(float fov) -> void
 auto FovChanger(float fov) -> void
 {
     uintptr_t kl = read<uintptr_t>(GameAssembly + offsets::FOV::ConVar_Graphics);
-    if (!is_valid(kl)) { static int f1=0; if(f1<3){LOG("FOV: ConVar_Graphics invalid kl=0x%I64X RVA=0x%I64X — using bypass", (uint64_t)kl, offsets::FOV::ConVar_Graphics); f1++;} FovChanger_Bypass(fov); return; }
+    if (!is_valid(kl)) { static int f1=0; if(f1<10){LOG("FOV: ConVar_Graphics invalid kl=0x%I64X RVA=0x%I64X — using bypass", (uint64_t)kl, offsets::FOV::ConVar_Graphics); f1++;} FovChanger_Bypass(fov); return; }
     uintptr_t field = read<uintptr_t>(kl + offsets::BaseCamera::static_fields);
-    if (!is_valid(field)) { static int f2=0; if(f2<3){LOG("FOV: static_fields invalid kl=0x%I64X — using bypass", (uint64_t)kl); f2++;} FovChanger_Bypass(fov); return; }
+    if (!is_valid(field)) { static int f2=0; if(f2<10){LOG("FOV: static_fields invalid kl=0x%I64X — using bypass", (uint64_t)kl); f2++;} FovChanger_Bypass(fov); return; }
     uint32_t raw = *(uint32_t*)&fov;
     uint32_t encrypted = decrypt::encrypt_fov(raw);
     write<uint32_t>(field + offsets::FOV::fovWrite, encrypted);
-    static int f3 = 0; if (f3 < 3) { LOG("FOV: wrote enc=%u to field=0x%I64X+0x%I64X (kl=0x%I64X fov=%.0f)", encrypted, (uint64_t)field, offsets::FOV::fovWrite, (uint64_t)kl, fov); f3++; }
+    static int f3 = 0; if (f3 < 10) { LOG("FOV: wrote enc=%u to field=0x%I64X+0x%I64X (kl=0x%I64X fov=%.0f)", encrypted, (uint64_t)field, offsets::FOV::fovWrite, (uint64_t)kl, fov); f3++; }
 };
 
 void misc::do_misc() {
@@ -281,9 +282,9 @@ void misc::do_misc() {
             gTodSkyPtr = 0;
             lastLpGeneration = lpGeneration;
         }
-        // Invalidate cached TOD_Sky after 30 seconds — prevents writes to freed memory
+        // Invalidate cached TOD_Sky after 5 minutes — prevents writes to freed memory
         // if the game unloads TOD_Sky during server transition without LocalPlayer gen change
-        if (gTodSkyPtr && (GetTickCount64() - gTodSkySetMs) > 30000) {
+        if (gTodSkyPtr && (GetTickCount64() - gTodSkySetMs) > 300000) {
             gTodSkyPtr = 0;
         }
     }
@@ -315,12 +316,9 @@ void misc::do_misc() {
 
     // TOD Bright Night / Ambient path (static TOD_Sky chain)
     {
-        static int brightNightFailCount = 0;
-
         if (MISC::BrightNight) {
             uintptr_t todSky = ResolveTodSkyPtr();
             if (todSky && is_valid(todSky)) {
-                brightNightFailCount = 0;
                 float ambientMult = MISC::ambientMultiplier;
                 if (ambientMult < 0.0f) ambientMult = 0.0f;
                 if (ambientMult > 20.0f) ambientMult = 20.0f;
@@ -347,13 +345,7 @@ void misc::do_misc() {
                     write<float>(todSky + offsets::TOD_Sky::timeSinceAmbientUpdate, 999.0f);
             } else {
                 gTodSkyPtr = 0;
-                if (++brightNightFailCount >= 500) {
-                    MISC::BrightNight = false;
-                    brightNightFailCount = 0;
-                }
             }
-        } else {
-            brightNightFailCount = 0;
         }
     }
 
@@ -383,6 +375,85 @@ void misc::do_misc() {
         }
     }
 
+    // === Read game time for display (always runs, zero writes) ===
+    {
+        uintptr_t todSky = ResolveTodSkyPtr();
+        if (todSky && is_valid(todSky)) {
+            float hour = -1.f;
+            // Try pointer path first (Cycle is a reference type)
+            uintptr_t cycleParams = read<uintptr_t>(todSky + offsets::TOD_Sky::CycleParameters);
+            if (cycleParams && is_valid(cycleParams)) {
+                hour = read<float>(cycleParams + 0x10);
+            } else if (is_valid(todSky + 0x50)) {
+                // Inline struct fallback — Cycle is a value type at todSky + 0x40
+                hour = read<float>(todSky + 0x50);
+            }
+            if (hour >= 0.f && hour <= 24.f && std::isfinite(hour)) {
+                g_GameTimeHour = hour;
+            }
+        }
+    }
+
+    // === Raid ESP — poll EffectNetwork for explosion positions ===
+    if (WORLD::RaidESP) {
+        static uint64_t lastRaidPoll = 0;
+        static Vector3 lastEffectPos = {};
+        static uint64_t raidDiagTick = 0;
+        uint64_t now = GetTickCount64();
+        if (now - lastRaidPoll >= 200) { // poll every 200ms
+            lastRaidPoll = now;
+            uint64_t effTypeInfo = read<uint64_t>(GameAssembly + offsets::EffectNetwork_Pointer);
+            if (effTypeInfo && is_valid(effTypeInfo)) {
+                uint64_t sf = read<uint64_t>(effTypeInfo + offsets::EffectNetwork::static_fields);
+                if (sf && is_valid(sf)) {
+                    // Dumper picks MAX offset (0x8), but there are 2 static fields at 0x0 and 0x8.
+                    // Try instance offset 0x8 first, then fall back to 0x0.
+                    uint64_t inst = read<uint64_t>(sf + offsets::EffectNetwork::instance);
+                    if (!inst || !is_valid(inst)) {
+                        inst = read<uint64_t>(sf + 0x0); // try first static field
+                    }
+                    if (inst && is_valid(inst)) {
+                        Vector3 hitPos = read<Vector3>(inst + offsets::EffectNetwork::hitPosition);
+                        // Validate as float position, not pointer
+                        if (std::isfinite(hitPos.x) && std::isfinite(hitPos.y) && std::isfinite(hitPos.z)
+                            && hitPos.x != 0.f && hitPos.y != 0.f && hitPos.z != 0.f
+                            && hitPos.DistTo(lastEffectPos) > 5.f) {
+                            lastEffectPos = hitPos;
+                            std::lock_guard<std::mutex> lk(g_RaidMutex);
+                            // Try to merge with existing event within 30m
+                            bool merged = false;
+                            for (auto& evt : g_RaidEvents) {
+                                if (evt.position.DistTo(hitPos) < 30.f) {
+                                    evt.position = hitPos; // update to latest
+                                    evt.timestamp = now;
+                                    evt.count++;
+                                    merged = true;
+                                    break;
+                                }
+                            }
+                            if (!merged) {
+                                g_RaidEvents.push_back({ hitPos, now, 1 });
+                            }
+                            // Remove expired events (>120s)
+                            g_RaidEvents.erase(
+                                std::remove_if(g_RaidEvents.begin(), g_RaidEvents.end(),
+                                    [now](const RaidEvent& e) { return (now - e.timestamp) > 120000; }),
+                                g_RaidEvents.end());
+                        }
+                    } else if (now - raidDiagTick > 10000) {
+                        // Log diagnostic every 10s when instance is null
+                        raidDiagTick = now;
+                        LOG("RAID_DIAG: effTypeInfo=0x%llX sf=0x%llX inst=0x%llX (both 0x0 and 0x8 null/invalid)",
+                            effTypeInfo, sf, inst);
+                    }
+                } else if (now - raidDiagTick > 10000) {
+                    raidDiagTick = now;
+                    LOG("RAID_DIAG: effTypeInfo=0x%llX sf=0x%llX (static_fields null/invalid)", effTypeInfo, sf);
+                }
+            }
+        }
+    }
+
     // === Admin Flags — sets PlayerFlags.IsAdmin every frame ===
     {
         if (HotkeyPressed("UTIL.AdminFlags")) {
@@ -397,103 +468,31 @@ void misc::do_misc() {
         }
     }
 
-    // === Debug Camera — camera position manipulation + Flying + body freeze ===
+    // === Debug Camera — enables AdminFlags + shows on-screen instructions ===
+    // SendInput/PostMessage don't work with Unity's RawInput from external process.
+    // Instead: auto-enable AdminFlags, show hint to type debugcamera in F1 console.
     {
-        if (HotkeyPressed("UTIL.DebugCam") && MISC::AdminFlags) {
+        if (HotkeyPressed("UTIL.DebugCam")) {
             MISC::DebugCamera = !MISC::DebugCamera;
             LOG("DebugCam: %s", MISC::DebugCamera ? "ON" : "OFF");
-            if (!MISC::DebugCamera) restoreCameraPosition();
         }
 
-        if (!MISC::AdminFlags)
-            MISC::DebugCamera = false;
-
-        if (MISC::DebugCameraTimer > 50.0f) {
-            MISC::DebugCameraTimer = 0.0f;
-            MISC::DebugCamera = false;
-        }
-
-        static bool wasDebugBypass = false;
-        if (MISC::DebugCamera && MISC::DebugCameraTimer <= 50.0f && src->LocalPlayer && miscLpStable()) {
+        // When DebugCamera is ON, force AdminFlags ON and set IsAdmin every frame
+        if (MISC::DebugCamera && src->LocalPlayer && miscLpStable()) {
+            MISC::AdminFlags = true;
             uintptr_t lp = (uintptr_t)src->LocalPlayer;
             int pf = read<int>(lp + offsets::BasePlayer::PlayerFlags);
             write<int>(lp + offsets::BasePlayer::PlayerFlags, pf | (int)offsets::base_player_flags::IsAdmin);
-            BeginDebugTimer();
-            AssignLoadingScreenData(true);
-            wasDebugBypass = true;
-        } else if (wasDebugBypass && src->LocalPlayer) {
-            uintptr_t lp = (uintptr_t)src->LocalPlayer;
-            MISC::DebugCamera = false;
-            if (!MISC::AdminFlags) {
-                int pf = read<int>(lp + offsets::BasePlayer::PlayerFlags);
-                write<int>(lp + offsets::BasePlayer::PlayerFlags, pf & ~(int)offsets::base_player_flags::IsAdmin);
-            }
-            debugTimerStarted = false;
-            MISC::DebugCameraTimer = 0.0f;
-            AssignLoadingScreenData(false);
-            wasDebugBypass = false;
         }
 
-        { static bool dcCamPrev = false; if (dcCamPrev && !MISC::DebugCamera && dcCamActive) restoreCameraPosition(); dcCamPrev = MISC::DebugCamera; }
-
-        if (MISC::DebugCamera && src->LocalPlayer) {
+        // When DebugCamera is OFF and AdminFlags is OFF, clear IsAdmin
+        static bool wasDebugCam = false;
+        if (wasDebugCam && !MISC::DebugCamera && !MISC::AdminFlags && src->LocalPlayer) {
             uintptr_t lp = (uintptr_t)src->LocalPlayer;
-
-            do {
-                // Camera position via chain
-                uintptr_t camObj = ResolveCameraComponent();
-                if (!camObj || !is_valid(camObj)) break;
-                uintptr_t camPosAddr = camObj + offsets::BaseCamera::world_position;
-                if (!is_valid(camPosAddr)) break;
-
-                if (!dcCamActive) {
-                    dcCamBasePos = read<Vector3>(camPosAddr);
-                    if (!(dcCamBasePos.x == dcCamBasePos.x)) { LOG("DebugCam: activation FAILED"); break; }
-                    dcCamDelta = {}; dcCamActive = true;
-                    LOG("DebugCam: activated — camera pos saved at (%.0f,%.0f,%.0f)",
-                        dcCamBasePos.x, dcCamBasePos.y, dcCamBasePos.z);
-                }
-
-                // Movement input
-                float speed = (GetAsyncKeyState(VK_SHIFT) & 0x8000) ? 0.40f : 0.15f;
-                float upDown = 0.f; if (GetAsyncKeyState(VK_SPACE) & 0x8000) upDown += speed; if (GetAsyncKeyState(VK_CONTROL) & 0x8000) upDown -= speed;
-                float forward = 0.f, right = 0.f;
-                if (GetAsyncKeyState('W') & 0x8000) forward += speed; if (GetAsyncKeyState('S') & 0x8000) forward -= speed;
-                if (GetAsyncKeyState('D') & 0x8000) right += speed; if (GetAsyncKeyState('A') & 0x8000) right -= speed;
-                float yawDeg = 0.f;
-                uintptr_t input = read<uintptr_t>(lp + offsets::BasePlayer::PlayerInput);
-                yawDeg = input ? read<float>(input + offsets::PlayerInput::yaw) : 0.f;
-                float yaw = yawDeg * 3.1415926f / 180.0f; float sy = sinf(yaw); float cy = cosf(yaw);
-                dcCamDelta.x += (forward * sy) + (right * cy); dcCamDelta.z += (forward * cy) - (right * sy); dcCamDelta.y += upDown;
-                if (dcCamDelta.x > 200.f) dcCamDelta.x = 200.f; if (dcCamDelta.x < -200.f) dcCamDelta.x = -200.f;
-                if (dcCamDelta.y > 200.f) dcCamDelta.y = 200.f; if (dcCamDelta.y < -200.f) dcCamDelta.y = -200.f;
-                if (dcCamDelta.z > 200.f) dcCamDelta.z = 200.f; if (dcCamDelta.z < -200.f) dcCamDelta.z = -200.f;
-                Vector3 newPos = dcCamBasePos + dcCamDelta;
-                ULONGLONG nowTick = GetTickCount64();
-                if (dcCamLastWriteTick == 0 || (nowTick - dcCamLastWriteTick >= 8ULL)) {
-                    write<Vector3>(camPosAddr, newPos); dcCamLastWriteTick = nowTick;
-                }
-            } while (false);
-
-            // ModelState.Flying + body freeze — throttled to 100ms (was every frame)
-            // to prevent writes to freed memory if player object is stale
-            if (miscLpStable()) {
-                static ULONGLONG dcMsWriteTick = 0;
-                ULONGLONG msNow = GetTickCount64();
-                if (dcMsWriteTick == 0 || (msNow - dcMsWriteTick >= 100ULL)) {
-                    dcMsWriteTick = msNow;
-                    uintptr_t ms = read<uintptr_t>(lp + offsets::BasePlayer::ModelState);
-                    if (ms && is_valid(ms) && is_valid(ms + offsets::ModelState::flags)) {
-                        int mf = read<int>(ms + offsets::ModelState::flags);
-                        write<int>(ms + offsets::ModelState::flags, mf | offsets::ModelState::Flying);
-                    }
-                    uintptr_t mov = read<uintptr_t>(lp + offsets::BasePlayer::BaseMovement);
-                    if (mov && is_valid(mov) && is_valid(mov + offsets::BaseMovement2::target_movement)) {
-                        write<Vector3>(mov + offsets::BaseMovement2::target_movement, Vector3{});
-                    }
-                }
-            }
+            int pf = read<int>(lp + offsets::BasePlayer::PlayerFlags);
+            write<int>(lp + offsets::BasePlayer::PlayerFlags, pf & ~(int)offsets::base_player_flags::IsAdmin);
         }
+        wasDebugCam = MISC::DebugCamera;
     }
 
     // === PHASE 2: LP-DEPENDENT FEATURES ===
@@ -504,7 +503,7 @@ void misc::do_misc() {
     // Enter block when recoil/burst is active OR when we need to restore originals after toggling off
     static bool wasRecoilEnabled = false;
     bool needRecoilRestore = wasRecoilEnabled && !MISC::RecoilEnabled;
-    wasRecoilEnabled = MISC::RecoilEnabled;    if ((MISC::RecoilEnabled || MISC::ChangeBurst || needRecoilRestore) && miscLpStable())
+    wasRecoilEnabled = MISC::RecoilEnabled;    if ((MISC::RecoilEnabled || MISC::ChangeBurst || needRecoilRestore || MISC::NoSway || MISC::ForceAutomatic) && miscLpStable())
     {
         // Get all children
         uintptr_t childrenList = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BaseNetworkable::children);
@@ -701,6 +700,25 @@ void misc::do_misc() {
             lastBurst = 0;
         }
         wasBurst = MISC::ChangeBurst;
+
+        // No Sway — write aimSway=0, aimSwaySpeed=0 to all weapons (throttled)
+        if (MISC::NoSway && doWrite) {
+            for (int ci = 0; ci < nkids; ci++) {
+                if (kids[ci] && is_valid(kids[ci] + offsets::BaseProjectile::aimSway)) {
+                    write<float>(kids[ci] + offsets::BaseProjectile::aimSway, 0.f);
+                    write<float>(kids[ci] + offsets::BaseProjectile::aimSwaySpeed, 0.f);
+                }
+            }
+        }
+
+        // Force Automatic — make all semi-auto weapons full-auto (throttled)
+        if (MISC::ForceAutomatic && doWrite) {
+            for (int ci = 0; ci < nkids; ci++) {
+                if (kids[ci] && is_valid(kids[ci] + offsets::BaseProjectile::automatic)) {
+                    write<bool>(kids[ci] + offsets::BaseProjectile::automatic, true);
+                }
+            }
+        }
     }
 
 }

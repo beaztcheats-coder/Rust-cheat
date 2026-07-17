@@ -3,7 +3,6 @@
 #include <D3D11.h>
 #include "../Hotkeys.hpp"
 #include "../Translation.hpp"
-#include "../tracers.hpp"
 #include <d3d9types.h>
 #include <dwmapi.h>
 #include <d3d11.h>
@@ -36,7 +35,6 @@
 #include <functional>
 #include <cctype>
 #include <algorithm>
-#include <urlmon.h>
 
 static int g_drawStep = 0;
 static int g_drawCrashCount = 0;
@@ -44,7 +42,6 @@ static int g_drawSkipFrames = 0;
 #include <Shlwapi.h>
 
 #pragma comment(lib, "d3dx11.lib")
-#pragma comment(lib, "urlmon.lib")
 #pragma comment(lib, "shlwapi.lib")
 
 
@@ -335,7 +332,6 @@ inline void ChangeKey1(void* blank)
         {
             if (GetAsyncKeyState(i) & 0x8000)
             {
-                // AIMBOT::SILENTKEY removed â€” kept for hotkey infrastructure
                 keystatus1 = 0;
                 return;
             }
@@ -353,7 +349,6 @@ inline void ChangeKey2(void* blank)
         {
             if (GetAsyncKeyState(i) & 0x8000)
             {
-                // MISC::SpeedKey removed
                 keystatus2 = 0;
                 return;
             }
@@ -566,7 +561,6 @@ inline void ChangeKey4(void* blank)
         {
             if (GetAsyncKeyState(i) & 0x8000)
             {
-                // MISC::FlyKey removed
                 keystatus4 = 0;
                 return;
             }
@@ -689,7 +683,6 @@ inline void ChangeKey6(void* blank)
         {
             if (GetAsyncKeyState(i) & 0x8000)
             {
-                // MISC::FlyKey removed
                 keystatus6 = 0;
                 return;
             }
@@ -1218,20 +1211,28 @@ namespace render {
                 screenHeight = GetSystemMetrics(SM_CYSCREEN);
             }
 
-            WNDCLASSEXW wc = { sizeof(WNDCLASSEX), CS_HREDRAW | CS_VREDRAW, WndProcHook, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, _T("onGuiClass"), NULL };
+            // Randomized class/title to avoid EAC signature scanning
+            wchar_t randClass[16], randTitle[16];
+            {
+                srand(GetTickCount());
+                const wchar_t* chars = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                for (int i = 0; i < 14; i++) {
+                    randClass[i] = chars[rand() % 52];
+                    randTitle[i] = chars[rand() % 52];
+                }
+                randClass[14] = 0; randTitle[14] = 0;
+            }
+            WNDCLASSEXW wc = { sizeof(WNDCLASSEX), CS_HREDRAW | CS_VREDRAW, WndProcHook, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, randClass, NULL };
             ::RegisterClassEx(&wc);
 
             window_handle = CreateWindowEx(
                 WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                 wc.lpszClassName,
-                L"ongaUI",
+                randTitle,
                 WS_POPUP,
                 0, 0, screenWidth, screenHeight,
                 NULL, NULL, wc.hInstance, NULL
             );
-
-            // Stream Proof disabled — causes black screen + crash on some systems
-            // SetWindowDisplayAffinity(window_handle, WDA_EXCLUDEFROMCAPTURE);
 
             // Extend frame for visual transparency
             MARGINS margins = { -1 };
@@ -1489,6 +1490,7 @@ namespace render {
             EnsureHotkey("UTIL.DebugCam", VK_F7, HK_TOGGLE);
             EnsureHotkey("UTIL.BattleMode", VK_F2, HK_TOGGLE);
             EnsureHotkey("UTIL.CombatMode", VK_F3, HK_TOGGLE);
+            EnsureHotkey("UTIL.MarkFriend", VK_F4, HK_TOGGLE);
             EnsureHotkey("VISUAL.RemoveLayers", VK_F8, HK_TOGGLE);
             EnsureHotkey("VISUAL.FovChanger", VK_NUMPAD1, HK_TOGGLE);
             EnsureHotkey("VISUAL.Zoom", VK_NUMPAD2, HK_TOGGLE);
@@ -1641,7 +1643,6 @@ namespace render {
             // No frame limiter — Present() governs frame rate naturally.
             // Camera matrix read in render thread via ReadFrameCameraMatrix().
 
-<<<<<<< HEAD
             // Force overlay to topmost every 60 frames — avoids z-fighting with Discord overlay
             {
                 static int topmostTick = 0;
@@ -1653,13 +1654,6 @@ namespace render {
 
             // Sync overlay window to game client area — pixel-perfect alignment
             {
-=======
-            // Force overlay to topmost every frame — fixes fullscreen z-order issue
-            SetWindowPos(window_handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-
-            // Sync overlay window to game window position + cache screen size
-            {
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 HWND hw = fortnite_window;
                 if (hw && IsWindow(hw)) {
                     RECT rc = {0};
@@ -1668,7 +1662,6 @@ namespace render {
                         g_ScreenW = rc.right;
                         g_ScreenH = rc.bottom;
                     }
-<<<<<<< HEAD
                     // Use ClientToScreen for exact client area position (no title bar offset)
                     POINT pt = {0, 0};
                     if (ClientToScreen(hw, &pt) && rc.right > 0 && rc.bottom > 0) {
@@ -1680,19 +1673,6 @@ namespace render {
                         if (GetWindowRect(window_handle, &oc)) {
                             if (oc.left != gx || oc.top != gy || (oc.right - oc.left) != gw || (oc.bottom - oc.top) != gh) {
                                 SetWindowPos(window_handle, HWND_TOP, gx, gy, gw, gh, SWP_NOACTIVATE);
-=======
-                    // Sync overlay position to game window — prevents ESP misalignment in windowed mode
-                    RECT wr = {0};
-                    if (GetWindowRect(hw, &wr)) {
-                        int gx = wr.left;
-                        int gy = wr.top;
-                        int gw = wr.right - wr.left;
-                        int gh = wr.bottom - wr.top;
-                        RECT oc = {0};
-                        if (GetWindowRect(window_handle, &oc)) {
-                            if (oc.left != gx || oc.top != gy || (oc.right - oc.left) != gw || (oc.bottom - oc.top) != gh) {
-                                SetWindowPos(window_handle, HWND_TOPMOST, gx, gy, gw, gh, SWP_NOACTIVATE);
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                             }
                         }
                     }
@@ -1964,6 +1944,9 @@ namespace render {
                 }
             }
 
+            // Big Map overlay — disabled (detection not working reliably)
+            // SafeDrawMap();
+
             // Hit indicator / crosshair rendering continues
 
             g_drawStep = 10;
@@ -2165,12 +2148,8 @@ namespace render {
             g_drawStep = 13;
             d3d_swap_chain->Present(0, 0); // No VSync — zero input lag
 
-<<<<<<< HEAD
             // NOTE: Do NOT call SetWindowPos(HWND_TOPMOST) every frame — it causes z-fighting
             // with Discord/Steam overlays. Topmost is re-asserted every 60 frames in Draw() above.
-=======
-            SetWindowPos(window_handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
             if (logFrame) LOG("DRAW[%d]: end", drawFrameCount);
             drawFrameCount++;
         }

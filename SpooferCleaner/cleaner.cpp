@@ -395,9 +395,9 @@ void CleanWarzone() {
     PrintDone();
 }
 
-void CleanRust() {
+void CleanGame() {
     PrintBanner();
-    printf("    GAME: Rust (Full 8-Phase Reset)\n\n");
+    printf("    GAME: Full 8-Phase Reset\n\n");
 
     printf("--- PHASE 1: BROWSER & TEMP ---\n\n"); fflush(stdout);
     CommonCleanup();
@@ -520,7 +520,7 @@ void CleanerMenu() {
         printf("  Select game to clean:\n\n");
         printf("    [1]  Fortnite Cleaner\n");
         printf("    [2]  Warzone Cleaner\n");
-        printf("    [3]  Rust      (Full 8-Phase HWID Reset)\n");
+        printf("    [3]  Game      (Full 8-Phase HWID Reset)\n");
         printf("    [4]  BIOS      (External Batch Scripts)\n");
         printf("    [5]  Return to Main Menu\n\n");
         printf("  ============================================\n");
@@ -533,7 +533,7 @@ void CleanerMenu() {
         switch (choice) {
             case '1': CleanFortnite(); break;
             case '2': CleanWarzone(); break;
-            case '3': CleanRust(); break;
+            case '3': CleanGame(); break;
             case '4': CleanBootBIOS(); break;
             case '5': return;
             default:

@@ -1,0 +1,28 @@
+# rust_decrypts.dat — Auto-generated from morphine-dumper2 output
+# Format: key=value (one per line, hex values with 0x prefix)
+# Place this file in the DLL directory or C:\ to override embedded decrypt defaults
+
+nk_rol=0x15
+nk_xor=0xDA053B90
+nk_sub=0x4D1B2722
+
+nk2_rol1=0x6
+nk2_add=0xC52F0932
+nk2_rol2=0x16
+
+cla_add=0x5A0D1F9B
+cla_rol=0x19
+cla_xor=0xAFFC2B31
+
+inv_xor1=0x6562778
+inv_rol=0x6
+inv_xor2=0x7EC38BFC
+
+ey_add=0xBCFC6DA8
+ey_rol1=0x13
+ey_xor=0x73437527
+ey_rol2=0xA
+
+fov_rol=0x3
+fov_add=0x1180A466
+fov_xor=0x91BFA9C2

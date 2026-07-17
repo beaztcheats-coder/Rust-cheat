@@ -2,7 +2,7 @@
 #include "../imgui/imgui.h"
 #include "../offsets.hpp"
 #include "../Config.hpp"
-#include "../tracers.hpp"
+#include "../sdk.hpp"
 #include "../Render/icons.cpp"
 #include "../Hotkeys.hpp"
 #include "../Translation.hpp"
@@ -326,7 +326,9 @@ inline void Aim()
 
     ImGui::BeginGroup();
     BeginCard("aim_basic", "BASIC", ImVec2(col, 130.f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
     ImGui::Checkbox("Aimbot Enable", &AIMBOT::Memory);
+    ImGui::PopStyleColor();
     ImGui::Combo("Bone Priority", &AIMBOT::BonePriority, "Head\0Neck\0Chest\0Pelvis\0Closest\0Smart\0");
     EndCard();
 
@@ -374,13 +376,19 @@ inline void Aim()
     ImGui::Checkbox("Prediction Indicator", &AIMBOT::PredictionIndicator);
     EndCard();
 
-    BeginCard("aim_recoil", "RECOIL", ImVec2(col, 160.f));
+    BeginCard("aim_recoil", "RECOIL", ImVec2(col, 180.f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
     ImGui::Checkbox("Recoil Mod", &MISC::RecoilEnabled);
+    ImGui::PopStyleColor();
     if (MISC::RecoilEnabled) {
         ImGui::SliderFloat("Recoil %", &MISC::RecoilModifier, 0.f, 100.f, "%.0f%%");
         ImGui::Checkbox("Recoil Variance", &MISC::RecoilVariance);
         ImGui::SliderFloat("Floor", &MISC::RecoilFloor, 0.10f, 0.50f, "%.2f");
     }
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
+    ImGui::Checkbox("No Sway", &MISC::NoSway);
+    ImGui::Checkbox("Force Automatic", &MISC::ForceAutomatic);
+    ImGui::PopStyleColor();
     EndCard();
 
     BeginCard("aim_human", "HUMANIZATION", ImVec2(col, 160.f));
@@ -394,7 +402,6 @@ inline void Aim()
     EndCard();
 
     BeginCard("aim_anticheat", "ANTI-CHEAT", ImVec2(col, 60.f));
-    ImGui::Checkbox("Anti Anybrain", &MISC::AntiAnybrain);
     EndCard();
     ImGui::EndGroup();
 
@@ -466,9 +473,9 @@ inline void Pawn()
         ImGui::Checkbox("Health Bar", &ESP::HealthBar);
         ImGui::Checkbox("OFF Arrows", &ESP::OFFArrows);
         ImGui::Checkbox("Team ID", &ESP::TeamID);
+        ImGui::Checkbox("Player Flags", &ESP::PlayerFlags);
         ImGui::Checkbox("Hotbar Text", &ESP::hotbar_text);
         ImGui::Checkbox("Inventory Panel", &ESP::PlayerInventoryPanel);
-        ImGui::Checkbox("Bullet Tracers", &ESP::BulletTracers);
         ImGui::Checkbox("VisCheck", &ESP::VisCheck);
         ImGui::Columns(1);
         EndCard();
@@ -524,7 +531,7 @@ inline void Pawn()
         ImGui::Columns(1);
         EndCard();
 
-        BeginCard("animal_types", "ANIMAL TYPES", ImVec2(right, 220.f));
+        BeginCard("animal_types", "ANIMAL TYPES", ImVec2(right, 240.f));
         ImGui::Checkbox("Bear", &ANIMAL_ESP::Bear);
         ImGui::Checkbox("Polar Bear", &ANIMAL_ESP::PolarBear);
         ImGui::Checkbox("Wolf", &ANIMAL_ESP::Wolf);
@@ -535,6 +542,7 @@ inline void Pawn()
         ImGui::Checkbox("Panther", &ANIMAL_ESP::Panther);
         ImGui::Checkbox("Tiger", &ANIMAL_ESP::Tiger);
         ImGui::Checkbox("Snake", &ANIMAL_ESP::Snake);
+        ImGui::Checkbox("Crocodile", &ANIMAL_ESP::Crocodile);
         EndCard();
 
         BeginCard("animal_style", "DISTANCE & STYLE", ImVec2(right, 80.f));
@@ -589,15 +597,20 @@ static void DrawContainersTab()
     const float col = (avail - 12.f) * 0.5f;
 
     ImGui::BeginGroup();
-    BeginCard("cont_loot", "LOOT & STASH", ImVec2(col, 280.f));
+    BeginCard("cont_loot", "LOOT & STASH", ImVec2(col, 340.f));
     ImGui::Checkbox("Stash", &WORLD::Stash);
+    ImGui::Checkbox("Stash Persist", &WORLD::StashPersist);
     ImGui::Checkbox("Body Bag / Corpse", &WORLD::BodyBag);
-    ImGui::Checkbox("Backpack", &WORLD::Backpack);
+    ImGui::Checkbox("Body Bag", &WORLD::Backpack);
     ImGui::Checkbox("Dropped Items", &WORLD::DroppedItem);
+    ImGui::Separator();
+    ImGui::Checkbox("Raid ESP", &WORLD::RaidESP);
+    ImGui::SliderFloat("Raid Dist", &WORLD::draw_raid, 100.f, 2000.f);
+    ImGui::Checkbox("Crate Timer", &WORLD::CrateTimer);
     ImGui::Separator();
     ImGui::SliderFloat("Stash Dist", &WORLD::draw_stash, 50.f, 1000.f);
     ImGui::SliderFloat("Corpse Dist", &WORLD::draw_corpse, 50.f, 1000.f);
-    ImGui::SliderFloat("Backpack Dist", &WORLD::draw_backpack, 50.f, 1000.f);
+    ImGui::SliderFloat("Body Bag Dist", &WORLD::draw_backpack, 50.f, 1000.f);
     ImGui::SliderFloat("Dropped Dist", &WORLD::draw_dropped, 50.f, 1000.f);
     EndCard();
     ImGui::EndGroup();
@@ -673,7 +686,7 @@ static void DrawTrapsVehiclesTab()
     SameLineNext();
 
     ImGui::BeginGroup();
-    BeginCard("tv_vehicles", "VEHICLES", ImVec2(col, 280.f));
+    BeginCard("tv_vehicles", "VEHICLES", ImVec2(col, 300.f));
     ImGui::Checkbox("MiniCopter", &WORLD::MiniCopter);
     ImGui::Checkbox("Bradley APC", &WORLD::BradlyAPC);
     ImGui::Checkbox("Cargo Ship", &WORLD::CargoShip);
@@ -688,6 +701,8 @@ static void DrawTrapsVehiclesTab()
     ImGui::Checkbox("Hot Air Balloon", &WORLD::Balloon);
     ImGui::Checkbox("Motorbike", &WORLD::Motorbike);
     ImGui::Checkbox("Snowmobile", &WORLD::Snowmobile);
+    ImGui::Separator();
+    ImGui::Checkbox("Vehicle Health", &WORLD::VehicleHealth);
     EndCard();
     ImGui::EndGroup();
 }
@@ -764,11 +779,19 @@ inline void Settting()
     SameLineNext();
 
     ImGui::BeginGroup();
-    BeginCard("set_hotkeys", "HOTKEYS", ImVec2(col, 170.f));
+    BeginCard("set_hotkeys", "HOTKEYS", ImVec2(col, 220.f));
     Hotkey("Show/Hide Menu", "global.menu");
     Hotkey("Panic / Unload", "global.shutdown");
     Hotkey("Admin Flags", "UTIL.AdminFlags");
+    Hotkey("Mark Friend", "UTIL.MarkFriend");
     Hotkey("FOV Changer", "VISUAL.FovChanger");
+    EndCard();
+
+    BeginCard("set_debug", "DEBUG CAMERA", ImVec2(col, 120.f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
+    ImGui::Checkbox("Debug Camera (auto-enables Admin)", &MISC::DebugCamera);
+    ImGui::PopStyleColor();
+    ImGui::TextWrapped("1. Toggle ON  2. Press F1  3. Type: debugcamera  4. Enter");
     EndCard();
 
     BeginCard("set_config", "CONFIGURATION", ImVec2(col, 190.f));
@@ -792,23 +815,34 @@ inline void Settting()
     SameLineNext();
 
     ImGui::BeginGroup();
-    BeginCard("set_camera", "CAMERA", ImVec2(col, 170.f));
+    BeginCard("set_camera", "CAMERA", ImVec2(col, 190.f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
     ImGui::Checkbox("FOV Changer", &MISC::FovChanger);
+    ImGui::PopStyleColor();
     if (MISC::FovChanger)
         ImGui::SliderFloat("FOV Amount", &MISC::FovAmount, 30.f, 150.f, "%.0f");
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
     ImGui::Checkbox("Zoom", &MISC::Zoom);
+    ImGui::PopStyleColor();
     if (MISC::Zoom)
         ImGui::SliderFloat("Zoom Amount", &MISC::ZoomAmount, 10.f, 200.f, "%.0f");
+    ImGui::Checkbox("Show Time", &SETTINGS::ShowTime);
+    ImGui::Checkbox("Feature Indicators", &SETTINGS::FeatureIndicators);
+    ImGui::Checkbox("Player List", &SETTINGS::PlayerList);
     EndCard();
 
     BeginCard("set_env", "ENVIRONMENT", ImVec2(col, 160.f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
     ImGui::Checkbox("Bright Night", &MISC::BrightNight);
+    ImGui::PopStyleColor();
     if (MISC::BrightNight) {
         ImGui::SliderFloat("Ambient Mul", &MISC::ambientMultiplier, 0.f, 20.f);
         ImGui::SliderFloat("Ambient Sat", &MISC::AmbientSaturation, 0.f, 5.f);
     }
     ImGui::Separator();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.945f, 0.302f, 0.302f, 1.0f));
     ImGui::Checkbox("Time Changer", &MISC::Timechanger);
+    ImGui::PopStyleColor();
     if (MISC::Timechanger) {
         ImGui::SliderInt("Time", &MISC::timevalue, 0, 24);
     }
@@ -835,6 +869,26 @@ inline void Settting()
         ImGui::SameLine();
         ColorEditSmall("Animal", (float*)&RADAR::AnimalColor);
         ColorEditSmall("Border", (float*)&RADAR::BorderColor);
+    }
+    EndCard();
+
+    BeginCard("set_bigmap", "BIG MAP OVERLAY", ImVec2(col, 280.f));
+    {
+        ImGui::TextColored(ImColor(200, 200, 220, 255), "Auto-shows when in-game map is open (G)");
+        ImGui::Separator();
+        ImGui::Checkbox("Players", &BIGMAP::ShowPlayers);
+        ImGui::Checkbox("NPCs", &BIGMAP::ShowNPCs);
+        ImGui::Checkbox("Animals", &BIGMAP::ShowAnimals);
+        ImGui::Checkbox("Ores", &BIGMAP::ShowOres);
+        ImGui::Checkbox("Hemp", &BIGMAP::ShowHemp);
+        ImGui::Checkbox("Stashes", &BIGMAP::ShowStashes);
+        ImGui::Checkbox("TCs", &BIGMAP::ShowTCs);
+        ImGui::Checkbox("Crates", &BIGMAP::ShowCrates);
+        ImGui::Checkbox("Vehicles", &BIGMAP::ShowVehicles);
+        ImGui::Checkbox("Turrets/Traps", &BIGMAP::ShowTurrets);
+        ImGui::Checkbox("Show Names", &BIGMAP::ShowNames);
+        ImGui::Checkbox("Show Distance", &BIGMAP::ShowDistance);
+        ImGui::SliderFloat("Dot Size", &BIGMAP::DotSize, 2.f, 15.f, "%.0f");
     }
     EndCard();
 

@@ -1,3 +1,4 @@
+#ifdef BEAZT_DEBUG
 #include "cleaner.hpp"
 #include <Windows.h>
 #include <cstdio>
@@ -20,8 +21,8 @@ static void PrintBanner() {
     SafeCLS();
     printf("\n");
     printf("  ============================================\n");
-    printf("            T H E   B E A Z T   V 3\n");
-    printf("         Deep Clean  -  HWID Reset Tool\n");
+    printf("         HWID Spoofer & Cleaner Tool\n");
+    printf("         Deep Clean  -  HWID Reset\n");
     printf("  ============================================\n\n");
     fflush(stdout);
 }
@@ -45,11 +46,7 @@ static void PrintDone() {
     if (key == 'r' || key == 'R') {
         printf("\nRestarting system . . .\n");
         fflush(stdout);
-#ifdef VSHARP
         system("shutdown /r /t 3 /c \"Cleaner - restarting to apply changes\"");
-#else
-        system("shutdown /r /t 3 /c \"Beazt Cleaner - restarting to apply changes\"");
-#endif
         Sleep(5000);
     }
 }
@@ -399,9 +396,9 @@ void CleanWarzone() {
     PrintDone();
 }
 
-void CleanRust() {
+void CleanGame() {
     PrintBanner();
-    printf("    GAME: Rust (Full 8-Phase Reset)\n\n");
+    printf("    GAME: Full 8-Phase Reset\n\n");
 
     printf("--- PHASE 1: BROWSER & TEMP ---\n\n"); fflush(stdout);
     CommonCleanup();
@@ -518,13 +515,13 @@ void CleanerMenu() {
 
         printf("\n");
         printf("  ============================================\n");
-        printf("            T H E   B E A Z T   V 3\n");
-        printf("         Deep Clean  -  HWID Reset Tool\n");
+        printf("         HWID Spoofer & Cleaner Tool\n");
+        printf("         Deep Clean  -  HWID Reset\n");
         printf("  ============================================\n\n");
         printf("  Select game to clean:\n\n");
         printf("    [1]  Fortnite Cleaner\n");
         printf("    [2]  Warzone Cleaner\n");
-        printf("    [3]  Rust      (Full 8-Phase HWID Reset)\n");
+        printf("    [3]  Game      (Full 8-Phase HWID Reset)\n");
         printf("    [4]  BIOS      (External Batch Scripts)\n");
         printf("    [5]  Return to Main Menu\n\n");
         printf("  ============================================\n");
@@ -537,7 +534,7 @@ void CleanerMenu() {
         switch (choice) {
             case '1': CleanFortnite(); break;
             case '2': CleanWarzone(); break;
-            case '3': CleanRust(); break;
+            case '3': CleanGame(); break;
             case '4': CleanBootBIOS(); break;
             case '5': return;
             default:
@@ -548,3 +545,4 @@ void CleanerMenu() {
         }
     }
 }
+#endif // BEAZT_DEBUG

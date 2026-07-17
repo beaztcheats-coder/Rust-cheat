@@ -1,4 +1,5 @@
 #pragma once
+#include <windows.h>
 
 struct SpooferStatus {
     bool attempted = false;
@@ -12,10 +13,9 @@ struct SpooferStatus {
     int attemptedCount = 0;
 };
 
-// Called from MainThreadImpl before the cheat starts.
-// Shows a MessageBox asking whether to spoof.
-// If user clicks Yes, runs all HWID spoof operations via the kernel driver.
-// Returns true if spoofer ran successfully or was skipped.
-bool RunEmbeddedSpoofer();
+// Called from MainThreadImpl AFTER driver is initialized (CR3 set).
+// hDriver must be a valid handle to \\.\Bfo64 with CR3 already configured.
+// Runs HWID spoof IOCTLs via the kernel driver, then user-mode cleanup.
+bool RunEmbeddedSpoofer(HANDLE hDriver);
 
 const SpooferStatus& GetLastSpooferStatus();

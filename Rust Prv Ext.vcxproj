@@ -150,7 +150,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dbghelp.lib;iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -159,6 +159,8 @@
     <ClCompile Include="Hacks\Cache\cache.cpp" />
     <ClCompile Include="Hacks\Misc\misc.cpp" />
     <ClCompile Include="Hacks\Misc\spoofer.cpp" />
+    <ClCompile Include="Hacks\Misc\spoofer_driver_client.cpp" />
+    <ClCompile Include="Hacks\Misc\pdb_resolver.cpp" />
     <ClCompile Include="Hacks\Misc\cleaner.cpp" />
     <ClCompile Include="Hacks\Visuals\visuals.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
@@ -188,6 +190,9 @@
     <ClInclude Include="Hacks\Cheat\Cheat.hpp" />
     <ClInclude Include="Hacks\Misc\misc.hpp" />
     <ClInclude Include="Hacks\Misc\spoofer.hpp" />
+    <ClInclude Include="Hacks\Misc\spoofer_driver_client.h" />
+    <ClInclude Include="Hacks\Misc\offset_database.h" />
+    <ClInclude Include="Hacks\Misc\pdb_resolver.h" />
     <ClInclude Include="Hacks\Misc\cleaner.hpp" />
     <ClInclude Include="Hacks\VisCheck\VisCheck.hpp" />
     <ClInclude Include="Hacks\Visuals\visuals.hpp" />

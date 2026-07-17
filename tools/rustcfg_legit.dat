@@ -354,7 +354,6 @@ MISC.RecoilEnabled=1
 MISC.RecoilModifier=0.00
 MISC.RecoilVariance=0
 MISC.RecoilFloor=0.25
-MISC.AntiAnybrain=1
 MISC.ChangeBurst=0
 MISC.QuickBurst=0
 MISC.BURSTAMOUNT=0.40

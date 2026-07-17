@@ -1,7 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="morphine-dumper/morphine-dumper.vcxproj" Id="de1fa205-8794-46f8-9a2f-6149e836fd5f" />
-</Solution>

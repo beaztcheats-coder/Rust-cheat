@@ -9,38 +9,36 @@
 namespace OffsetManager {
 
     struct DecryptConfig {
-        // networkable_key (client_entities): add-rol-add (build 24091435)
-        uint32_t nk_add1 = 0x16A2149;
-        uint32_t nk_rol = 0x7;
-        uint32_t nk_add2 = 0x42D649F;
+        // networkable_key (client_entities): rol-xor-sub (build 24181174)
+        uint32_t nk_rol = 0x15;
+        uint32_t nk_xor = 0xDA053B90;
+        uint32_t nk_sub = 0x4D1B2722;
 
-        // networkable_key2 (entity_list): rol-sub-xor-add (build 24091435)
-        uint32_t nk2_rol = 0x14;
-        uint32_t nk2_sub = 0x1CC81122;
-        uint32_t nk2_xor = 0xAACADDEB;
-        uint32_t nk2_add = 0x63DFF63C;
+        // networkable_key2 (entity_list): rol-add-rol (build 24181174)
+        uint32_t nk2_rol1 = 0x6;
+        uint32_t nk2_add = 0xC52F0932;
+        uint32_t nk2_rol2 = 0x16;
 
-        // decrypt_ClActiveItem (cl_active_item): xor-rol-add, count=1 (build 24091435)
-        uint32_t cla_xor = 0x320F4C7D;
-        uint32_t cla_rol = 0x1F;
-        uint32_t cla_add = 0x62E951E6;
+        // decrypt_ClActiveItem (cl_active_item): add-rol-xor, count=1 (build 24181174)
+        uint32_t cla_add = 0x5A0D1F9B;
+        uint32_t cla_rol = 0x19;
+        uint32_t cla_xor = 0xAFFC2B31;
 
-        // decrypt_inventory_pointer (player_inventory): rol-xor-add-rol (build 24091435)
-        uint32_t inv_rol1 = 0x7;
-        uint32_t inv_xor = 0xEC9526A3;
-        uint32_t inv_add = 0xAC5D1D91;
-        uint32_t inv_rol2 = 0xF;
+        // decrypt_inventory_pointer (player_inventory): xor-rol-xor (build 24181174)
+        uint32_t inv_xor1 = 0x6562778;
+        uint32_t inv_rol = 0x6;
+        uint32_t inv_xor2 = 0x7EC38BFC;
 
-        // decrypt_eyes (player_eyes): sub-xor-add-rol (build 24091435)
-        uint32_t ey_sub = 0x2C865414;
-        uint32_t ey_xor = 0x873FAFE5;
-        uint32_t ey_add = 0x3FD966E1;
-        uint32_t ey_rol = 0x6;
+        // decrypt_eyes (player_eyes): add-rol-xor-rol (build 24181174)
+        uint32_t ey_add = 0xBCFC6DA8;
+        uint32_t ey_rol1 = 0x13;
+        uint32_t ey_xor = 0x73437527;
+        uint32_t ey_rol2 = 0xA;
 
-        // decrypt_fov: add-rol-sub (build 24091435)
-        uint32_t fov_add1 = 0xCA34BF6D;
-        uint32_t fov_rol = 0x1D;
-        uint32_t fov_sub = 0xB723318;
+        // decrypt_fov: rol-add-xor (build 24181174)
+        uint32_t fov_rol = 0x3;
+        uint32_t fov_add = 0x1180A466;
+        uint32_t fov_xor = 0x91BFA9C2;
     };
 
     inline DecryptConfig DecryptCfg;
@@ -89,32 +87,30 @@ namespace OffsetManager {
 
                         #define LOAD_DEC(k, v) if (lstrcmpA(key, k) == 0) { v = iv; }
 
-LOAD_DEC("nk_add1", DecryptCfg.nk_add1);
-                        LOAD_DEC("nk_rol", DecryptCfg.nk_rol);
-                        LOAD_DEC("nk_add2", DecryptCfg.nk_add2);
-                        // networkable_key: add-rol-add
-                        LOAD_DEC("nk2_rol", DecryptCfg.nk2_rol);
-                        LOAD_DEC("nk2_sub", DecryptCfg.nk2_sub);
-                        LOAD_DEC("nk2_xor", DecryptCfg.nk2_xor);
-                        LOAD_DEC("nk2_add", DecryptCfg.nk2_add);
-                        // networkable_key2: rol-sub-xor-add
-                        LOAD_DEC("cla_xor", DecryptCfg.cla_xor);
-                        LOAD_DEC("cla_rol", DecryptCfg.cla_rol);
+                        LOAD_DEC("nk_rol",  DecryptCfg.nk_rol);
+                        LOAD_DEC("nk_xor",  DecryptCfg.nk_xor);
+                        LOAD_DEC("nk_sub",  DecryptCfg.nk_sub);
+                        // networkable_key: rol-xor-sub
+                        LOAD_DEC("nk2_rol1", DecryptCfg.nk2_rol1);
+                        LOAD_DEC("nk2_add",  DecryptCfg.nk2_add);
+                        LOAD_DEC("nk2_rol2", DecryptCfg.nk2_rol2);
+                        // networkable_key2: rol-add-rol
                         LOAD_DEC("cla_add", DecryptCfg.cla_add);
-                        // decrypt_ClActiveItem: xor-rol-add
-                        LOAD_DEC("inv_rol1", DecryptCfg.inv_rol1);
-                        LOAD_DEC("inv_xor", DecryptCfg.inv_xor);
-                        LOAD_DEC("inv_add", DecryptCfg.inv_add);
-                        LOAD_DEC("inv_rol2", DecryptCfg.inv_rol2);
-                        // decrypt_inventory_pointer: rol-xor-add-rol
-                        LOAD_DEC("ey_sub", DecryptCfg.ey_sub);
-                        LOAD_DEC("ey_xor", DecryptCfg.ey_xor);
-                        LOAD_DEC("ey_add", DecryptCfg.ey_add);
-                        LOAD_DEC("ey_rol", DecryptCfg.ey_rol);
-                        // decrypt_eyes: sub-xor-add-rol
-                        LOAD_DEC("fov_add1", DecryptCfg.fov_add1);
+                        LOAD_DEC("cla_rol", DecryptCfg.cla_rol);
+                        LOAD_DEC("cla_xor", DecryptCfg.cla_xor);
+                        // decrypt_ClActiveItem: add-rol-xor
+                        LOAD_DEC("inv_xor1", DecryptCfg.inv_xor1);
+                        LOAD_DEC("inv_rol",  DecryptCfg.inv_rol);
+                        LOAD_DEC("inv_xor2", DecryptCfg.inv_xor2);
+                        // decrypt_inventory_pointer: xor-rol-xor
+                        LOAD_DEC("ey_add",  DecryptCfg.ey_add);
+                        LOAD_DEC("ey_rol1", DecryptCfg.ey_rol1);
+                        LOAD_DEC("ey_xor",  DecryptCfg.ey_xor);
+                        LOAD_DEC("ey_rol2", DecryptCfg.ey_rol2);
+                        // decrypt_eyes: add-rol-xor-rol
                         LOAD_DEC("fov_rol", DecryptCfg.fov_rol);
-                        LOAD_DEC("fov_sub", DecryptCfg.fov_sub);
+                        LOAD_DEC("fov_add", DecryptCfg.fov_add);
+                        LOAD_DEC("fov_xor", DecryptCfg.fov_xor);
 
                         #undef LOAD_DEC
                     }

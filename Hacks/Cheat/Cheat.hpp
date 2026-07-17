@@ -1,8 +1,6 @@
-#include "Hacks/Aimbot/aimbot.hpp"
-#include "../AntiCheat/anybrain.hpp"
+﻿#include "Hacks/Aimbot/aimbot.hpp"
 #include "../../Logger.hpp"
 #include "../../Hotkeys.hpp"
-#include "../../Occlusion.hpp"
 #include <cmath>
 
 void SafeDoCheat();
@@ -133,7 +131,6 @@ namespace Xheat {
         static bool firstRun = true;
         if (firstRun) { LOG("Do_Cheat RUNNING — first frame (all gates passed)"); firstRun = false; }
 
-        Anybrain::Neutralize();
         // g_ScreenW/g_ScreenH are global (vectorMath.hpp), updated every frame in render.hpp
 
         // Cache LocalPlayer position from globals (zero IOCTLs — written by fast thread)
@@ -152,6 +149,48 @@ namespace Xheat {
                 MISC::CombatMode = !MISC::CombatMode;
             if (!SETTINGS::MenuOpen && HotkeyPressed("UTIL.BattleMode"))
                 SETTINGS::BattleMode = !SETTINGS::BattleMode;
+        }
+
+        // In-game time display
+        if (SETTINGS::ShowTime && g_GameTimeHour >= 0.f) {
+            float h = g_GameTimeHour;
+            int hh = (int)h;
+            int mm = (int)((h - (float)hh) * 60.f);
+            if (hh >= 24) hh = 23;
+            if (mm >= 60) mm = 59;
+            bool isDay = h >= 6.f && h < 19.f;
+            char timeBuf[32];
+            wsprintfA(timeBuf, "%02d:%02d %s", hh, mm, isDay ? "Day" : "Night");
+            float tw = ImGui::CalcTextSize(timeBuf).x;
+            draw_text_outline_font((float)g_ScreenW - tw - 10.f, 10.f, isDay ? ImColor(255, 220, 100, 255) : ImColor(100, 150, 255, 255), timeBuf);
+        }
+
+        // Feature indicators — top-left corner
+        if (SETTINGS::FeatureIndicators) {
+            float fy = 10.f;
+            auto drawInd = [&](const char* label, bool on, ImColor onColor) {
+                if (!on) return;
+                draw_text_outline_font(10.f, fy, onColor, label);
+                fy += 16.f;
+            };
+            drawInd("Combat Mode", MISC::CombatMode, ImColor(255, 100, 100, 255));
+            drawInd("Battle Mode", SETTINGS::BattleMode, ImColor(100, 200, 255, 255));
+            drawInd("Recoil Mod", MISC::RecoilEnabled, ImColor(100, 255, 100, 255));
+            drawInd("No Sway", MISC::NoSway, ImColor(100, 255, 100, 255));
+            drawInd("Force Auto", MISC::ForceAutomatic, ImColor(100, 255, 100, 255));
+            drawInd("Bright Night", MISC::BrightNight, ImColor(200, 200, 100, 255));
+            drawInd("Admin Flags", MISC::AdminFlags, ImColor(255, 200, 50, 255));
+            drawInd("Debug Cam", MISC::DebugCamera, ImColor(200, 100, 255, 255));
+            drawInd("Time Changer", MISC::Timechanger, ImColor(200, 200, 100, 255));
+        }
+
+        // Debug Camera on-screen instructions
+        if (MISC::DebugCamera && !SETTINGS::MenuOpen) {
+            float cx = (float)g_ScreenW * 0.5f;
+            float cy = (float)g_ScreenH * 0.5f;
+            const char* hint = "Admin ON — Press F1, type: debugcamera";
+            ImVec2 sz = ImGui::CalcTextSize(hint);
+            draw_text_outline_font(cx - sz.x * 0.5f, cy - 40.f, ImColor(200, 100, 255, 255), hint);
         }
 
         const bool battleMode = SETTINGS::BattleMode;
@@ -184,6 +223,87 @@ namespace Xheat {
                 auto txt = std::string("[" + std::to_string(int(Distance)) + "M]");
                 auto sz = ImGui::CalcTextSize(txt.c_str());
                 draw_text_outline_font(position.x, position.y - 13, WORLD::color::Distance_Color, txt.c_str());
+            }
+
+            // Vehicle health bar
+            if (prefab.health >= 0.f && prefab.maxHealth > 0.f) {
+                float hpPct = prefab.health / prefab.maxHealth;
+                if (hpPct < 0.f) hpPct = 0.f;
+                if (hpPct > 1.f) hpPct = 1.f;
+                float barW = 60.f;
+                float barH = 4.f;
+                float barX = Screen.x - barW / 2.f;
+                float barY = position.y + Size.y + 2;
+                ImColor barBg = ImColor(0, 0, 0, 180);
+                ImColor barFg = hpPct > 0.5f ? ImColor(0, 220, 0, 255) : (hpPct > 0.25f ? ImColor(220, 180, 0, 255) : ImColor(220, 40, 40, 255));
+                ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(barX - 1, barY - 1), ImVec2(barX + barW + 1, barY + barH + 1), barBg);
+                ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(barX, barY), ImVec2(barX + barW * hpPct, barY + barH), barFg);
+            }
+
+            // Hackable crate timer
+            if (prefab.hackSeconds > 0.f) {
+                int totalSec = (int)prefab.hackSeconds;
+                int mins = totalSec / 60;
+                int secs = totalSec % 60;
+                char timerTxt[32];
+                wsprintfA(timerTxt, "Hack: %dm %ds", mins, secs);
+                auto tsz = ImGui::CalcTextSize(timerTxt);
+                draw_text_outline_font(Screen.x - tsz.x / 2, position.y + Size.y + 8, ImColor(255, 200, 50, 255), timerTxt);
+            }
+        }
+
+        // Saved stashes (persisted across sessions)
+        if (WORLD::StashPersist) {
+            std::vector<SavedStash> saved;
+            { std::lock_guard<std::mutex> lk(g_StashMutex); saved = g_SavedStashes; }
+            for (const auto& ss : saved) {
+                float dist = lpPos.DistTo(ss.position);
+                if (dist > WORLD::draw_stash) continue;
+                Vector2 Screen = WorldToScreen(ss.position, frameMatrix);
+                if (!std::isfinite(Screen.x) || !std::isfinite(Screen.y)
+                    || Screen.x <= 1 || Screen.x >= (float)g_ScreenW - 1
+                    || Screen.y <= 1 || Screen.y >= (float)g_ScreenH - 1) continue;
+                const char* txt = "Stash (saved)";
+                ImVec2 sz = ImGui::CalcTextSize(txt);
+                draw_text_outline_font(Screen.x - sz.x / 2, Screen.y - sz.y / 2, ImColor(180, 180, 80, 200), txt);
+                if (WORLD::Distance) {
+                    char dtxt[32]; wsprintfA(dtxt, "[%dm]", (int)dist);
+                    auto dsz = ImGui::CalcTextSize(dtxt);
+                    draw_text_outline_font(Screen.x - dsz.x / 2, Screen.y + sz.y / 2, WORLD::color::Distance_Color, dtxt);
+                }
+            }
+        }
+
+        // Raid ESP
+        if (WORLD::RaidESP) {
+            std::vector<RaidEvent> raids;
+            { std::lock_guard<std::mutex> lk(g_RaidMutex); raids = g_RaidEvents; }
+            uint64_t nowMs = GetTickCount64();
+            for (const auto& raid : raids) {
+                float dist = lpPos.DistTo(raid.position);
+                if (dist > WORLD::draw_raid) continue;
+                Vector2 Screen = WorldToScreen(raid.position, frameMatrix);
+                if (!std::isfinite(Screen.x) || !std::isfinite(Screen.y)
+                    || Screen.x <= 1 || Screen.x >= (float)g_ScreenW - 1
+                    || Screen.y <= 1 || Screen.y >= (float)g_ScreenH - 1) {
+                    continue;
+                }
+                int elapsed = (int)((nowMs - raid.timestamp) / 1000);
+                int remaining = 120 - elapsed;
+                if (remaining <= 0) continue;
+                char raidTxt[64];
+                wsprintfA(raidTxt, "RAID [%dx] %ds", raid.count, remaining);
+                ImVec2 sz = ImGui::CalcTextSize(raidTxt);
+                float rx = Screen.x - sz.x / 2;
+                float ry = Screen.y - sz.y / 2;
+                ImColor raidColor = elapsed < 30 ? ImColor(255, 50, 50, 255) : ImColor(255, 150, 50, 255);
+                draw_text_outline_font(rx, ry, raidColor, raidTxt);
+                if (WORLD::Distance) {
+                    char distTxt[32];
+                    wsprintfA(distTxt, "[%dm]", (int)dist);
+                    auto dsz = ImGui::CalcTextSize(distTxt);
+                    draw_text_outline_font(Screen.x - dsz.x / 2, ry - 13, WORLD::color::Distance_Color, distTxt);
+                }
             }
         }
         }
@@ -236,21 +356,13 @@ namespace Xheat {
             }
         }
 
-        // AABB occlusion system disabled — ESP uses game visibility flags now
-        // (occluder list + camera position copy removed to save CPU)
-
         // Compute target player closest to crosshair (for hotbar + inventory panel)
         // Only considers players (entlist), not animals/NPCs
         if (ESP::hotbar_text || ESP::PlayerInventoryPanel) {
             uintptr_t bestTgt = 0;
             float best = FLT_MAX;
-<<<<<<< HEAD
             float cx = (float)g_ScreenW * 0.5f;
             float cy = (float)g_ScreenH * 0.5f;
-=======
-            float cx = (float)screenWidth * 0.5f;
-            float cy = (float)screenHeight * 0.5f;
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
             float fovLimit = ESP::PlayerInventoryPanel ? 150.0f * 150.0f : FLT_MAX;
             for (auto* Player : entlist) {
                 if (!Player || !is_valid((uintptr_t)Player)) continue;
@@ -275,6 +387,20 @@ namespace Xheat {
             g_HotbarTarget = 0;
         }
 
+        // Toggle friend on player closest to crosshair
+        if (!SETTINGS::MenuOpen && HotkeyPressed("UTIL.MarkFriend") && g_HotbarTarget) {
+            auto fit = cacheCopy.find(g_HotbarTarget);
+            if (fit != cacheCopy.end()) {
+                std::string name = fit->second.name;
+                if (!name.empty()) {
+                    std::lock_guard<std::mutex> lk(g_FriendMutex);
+                    if (g_Friends.count(name)) { g_Friends.erase(name); LOG("FRIENDS: removed %s", name.c_str()); }
+                    else { g_Friends.insert(name); LOG("FRIENDS: added %s", name.c_str()); }
+                    SaveFriends();
+                }
+            }
+        }
+
         if (allowPlayers) {
         if (!ESP::ESPEnabled) goto skipPlayers;
 
@@ -285,14 +411,20 @@ namespace Xheat {
             auto cit = cacheCopy.find((uintptr_t)Player);
             if (cit == cacheCopy.end()) continue;
             const EspCacheData& pcache = cit->second;
-            if (pcache.isDead) continue;
-            if (ESP::RemoveWounded && pcache.isWounded) continue;
-            if (ESP::RemoveSleepers && pcache.isSleeping) continue;
-            if (ESP::RemoveTeam && pcache.teamId != 0) {
+
+            // Check if this player is a teammate — teammates are exempt from
+            // dead/sleeper/wounded filters so you always see them.
+            bool isTeammate = false;
+            if (pcache.teamId != 0) {
                 uint64_t myTeam = 0;
                 { std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex); myTeam = g_LocalPlayerTeam; }
-                if (myTeam != 0 && pcache.teamId == myTeam) continue;
+                isTeammate = (myTeam != 0 && pcache.teamId == myTeam);
             }
+
+            if (pcache.isDead && !isTeammate) continue;
+            if (ESP::RemoveWounded && pcache.isWounded && !isTeammate) continue;
+            if (ESP::RemoveSleepers && pcache.isSleeping && !isTeammate) continue;
+            if (ESP::RemoveTeam && isTeammate) continue;
 
             Vector3 tPos = pcache.headPos;
             {
@@ -326,7 +458,6 @@ namespace Xheat {
                 continue;
             }
 
-            cit->second.isAabbOccluded = false;
 
             esp->do_Visuals(Player, lpPos, pcache, frameMatrix);
             
@@ -342,13 +473,8 @@ namespace Xheat {
                 float panelDist = lpPos.DistTo(tc.headPos);
                 if (panelDist <= ESP::draw_distance && !tc.isDead) {
                     float panelW = 230.0f;
-<<<<<<< HEAD
                     float panelX = (float)g_ScreenW - panelW - 10.0f;
                     ImGui::SetNextWindowPos(ImVec2(panelX, (float)g_ScreenH * 0.5f), ImGuiCond_Always, ImVec2(0.0f, 0.5f));
-=======
-                    float panelX = (float)screenWidth - panelW - 10.0f;
-                    ImGui::SetNextWindowPos(ImVec2(panelX, (float)screenHeight * 0.5f), ImGuiCond_Always, ImVec2(0.0f, 0.5f));
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                     ImGui::SetNextWindowSize(ImVec2(panelW, 0), ImGuiCond_Always);
                     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.88f));
                     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.25f, 0.35f, 0.6f));
@@ -360,7 +486,7 @@ namespace Xheat {
                     ImGui::Separator();
 
                     ImGui::TextColored(ImColor(180, 190, 200, 255), "Held: %s", cacheStrEmpty(tc.weaponName) ? "Empty" : tc.weaponName);
-                    if (tc.ammo >= 0)
+                    if (tc.ammo > 0)
                         ImGui::TextColored(ImColor(150, 170, 200, 255), "Ammo: %d", tc.ammo);
                     ImGui::Separator();
 
@@ -393,6 +519,47 @@ namespace Xheat {
                     ImGui::PopStyleColor(2);
                 }
             }
+        }
+
+        // Player List Window
+        if (SETTINGS::PlayerList && !SETTINGS::MenuOpen) {
+            ImGui::SetNextWindowPos(ImVec2(10, (float)g_ScreenH * 0.15f), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(340, (float)g_ScreenH * 0.5f), ImGuiCond_FirstUseEver);
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.88f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.25f, 0.35f, 0.6f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+            if (ImGui::Begin("Player List##PL", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse)) {
+                ImGui::TextColored(ImColor(200, 200, 210, 255), "Players (%d)", (int)entlist.size());
+                ImGui::Separator();
+                for (const auto& Player : entlist) {
+                    if (!Player || !is_valid((uintptr_t)Player)) continue;
+                    auto it = cacheCopy.find((uintptr_t)Player);
+                    if (it == cacheCopy.end()) continue;
+                    const auto& ec = it->second;
+                    if (ec.isDead) continue;
+                    float dist = lpPos.DistTo(ec.headPos);
+                    if (dist > ESP::draw_distance) continue;
+                    int hp = (int)ec.health;
+                    int mhp = (int)ec.maxHealth;
+                    if (mhp <= 0) mhp = 100;
+                    ImColor nameColor = ec.isSleeping ? ImColor(150, 150, 150, 255) :
+                                        ec.isWounded ? ImColor(200, 100, 100, 255) :
+                                        ec.teamId == g_LocalPlayerTeam ? ImColor(100, 200, 100, 255) : ImColor(220, 220, 220, 255);
+                    ImGui::TextColored(nameColor, "%-16s", cacheStrEmpty(ec.name) ? "Unknown" : ec.name);
+                    ImGui::SameLine(170);
+                    ImGui::TextColored(ImColor(150, 170, 200, 255), "%dm", (int)dist);
+                    ImGui::SameLine(220);
+                    float hpPct = (float)hp / (float)mhp;
+                    ImColor hpColor = hpPct > 0.5f ? ImColor(100, 255, 100, 255) : (hpPct > 0.25f ? ImColor(255, 200, 50, 255) : ImColor(255, 80, 80, 255));
+                    ImGui::TextColored(hpColor, "%dhp", hp);
+                    ImGui::SameLine(260);
+                    if (!cacheStrEmpty(ec.weaponName))
+                        ImGui::TextColored(ImColor(180, 180, 180, 220), "%.12s", ec.weaponName);
+                }
+            }
+            ImGui::End();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
         }
 
         if (allowNPC && NPC_ESP::Enabled && !MISC::CombatMode) {
@@ -489,5 +656,286 @@ void SafeDoCheat() {
     __except (EXCEPTION_EXECUTE_HANDLER) {
         s_doCheatCrashCount++;
         LOG("CRASH in Do_Cheat! code=0x%X crash#%d", GetExceptionCode(), s_doCheatCrashCount);
+    }
+}
+
+// ===================== BIG MAP OVERLAY =====================
+
+static uint64_t s_worldSizeLastRead = 0;
+
+static void ReadWorldSize() {
+    if (GetTickCount64() - s_worldSizeLastRead < 30000) return;
+    s_worldSizeLastRead = GetTickCount64();
+    uintptr_t rustWorldTI = read<uint64_t>(GameAssembly + offsets::mapview::RVA_RustWorld);
+    if (!rustWorldTI || !is_valid(rustWorldTI)) return;
+    uintptr_t sf = read<uint64_t>(rustWorldTI + offsets::mapview::static_fields_off);
+    if (!sf || !is_valid(sf)) return;
+    float ws = read<float>(sf + offsets::mapview::World_Size_off);
+    if (ws > 100.f && ws < 100000.f && std::isfinite(ws))
+        g_WorldSize = ws;
+}
+
+// Map overlay toggle — hotkey based, no auto-detection false positives
+static bool g_MapToggleState = false;
+static bool g_MapPrevG = false;
+
+static bool IsMapOpen() {
+    // Toggle on G key rising edge (syncs with in-game map open/close)
+    bool gDown = (GetAsyncKeyState('G') & 0x8000) != 0;
+    if (gDown && !g_MapPrevG) {
+        g_MapToggleState = !g_MapToggleState;
+        LOG("MAP_TOGGLE: %s", g_MapToggleState ? "ON" : "OFF");
+    }
+    g_MapPrevG = gDown;
+    return g_MapToggleState;
+}
+
+static void DrawMapOverlay() {
+    if (!src->LocalPlayer) return;
+
+    float ws = g_WorldSize;
+    float halfWs = ws * 0.5f;
+
+    // Player-centered map: full world spread across 80% of screen
+    float cx = g_ScreenW * 0.5f;
+    float cy = g_ScreenH * 0.5f;
+    float halfW = g_ScreenW * 0.4f;
+    float halfH = g_ScreenH * 0.4f;
+
+    auto* dl = ImGui::GetBackgroundDrawList();
+    float dotSz = BIGMAP::DotSize;
+    ImVec2 mousePos = ImGui::GetIO().MousePos;
+    uintptr_t hoverPlayer = 0;
+    float hoverBest = 400.f;
+
+    static int mapDrawDiag = 0;
+    bool doDiag = ((++mapDrawDiag % 300) == 0);
+
+    // World to screen: full world map, north-up
+    auto worldToScreen = [&](Vector3 wp) -> ImVec2 {
+        float normX = (wp.x + halfWs) / ws;   // 0=west, 1=east
+        float normY = (wp.z + halfWs) / ws;   // 0=south, 1=north
+        float sx = (cx - halfW) + normX * halfW * 2.f;
+        float sy = (cy + halfH) - normY * halfH * 2.f;  // north=top
+        return ImVec2(sx, sy);
+    };
+
+    auto inView = [&](ImVec2 p) -> bool {
+        return p.x >= cx - halfW && p.x <= cx + halfW && p.y >= cy - halfH && p.y <= cy + halfH;
+    };
+
+    Vector3 lpPos;
+    { std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex); lpPos = g_LocalPlayerPos; }
+
+    if (doDiag) {
+        ImVec2 lpScr = worldToScreen(lpPos);
+        LOG("MAP_DRAW: ws=%.0f lp=(%.0f,%.0f,%.0f) screen=(%.0f,%.0f) sw=%d sh=%d",
+            ws, lpPos.x, lpPos.y, lpPos.z, lpScr.x, lpScr.y, g_ScreenW, g_ScreenH);
+    }
+
+    // Draw players
+    if (BIGMAP::ShowPlayers) {
+        static std::vector<Rust::BaseEntity*> entlist;
+        { std::unique_lock<std::mutex> lk(cac->entity_mutex, std::try_to_lock); if (lk.owns_lock()) entlist = entity_List; }
+
+        static std::unordered_map<uintptr_t, EspCacheData>* pCC = nullptr;
+        if (!pCC) pCC = new std::unordered_map<uintptr_t, EspCacheData>();
+        auto& cacheCopy = *pCC;
+        { std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex, std::try_to_lock); if (lk.owns_lock()) cacheCopy = g_EspCache; }
+
+        uint64_t myTeam = 0;
+        { std::lock_guard<std::mutex> tlk(g_LocalPlayerDataMutex); myTeam = g_LocalPlayerTeam; }
+
+        for (auto* Player : entlist) {
+            if (!Player || !is_valid((uintptr_t)Player)) continue;
+            auto it = cacheCopy.find((uintptr_t)Player);
+            if (it == cacheCopy.end()) continue;
+            const auto& ec = it->second;
+            if (ec.isDead) continue;
+
+            ImVec2 pos = worldToScreen(ec.headPos);
+            if (!inView(pos)) continue;
+
+            if (doDiag) {
+                LOG("MAP_DRAW: player '%s' world=(%.0f,%.0f,%.0f) screen=(%.0f,%.0f) dist=%.0fm",
+                    cacheStrEmpty(ec.name) ? "?" : ec.name,
+                    ec.headPos.x, ec.headPos.y, ec.headPos.z,
+                    pos.x, pos.y, lpPos.DistTo(ec.headPos));
+            }
+
+            bool isTeammate = (ec.teamId != 0 && myTeam != 0 && ec.teamId == myTeam);
+            ImColor col = ec.isSleeping ? BIGMAP::SleeperColor :
+                          isTeammate ? BIGMAP::TeammateColor : BIGMAP::PlayerColor;
+
+            dl->AddCircleFilled(pos, dotSz, col);
+            dl->AddCircle(pos, dotSz, ImColor(0, 0, 0, 200), 0, 1.f);
+
+            if (BIGMAP::ShowNames && !cacheStrEmpty(ec.name)) {
+                float dist = lpPos.DistTo(ec.headPos);
+                char label[80];
+                if (BIGMAP::ShowDistance)
+                    snprintf(label, sizeof(label), "%s [%dm]", ec.name, (int)dist);
+                else
+                    snprintf(label, sizeof(label), "%s", ec.name);
+                dl->AddText(ImVec2(pos.x + dotSz + 2, pos.y - 6), col, label);
+            }
+
+            float dx = mousePos.x - pos.x, dy = mousePos.y - pos.y;
+            float d2 = dx * dx + dy * dy;
+            if (d2 < hoverBest) { hoverBest = d2; hoverPlayer = (uintptr_t)Player; }
+        }
+
+        if (hoverPlayer) {
+            auto it = cacheCopy.find(hoverPlayer);
+            if (it != cacheCopy.end()) {
+                const auto& ec = it->second;
+                ImGui::BeginTooltip();
+                ImGui::TextColored(ImColor(220, 220, 220, 255), "%s", cacheStrEmpty(ec.name) ? "Player" : ec.name);
+                int hp = (int)ec.health, mhp = (int)ec.maxHealth;
+                if (mhp <= 0) mhp = 100;
+                ImGui::TextColored(ImColor(100, 255, 100, 255), "HP: %d/%d", hp, mhp);
+                float dist = lpPos.DistTo(ec.headPos);
+                ImGui::TextColored(ImColor(150, 170, 200, 255), "Distance: %dm", (int)dist);
+                if (!cacheStrEmpty(ec.weaponName))
+                    ImGui::TextColored(ImColor(200, 200, 100, 255), "Weapon: %s", ec.weaponName);
+                bool hasBelt = false;
+                for (int i = 0; i < 6; i++) if (!cacheStrEmpty(ec.belt[i])) { hasBelt = true; break; }
+                if (hasBelt) {
+                    ImGui::Separator();
+                    ImGui::TextColored(ImColor(150, 170, 200, 255), "Belt:");
+                    for (int i = 0; i < 6; i++) {
+                        if (!cacheStrEmpty(ec.belt[i])) {
+                            bool active = !cacheStrEmpty(ec.weaponName) && strcmp(ec.belt[i], ec.weaponName) == 0;
+                            ImGui::TextColored(active ? ImColor(100, 255, 100, 255) : ImColor(200, 200, 210, 255),
+                                "  %d. %s%s", i + 1, ec.belt[i], active ? " <<" : "");
+                        }
+                    }
+                }
+                ImGui::EndTooltip();
+            }
+        }
+    }
+
+    // Draw NPCs
+    if (BIGMAP::ShowNPCs) {
+        static std::vector<Rust::BaseEntity*> npclist;
+        { std::unique_lock<std::mutex> lk(cac->npc_mutex, std::try_to_lock); if (lk.owns_lock()) npclist = npc_List; }
+
+        static std::unordered_map<uintptr_t, EspCacheData>* pNPC = nullptr;
+        if (!pNPC) pNPC = new std::unordered_map<uintptr_t, EspCacheData>();
+        auto& npcCache = *pNPC;
+        { std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex, std::try_to_lock); if (lk.owns_lock()) npcCache = g_EspCache; }
+
+        for (auto* NPC : npclist) {
+            if (!NPC || !is_valid((uintptr_t)NPC)) continue;
+            auto it = npcCache.find((uintptr_t)NPC);
+            if (it == npcCache.end()) continue;
+            if (it->second.isDead) continue;
+            ImVec2 pos = worldToScreen(it->second.headPos);
+            if (!inView(pos)) continue;
+            dl->AddCircleFilled(pos, dotSz * 0.7f, BIGMAP::NpcColor);
+        }
+    }
+
+    // Draw animals
+    if (BIGMAP::ShowAnimals) {
+        static std::vector<Rust::BaseEntity*> animallist;
+        { std::unique_lock<std::mutex> lk(cac->animal_mutex, std::try_to_lock); if (lk.owns_lock()) animallist = animal_List; }
+
+        static std::unordered_map<uintptr_t, EspCacheData>* pAn = nullptr;
+        if (!pAn) pAn = new std::unordered_map<uintptr_t, EspCacheData>();
+        auto& anCache = *pAn;
+        { std::shared_lock<std::shared_mutex> lk(g_EspCacheMutex, std::try_to_lock); if (lk.owns_lock()) anCache = g_EspCache; }
+
+        for (auto* Animal : animallist) {
+            if (!Animal || !is_valid((uintptr_t)Animal)) continue;
+            auto it = anCache.find((uintptr_t)Animal);
+            if (it == anCache.end()) continue;
+            if (it->second.isDead) continue;
+            ImVec2 pos = worldToScreen(it->second.headPos);
+            if (!inView(pos)) continue;
+            dl->AddCircleFilled(pos, dotSz * 0.7f, BIGMAP::AnimalColor);
+        }
+    }
+
+    // Draw world items from prefab_List
+    {
+        static std::vector<Rust::PrefabData> pList;
+        { std::unique_lock<std::mutex> lk(cac->prefab_mutex, std::try_to_lock); if (lk.owns_lock()) pList = prefab_List; }
+
+        for (const auto& prefab : pList) {
+            const std::string& name = prefab.name;
+            std::string low = name;
+            for (char& c : low) c = (char)tolower((unsigned char)c);
+
+            bool draw = false;
+            ImColor col = prefab.Color;
+            float sz = dotSz * 0.55f;
+
+            if (BIGMAP::ShowOres && (low.find("stone") != std::string::npos || low.find("metal") != std::string::npos || low.find("sulfur") != std::string::npos || low.find("ore") != std::string::npos)) {
+                draw = true;
+                if (low.find("sulfur") != std::string::npos) col = ImColor(255, 255, 100, 255);
+                else if (low.find("metal") != std::string::npos) col = ImColor(180, 180, 180, 255);
+                else col = ImColor(100, 150, 255, 255);
+            } else if (BIGMAP::ShowHemp && low.find("hemp") != std::string::npos) {
+                draw = true; col = ImColor(100, 255, 100, 255);
+            } else if (BIGMAP::ShowStashes && low.find("stash") != std::string::npos) {
+                draw = true; sz = dotSz * 0.7f; col = ImColor(255, 255, 100, 255);
+            } else if (BIGMAP::ShowTCs && low.find("cupboard") != std::string::npos) {
+                draw = true; sz = dotSz * 0.7f; col = ImColor(160, 120, 80, 255);
+            } else if (BIGMAP::ShowCrates && (low.find("crate") != std::string::npos || low.find("hackable") != std::string::npos)) {
+                draw = true; sz = dotSz * 0.7f; col = ImColor(100, 150, 255, 255);
+            } else if (BIGMAP::ShowVehicles && (low.find("boat") != std::string::npos || low.find("heli") != std::string::npos || low.find("balloon") != std::string::npos || low.find("car") != std::string::npos || low.find("bike") != std::string::npos)) {
+                draw = true; col = ImColor(0, 200, 200, 255);
+            } else if (BIGMAP::ShowTurrets && (low.find("turret") != std::string::npos || low.find("trap") != std::string::npos || low.find("sam") != std::string::npos)) {
+                draw = true; col = ImColor(255, 80, 80, 255);
+            }
+
+            if (!draw) continue;
+            ImVec2 pos = worldToScreen(prefab.Position);
+            if (!inView(pos)) continue;
+
+            // Squares for TC/turrets, circles for everything else — dots only, no text
+            if (low.find("cupboard") != std::string::npos || low.find("turret") != std::string::npos || low.find("trap") != std::string::npos) {
+                dl->AddRectFilled(ImVec2(pos.x - sz, pos.y - sz), ImVec2(pos.x + sz, pos.y + sz), col);
+            } else {
+                dl->AddCircleFilled(pos, sz, col);
+            }
+        }
+    }
+
+    // Draw local player marker (white diamond)
+    if (!lpPos.Empty()) {
+        ImVec2 pos = worldToScreen(lpPos);
+        if (inView(pos)) {
+            float s = dotSz + 2;
+            dl->AddQuadFilled(
+                ImVec2(pos.x, pos.y - s), ImVec2(pos.x + s, pos.y),
+                ImVec2(pos.x, pos.y + s), ImVec2(pos.x - s, pos.y),
+                ImColor(255, 255, 255, 255));
+        }
+    }
+}
+
+void SafeDrawMap() {
+    __try {
+        ReadWorldSize(); // throttled to every 30s — 1 IOCTL
+        bool mapOpen = IsMapOpen(); // cursor check + throttled instance check — ~0 IOCTLs
+
+        g_MapOpen.store(mapOpen, std::memory_order_relaxed);
+
+        if (mapOpen) {
+            __try {
+                DrawMapOverlay();
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                static int mapCrashCount = 0;
+                mapCrashCount++;
+                if (mapCrashCount <= 3)
+                    LOG("CRASH in DrawMapOverlay! code=0x%X crash#%d", GetExceptionCode(), mapCrashCount);
+            }
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
     }
 }

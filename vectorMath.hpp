@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #define M_PI		3.14159265358979323846	
 #include <Windows.h>
 #include <math.h>
@@ -309,8 +309,7 @@ public:
 	}
 	bool Empty() const
 	{
-		if (x < 0.1f || y < 0.1f)
-			return true;
+		if (x < 0.f && y < 0.f) return true;
 		if (x != x || y != y) // NaN check
 			return true;
 		else
@@ -496,19 +495,11 @@ inline Vector2 WorldToScreen(const Vector3& entity_position, Matrix4x4 view_matr
 
 	float w = trans_vec.Dot(entity_position) + view_matrix._44;
 
-<<<<<<< HEAD
 	// Discard entities behind camera or too close to near-clip plane.
 	// Clamping w to 0.0001f (old approach) caused entities to project to extreme
 	// screen positions — appearing "in the sky" on some PCs. CCODIX approach is safer.
 	if (w < 0.098f)
 		return Vector2(-1, -1);
-=======
-	// Clamp w to near-zero instead of returning invalid — matches SHA source.
-	// Prevents ESP from vanishing/popping during fast camera turns.
-	// Entities behind camera project to extreme screen positions (pinned to edges).
-	if (w <= 0.f)
-		w = 0.0001f;
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
 
 	float y = up_vec.Dot(entity_position) + view_matrix._42;
 	float x = right_vec.Dot(entity_position) + view_matrix._41;

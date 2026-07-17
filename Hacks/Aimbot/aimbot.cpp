@@ -1,4 +1,4 @@
-#include "aimbot.hpp"
+﻿#include "aimbot.hpp"
 #include "../Cache/cache.hpp"
 #include <vector>
 #include "../../Logger.hpp"
@@ -11,6 +11,7 @@ struct AimbotCacheData {
     Vector3 velocity;
     Vector3 bones[15];
     std::string weaponName;
+    std::string name;
     uint64_t teamId = 0;
     bool skeletonValid = false;
     bool isDead = false;
@@ -29,6 +30,7 @@ static AimbotCacheData CopyAimbotCache(const EspCacheData& src) {
     d.velocity = src.velocity;
     for (int i = 0; i < 15; i++) d.bones[i] = src.bones[i];
     d.weaponName = std::string(src.weaponName);
+    d.name = std::string(src.name);
     d.teamId = src.teamId;
     d.skeletonValid = src.skeletonValid;
     d.isDead = src.isDead;
@@ -54,13 +56,13 @@ static float GetFrameDt()
 
 static std::unordered_map<uintptr_t, Vector3> prevPositions;
 
-static int GetScreenMidX() { static int v = 0; if (!v) v = GetSystemMetrics(0) / 2; return v; }
-static int GetScreenMidY() { static int v = 0; if (!v) v = GetSystemMetrics(1) / 2; return v; }
+static int GetScreenMidX() { return g_ScreenW > 0 ? g_ScreenW / 2 : GetSystemMetrics(SM_CXSCREEN) / 2; }
+static int GetScreenMidY() { return g_ScreenH > 0 ? g_ScreenH / 2 : GetSystemMetrics(SM_CYSCREEN) / 2; }
 
 static bool ScreenPointValid(const Vector2& p)
 {
-    static int sw = 0, sh = 0;
-    if (!sw) { sw = GetSystemMetrics(SM_CXSCREEN); sh = GetSystemMetrics(SM_CYSCREEN); }
+    int sw = g_ScreenW > 0 ? g_ScreenW : GetSystemMetrics(SM_CXSCREEN);
+    int sh = g_ScreenH > 0 ? g_ScreenH : GetSystemMetrics(SM_CYSCREEN);
     if (!std::isfinite(p.x) || !std::isfinite(p.y)) return false;
     if (p.x <= 1.0f || p.y <= 1.0f) return false;
     if (p.x >= (float)sw - 1.0f || p.y >= (float)sh - 1.0f) return false;
@@ -81,11 +83,11 @@ static inline float h_gauss() {
 static int GetBestBone(Rust::BaseEntity* player)
 {
     // 0=Head, 1=Neck, 2=Chest, 3=Pelvis, 4=ClosestToCrosshair, 5=Smart
+    int selectedBone;
     if (AIMBOT::BonePriority <= 3) {
         static const int singleBones[] = { 53, 52, 20, 14 };
-        return singleBones[AIMBOT::BonePriority];
-    }
-
+        selectedBone = singleBones[AIMBOT::BonePriority];
+    } else {
     // Priority 4/5: use CACHED bone positions
     static const int bonePool[] = { 53, 52, 20, 14 };
     static const int cacheIdx[] = { 0, 1, 2, 3 };
@@ -145,10 +147,13 @@ static int GetBestBone(Rust::BaseEntity* player)
                 bestBone = 53;
         }
 
-        return bestBone;
+        selectedBone = bestBone;
+    } else {
+        selectedBone = AIMBOT::BoneSelector;
     }
+    } // close else (BonePriority > 3)
 
-    return AIMBOT::BoneSelector;
+    return selectedBone;
 }
 
 static Vector3 GetPredictedTargetPos(Rust::BaseEntity* player, int bone)
@@ -302,17 +307,19 @@ Rust::BaseEntity* aimbot::Get_BestEntity()
         if (!hasCache) continue;
         if (AIMBOT::IgnoreWounded && pcache.isWounded) continue;
         if (AIMBOT::IgnoreSleepers && pcache.isSleeping) continue;
+        // Skip friends
+        if (!pcache.name.empty()) {
+            std::lock_guard<std::mutex> lk(g_FriendMutex);
+            if (g_Friends.count(pcache.name)) continue;
+        }
         if (AIMBOT::VisibleOnly) {
             bool vis = pcache.isVisible;
             if (AIMBOT::VisibleStrict) vis = pcache.isVisibleRaw && vis;
             if (!vis) continue;
         }
         if (AIMBOT::WeaponCheck) {
-            // Use cached weapon name instead of live read
             if (pcache.weaponName.empty()) continue;
-            // Basic weapon check via cached name (non-ideal but zero IOCTL)
         }
-
         if (AIMBOT::IgnoreTeam && myTeam != 0) {
             if (pcache.teamId == myTeam) continue;
         }
@@ -370,11 +377,7 @@ void aimbot::do_aimbot()
     if (g_BnStableCycles.load(std::memory_order_relaxed) < 3) return;
 
     // Early-out: skip the entire aimbot loop when no feature is active
-<<<<<<< HEAD
     if (!AIMBOT::Memory && !AIMBOT::TargetLine && !AIMBOT::TargetText
-=======
-    if (!AIMBOT::Memory && !AIMBOT::Silent && !AIMBOT::TargetLine && !AIMBOT::TargetText
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         && !AIMBOT::PredictionIndicator && !ESP::hotbar_text && !ESP::PlayerInventoryPanel) return;
 
     {
@@ -423,7 +426,6 @@ void aimbot::do_aimbot()
     }
 
     if (ESP::hotbar_text || ESP::PlayerInventoryPanel) {
-        // Use cached belt from EspCacheData (zero IOCTLs) instead of live Get_Hotbar_list
         EspCacheData tc;
         bool hasTc = false;
         {
@@ -442,18 +444,13 @@ void aimbot::do_aimbot()
         }
     }
 
-<<<<<<< HEAD
     // Calculate angle for memory aimbot
     if (AIMBOT::Memory) {
-=======
-    // Calculate angle — shared between Memory aimbot and Silent aim
-    if (AIMBOT::Memory || AIMBOT::Silent) {
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
         int bone = GetBestBone(BestEntity);
 
         // Get target position with prediction (handles velocity + gravity comp)
         auto targetPos = GetPredictedTargetPos(BestEntity, bone);
-        if (targetPos.Empty()) return; // no live IOCTL fallback — cache only
+        if (!targetPos.Empty()) {
 
         // Get LOCAL player position — from globals (zero IOCTLs, written by fast thread)
         Vector3 localPos;
@@ -464,22 +461,23 @@ void aimbot::do_aimbot()
             lpCrouching = g_LocalIsCrouching;
         }
         if (localPos.Empty()) {
-            // Fallback: use g_LocalPlayerPos + crouch-aware neck offset
             Vector3 lpPos;
             { std::lock_guard<std::mutex> lk(g_LocalPlayerDataMutex); lpPos = g_LocalPlayerPos; }
             if (!lpPos.Empty()) localPos = lpPos;
-            localPos.y += lpCrouching ? 0.9f : 1.5f; // crouch-aware neck height
+            localPos.y += lpCrouching ? 0.9f : 1.5f;
         }
-        if (localPos.Empty()) return;
+        if (!localPos.Empty()) {
         auto angle = CalcAngle(localPos, targetPos);
         if (!angle.Empty()) {
             Normalize(angle.y, angle.x);
 
             if (AIMBOT::HumanizeEnabled) {
                 if (AIMBOT::MissProbability > 0.f && h_rand() < AIMBOT::MissProbability)
-                    return;
-                angle.x += h_gauss() * AIMBOT::JitterAmount;
-                angle.y += h_gauss() * AIMBOT::JitterAmount;
+                    { /* skip */ }
+                else {
+                    angle.x += h_gauss() * AIMBOT::JitterAmount;
+                    angle.y += h_gauss() * AIMBOT::JitterAmount;
+                }
             }
 
             static bool aim_logged = false;
@@ -487,31 +485,19 @@ void aimbot::do_aimbot()
             if (!aim_logged || aim_count < 10) {
                 uintptr_t inp = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
                 Vector3 cur = read<Vector3>(inp + offsets::PlayerInput::bodyAngles);
-                // Determine which eyes path was used
-                uintptr_t eyesRaw = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerEyes);
-                uint64_t handle = eyesRaw ? read<uint64_t>(eyesRaw + 0x18) : 0;
-                uintptr_t eyesResolved = handle ? decrypt::Il2cppGetHandle(handle) : 0;
-                const char* eyesSrc = eyesResolved ? "GCHandle" : "fallback";
-<<<<<<< HEAD
                 LOG("AIMBOT_WRITE[%d]: bone=%d angle=(%.1f,%.1f) cur=(%.1f,%.1f) localY=%.1f targetY=%.1f crouch=%d Mem=%d",
                     aim_count, bone, angle.x, angle.y, cur.x, cur.y,
                     localPos.y, targetPos.y, (int)lpCrouching, (int)AIMBOT::Memory);
-=======
-                LOG("AIMBOT_WRITE[%d]: bone=%d angle=(%.1f,%.1f) cur=(%.1f,%.1f) localY=%.1f targetY=%.1f eyes=%s Mem=%d Sil=%d",
-                    aim_count, bone, angle.x, angle.y, cur.x, cur.y,
-                    localPos.y, targetPos.y, eyesSrc, (int)AIMBOT::Memory, (int)AIMBOT::Silent);
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
                 aim_logged = true;
                 aim_count++;
             }
 
             // Memory aimbot — write bodyAngles (visible aim change)
-            if (AIMBOT::Memory) {
+            {
                 uintptr_t input = read<uintptr_t>((uintptr_t)src->LocalPlayer + offsets::BasePlayer::PlayerInput);
                 if (is_valid(input) && is_valid(input + offsets::PlayerInput::bodyAngles)) {
                     int passes = AIMBOT::SpinWrites ? 3 : 1;
                     for (int p = 0; p < passes; p++) {
-                        // Re-read input each pass — PlayerInput can be freed between spin writes
                         if (p > 0) {
                             if (!lpStillStable()) break;
                             Sleep(0);
@@ -525,6 +511,7 @@ void aimbot::do_aimbot()
                         }
 
                         if (AIMBOT::SMOOTHING > 1.f) {
+                            // Phase 3: Ease-out aim path — decelerate near target
                             if (!lpStillStable()) break;
                             Vector3 currentAngle = read<Vector3>(input + offsets::PlayerInput::bodyAngles);
                             float smooth = AIMBOT::SMOOTHING;
@@ -537,18 +524,24 @@ void aimbot::do_aimbot()
                             float deltaY = angle.y - currentAngle.y;
                             if (deltaY > 180.f) deltaY -= 360.f;
                             if (deltaY < -180.f) deltaY += 360.f;
+
+                            float remainingMag = sqrtf(deltaX * deltaX + deltaY * deltaY);
+                            float effectiveFraction = 1.0f / smooth;
+
                             if (AIMBOT::HumanizeEnabled) {
-                                float deltaMag = sqrtf(deltaX * deltaX + deltaY * deltaY);
-                                if (deltaMag < 3.f && deltaMag > 0.5f) {
+                                if (remainingMag < 3.f && remainingMag > 0.5f) {
                                     float over = 1.f + (h_rand() * AIMBOT::OvershootAmount / 10.f);
                                     deltaX *= over;
                                     deltaY *= over;
                                 }
                             }
-                            Vector3 smoothed;
-                            smoothed.x = currentAngle.x + deltaX / smooth;
-                            smoothed.y = currentAngle.y + deltaY / smooth;
-                            smoothed.z = currentAngle.z;
+
+                            float moveX = deltaX * effectiveFraction;
+                            float moveY = deltaY * effectiveFraction;
+                            if (fabsf(moveX) > 15.0f) moveX = (moveX > 0 ? 15.0f : -15.0f);
+                            if (fabsf(moveY) > 15.0f) moveY = (moveY > 0 ? 15.0f : -15.0f);
+
+                            Vector3 smoothed(currentAngle.x + moveX, currentAngle.y + moveY, currentAngle.z);
                             write<Vector3>(input + offsets::PlayerInput::bodyAngles, smoothed);
                         }
                         else {
@@ -558,9 +551,9 @@ void aimbot::do_aimbot()
                             float deltaY = angle.y - currentAngle.y;
                             if (deltaY > 180.f) deltaY -= 360.f;
                             if (deltaY < -180.f) deltaY += 360.f;
-                            const float MAX_DELTA = 15.0f;
-                            if (fabsf(deltaX) > MAX_DELTA) deltaX = (deltaX > 0.f ? MAX_DELTA : -MAX_DELTA);
-                            if (fabsf(deltaY) > MAX_DELTA) deltaY = (deltaY > 0.f ? MAX_DELTA : -MAX_DELTA);
+
+                            if (fabsf(deltaX) > 15.0f) deltaX = (deltaX > 0 ? 15.0f : -15.0f);
+                            if (fabsf(deltaY) > 15.0f) deltaY = (deltaY > 0 ? 15.0f : -15.0f);
                             if (AIMBOT::HumanizeEnabled) {
                                 deltaX += h_gauss() * AIMBOT::JitterAmount * 0.5f;
                                 deltaY += h_gauss() * AIMBOT::JitterAmount * 0.5f;
@@ -568,29 +561,12 @@ void aimbot::do_aimbot()
                             Vector3 clamped(currentAngle.x + deltaX, currentAngle.y + deltaY, currentAngle.z);
                             write<Vector3>(input + offsets::PlayerInput::bodyAngles, clamped);
                         }
-<<<<<<< HEAD
-=======
                     }
                 }
             }
-
-            // Silent aim — BodyRotation quaternion (no visible aim change)
-            // Works independently of Memory aimbot — only writes bodyRotation, not bodyAngles
-            if (AIMBOT::Silent) {
-                if (lpStillStable()) {
-                    // Use cached PlayerEyes pointer — eliminates 708-IOCTL GetComponentByName() per frame
-                    uintptr_t eyes = g_LocalPlayerEyesPtr.load(std::memory_order_relaxed);
-                    if (eyes && is_valid(eyes)) {
-                            float pr = angle.x * 3.141592f / 180.f;
-                            float yr = angle.y * 3.141592f / 180.f;
-                            float cy = cosf(yr * 0.5f), sy = sinf(yr * 0.5f);
-                            float cp = cosf(pr * 0.5f), sp = sinf(pr * 0.5f);
-                            write<Vector4>(eyes + offsets::PlayerEyes::bodyRotation, Vector4(cy * sp, sy * cp, sy * sp, cy * cp));
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
-                    }
-                }
-            }
-        }
+        } // !angle.Empty()
+        } // !localPos.Empty()
+        } // !targetPos.Empty()
     }
 
     // Target visuals (work independently of Memory Aimbot) — only if a visual feature is on

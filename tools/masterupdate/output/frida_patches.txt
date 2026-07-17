@@ -1,2 +1,0 @@
-// No Frida-validated offset changes detected.
-// All offsets match the Frida runtime dump.

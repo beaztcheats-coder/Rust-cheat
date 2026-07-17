@@ -13,10 +13,8 @@
 #include "OffsetManager.hpp"
 #include "RuntimePaths.hpp"
 
-#if !defined(BETTERCHEATS)
 #include "Hacks/Misc/spoofer.hpp"
-#endif
-#if !defined(BETTERCHEATS)
+#ifdef BEAZT_DEBUG
 #include "Hacks/Misc/cleaner.hpp"
 #endif
 
@@ -129,10 +127,11 @@ void SafePause() {
 
 void CreateConsole()
 {
+#ifdef BEAZT_DEBUG
     if (!AllocConsole()) {
         AttachConsole(ATTACH_PARENT_PROCESS);
     }
-    SetConsoleTitleA("Rust External");
+    SetConsoleTitleA("System Monitor");
 
     HANDLE hOut = CreateFileA("CONOUT$", GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
     HANDLE hIn = CreateFileA("CONIN$", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
@@ -149,12 +148,14 @@ void CreateConsole()
         SetWindowPos(conWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW);
         SetForegroundWindow(conWnd);
     }
+#endif
 }
 
 void MainThreadImpl();
 
 static LONG s_already_running = 0;
 static std::mutex g_cache_worker_lock;
+static bool g_spoofRequested = false;
 
 static void StartCacheWorker(const char* reason)
 {
@@ -274,7 +275,7 @@ DWORD WINAPI MainThread(LPVOID lpReserved)
         DWORD code = GetExceptionCode();
         void* crashAddr = crashEp ? crashEp->ExceptionRecord->ExceptionAddress : nullptr;
         char msg[512];
-        wsprintfA(msg, "Cheat crashed!\nException code: 0x%X\nCrash address: 0x%p\n\nSend a screenshot to support.", code, crashAddr);
+        wsprintfA(msg, "Application error!\nException code: 0x%X\nAddress: 0x%p\n\nPlease restart.", code, crashAddr);
         LOG("CRASH in MainThread! code=0x%X addr=0x%p", code, crashAddr);
         if (crashEp && crashEp->ExceptionRecord->NumberParameters >= 2) {
             LOG("CRASH: access type=%s at 0x%p",
@@ -287,7 +288,7 @@ DWORD WINAPI MainThread(LPVOID lpReserved)
         for (USHORT i = 0; i < nFrames; i++) {
             LOG("CRASH: [%u] 0x%p", (unsigned)i, frames[i]);
         }
-        MessageBoxA(NULL, msg, "Cheat Error", MB_ICONERROR | MB_OK);
+        MessageBoxA(NULL, msg, "Application Error", MB_ICONERROR | MB_OK);
     }
     return 0;
 }
@@ -296,7 +297,6 @@ void MainThreadImpl()
 {
     g_vehHandle = AddVectoredExceptionHandler(1, CrashVEH);
 
-<<<<<<< HEAD
     // DPI awareness — SetProcessDpiAwarenessContext fails silently in injected DLLs
     // (host process already set its own DPI awareness). This is intentional — no fallbacks
     // because loading shcore.dll or calling SetProcessDpiAwareness/SetProcessDPIAware
@@ -341,42 +341,11 @@ void MainThreadImpl()
             DeleteFileA((tp + "cheat_debug.log").c_str());
             DeleteFileA((tp + "cheat_debug_bomza.log").c_str());
             DeleteFileA((tp + "cheat_debug_bc.log").c_str());
+            DeleteFileA((tp + "rust_friends.dat").c_str());
+            DeleteFileA((tp + "rust_stashes.dat").c_str());
         }
     }
 
-=======
-    // Delete ALL temp files at startup (except config + debug log for debug builds)
-    {
-        std::string dllDir = RuntimePaths::DllDirectory();
-        auto delFile = [&](const char* path) { DeleteFileA(path); };
-        auto delDll = [&](const char* name) { DeleteFileA((dllDir + name).c_str()); };
-
-        // DLL directory temp files
-        delDll("rust_decrypts.dat");
-        delDll("rust_mesh.tri");
-        delDll("cheat_dll_loaded.txt");
-        delDll("rust_debug_enabled.txt");
-        delDll("spoofer_debug.log");
-        delDll("spoof_seed.dat");
-
-        // C:\ temp files
-        delFile("C:\\rust_decrypts.dat");
-        delFile("C:\\rust_mesh.tri");
-        delFile("C:\\rust_meshes.tri");
-        delFile("C:\\rust_debug_enabled.txt");
-
-        // %TEMP% log files (debug build keeps current flavor's log — Logger::Init recreates it)
-        char tempPath[MAX_PATH] = {};
-        GetTempPathA(MAX_PATH, tempPath);
-        if (tempPath[0]) {
-            std::string tp(tempPath);
-            DeleteFileA((tp + "cheat_debug.log").c_str());
-            DeleteFileA((tp + "cheat_debug_bomza.log").c_str());
-            DeleteFileA((tp + "cheat_debug_bc.log").c_str());
-        }
-    }
-
->>>>>>> 25ff9416c9ef7560696ffe11ac63cc83810d43e6
     // Diagnostic marker in DLL directory (non-suspicious filename — NOT "cheat" in name)
     {
         HANDLE hDiag = CreateFileA(RuntimePaths::DiagnosticMarkerPath(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -403,10 +372,10 @@ void MainThreadImpl()
         printf("    Rust External  -  Better Cheats\n");
 #else
         printf("       T H E   B E A Z T   V 3\n");
-        printf("    Rust Private  -  External Cheat\n");
+        printf("    Rust Private  -  External\n");
 #endif
         printf("  ============================================\n\n");
-        printf("  Launching cheat...\n\n");
+        printf("  Initializing...\n\n");
         printf("  ============================================\n\n");
         fflush(stdout);
     }
@@ -458,7 +427,7 @@ void MainThreadImpl()
             printf("  ============================================\n");
 #if defined(BOMZA)
             printf("         B O M Z A\n");
-            printf("    Bomza Cheat  -  External\n");
+            printf("    Bomza  -  External\n");
             printf("  ============================================\n\n");
             printf("  [1] Spoof and Play     (spoof HWID, then launch)\n");
             printf("  [2] Just play           (skip, launch directly)\n");
@@ -470,17 +439,17 @@ void MainThreadImpl()
             printf("%c\n\n", choice);
 
             if (choice == '1') {
-                LOG("Startup: user chose Spoof and Play");
-                RunEmbeddedSpoofer();
-                ConsolePrint("\n  Spoof complete. Press any key to continue...\n");
-                SafePause();
+                LOG("Startup: user chose Spoof and Play (deferred until driver ready)");
+                g_spoofRequested = true;
             }
             else if (choice == '3') {
                 LOG("Startup: user chose Clean after detection");
                 printf("\n  Launching deep cleaner...\n\n");
                 fflush(stdout);
                 Sleep(500);
+#ifdef BEAZT_DEBUG
                 CleanerMenu();
+#endif
                 SafeCLS();
                 printf("\n  ============================================\n");
                 printf("  Cleaning complete.\n");
@@ -497,7 +466,7 @@ void MainThreadImpl()
             }
 #else
             printf("       T H E   B E A Z T   V 3\n");
-            printf("    Rust Private  -  External Cheat\n");
+            printf("    Rust Private  -  External\n");
             printf("  ============================================\n\n");
             printf("  [1] Spoof and Play     (spoof HWID, then launch)\n");
             printf("  [2] Clean after detection (run deep cleaner)\n");
@@ -509,17 +478,17 @@ void MainThreadImpl()
             printf("%c\n\n", choice);
 
             if (choice == '1') {
-                LOG("Startup: user chose Spoof and Play");
-                RunEmbeddedSpoofer();
-                ConsolePrint("\n  Spoof complete. Press any key to continue...\n");
-                SafePause();
+                LOG("Startup: user chose Spoof and Play (deferred until driver ready)");
+                g_spoofRequested = true;
             }
             else if (choice == '2') {
                 LOG("Startup: user chose Clean after detection");
                 printf("\n  Launching deep cleaner...\n\n");
                 fflush(stdout);
                 Sleep(500);
+#ifdef BEAZT_DEBUG
                 CleanerMenu();
+#endif
                 SafeCLS();
                 printf("\n  ============================================\n");
                 printf("  Cleaning complete.\n");
@@ -563,6 +532,18 @@ void MainThreadImpl()
             return;
         }
 
+#if !defined(BETTERCHEATS)
+        // === Execute spoofer BEFORE game launches ===
+        // Spoof IOCTLs patch kernel hardware structures (disk/NIC/GPU/SMBIOS/TPM)
+        // They only need a valid driver handle — no CR3, no Rust process needed.
+        // Running before find_process() ensures the game sees spoofed HWID from start.
+        if (g_spoofRequested) {
+            RunEmbeddedSpoofer(Drv->hDriver);
+            ConsolePrint("\n  Spoof complete. Press any key to continue...\n");
+            SafePause();
+        }
+#endif
+
         SafeCLS();
         HWND conWnd = GetConsoleWindow();
         if (conWnd) SetWindowPos(conWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
@@ -590,6 +571,8 @@ void MainThreadImpl()
 
         SafeCLS();
 
+        // Clear find_process cache and re-find PID after HOME press
+        Drv->findproc_cached_pid.store(0, std::memory_order_relaxed);
         Drv->processid = Drv->find_process(L"RustClient.exe");
         if (!Drv->processid)
         {
@@ -608,20 +591,70 @@ void MainThreadImpl()
             LOG("Internal reads: DISABLED (DLL not in Rust process, using driver)");
         }
 
-        bool isbasecorrect = Drv->GetProcessBase(Drv->processid, Drv->process_base);
+        // GetProcessBase — retry up to 5 times with 1s delay
+        // Non-fatal: if all retries fail, try user-mode fallback. process_base is only
+        // used by the PE scan fallback in get_module (Step 3/4), not by the driver for
+        // memory reads (those use process_cr3). get_module Method 1 (OpenProcess) doesn't
+        // need process_base at all, and PE scan Step 1 (coarse scan from 0x7FF000000000) works without it.
+        bool isbasecorrect = false;
+        for (int i = 0; i < 5 && !isbasecorrect; i++) {
+            isbasecorrect = Drv->GetProcessBase(Drv->processid, Drv->process_base);
+            if (!isbasecorrect) {
+                DWORD err = GetLastError();
+                char retryMsg[128];
+                wsprintfA(retryMsg, "Process base retry %d/5 (error=%d)\n", i + 1, err);
+                ConsolePrint(retryMsg);
+                LOG("Process base retry %d/5 failed, GetLastError=%d, PID=%d", i + 1, err, Drv->processid);
+                if (i < 4) {
+                    Sleep(1000);
+                    // Re-find PID in case it changed
+                    Drv->findproc_cached_pid.store(0, std::memory_order_relaxed);
+                    Drv->processid = Drv->find_process(L"RustClient.exe");
+                    if (!Drv->processid) {
+                        ConsolePrint("Process disappeared during retry\n");
+                        LOG("FATAL: Process disappeared during GetProcessBase retry");
+                        SafePause();
+                        return;
+                    }
+                }
+            }
+        }
         if (!isbasecorrect)
         {
-            ConsolePrint("Process base not found\n");
-            LOG("FATAL: Process base not found");
-            SafePause();
-            return;
+            LOG("WARNING: Process base IOCTL failed after 5 retries, trying user-mode fallback...");
+            ConsolePrint("Process base IOCTL failed, trying user-mode fallback...\n");
+            // User-mode fallback: OpenProcess + VirtualQueryEx to find first MEM_IMAGE region
+            if (Drv->GetProcessBaseUsermode(Drv->processid, Drv->process_base)) {
+                char fbMsg[128];
+                wsprintfA(fbMsg, "User-mode process base: 0x%llX\n", (unsigned long long)Drv->process_base);
+                ConsolePrint(fbMsg);
+                LOG("Process base resolved via user-mode fallback: 0x%llX", (unsigned long long)Drv->process_base);
+            } else {
+                // Both IOCTL and user-mode failed — set to 0, PE scan coarse step will still work
+                ConsolePrint("User-mode fallback also failed, continuing with base=0...\n");
+                LOG("WARNING: Both IOCTL and user-mode process base failed, continuing with base=0");
+                Drv->process_base = 0;
+            }
         }
         ConsolePrintHex("process_base", Drv->process_base);
         LOG_HEX("process_base", Drv->process_base);
 
         // CR3 MUST be set before get_module — PE scan fallback uses ReadMemory_Raw
         // which needs the driver's CR3 to translate virtual addresses.
-        Drv->GetCR3_1(Drv->processid, false, Drv->process_cr3);
+        // Try GetCR3_1 first, then GetCR3_2 as fallback.
+        // If both fail, the driver cannot access the process at all (likely EAC blocking).
+        bool cr3Ok = Drv->GetCR3_1(Drv->processid, false, Drv->process_cr3);
+        if (!cr3Ok) {
+            LOG("WARNING: GetCR3_1 failed, trying GetCR3_2...");
+            cr3Ok = Drv->GetCR3_2(Drv->processid, Drv->process_cr3);
+        }
+        if (!cr3Ok || Drv->process_cr3 == 0) {
+            ConsolePrint("Driver cannot access Rust process (CR3 failed).\n");
+            ConsolePrint("EAC may be blocking the driver. Check driver is loaded.\n");
+            LOG("FATAL: CR3 failed — both GetCR3_1 and GetCR3_2 returned 0, PID=%d. Driver cannot access process.", Drv->processid);
+            SafePause();
+            return;
+        }
         ConsolePrintHex("CR3", Drv->process_cr3);
         LOG_HEX("process_cr3", Drv->process_cr3);
 
@@ -661,6 +694,8 @@ void MainThreadImpl()
 
             ShowWindow(GetConsoleWindow(), SW_HIDE);
 
+        LoadSavedStashes();
+        LoadFriends();
         StartCacheWorker("initial");
         StartFastRefreshWorker("initial");
         StartSkeletonWorker("initial");
@@ -812,6 +847,9 @@ void MainThreadImpl()
                 DeleteFileA((tp + "cheat_debug.log").c_str());
                 DeleteFileA((tp + "cheat_debug_bomza.log").c_str());
                 DeleteFileA((tp + "cheat_debug_bc.log").c_str());
+                // Files that were missing from cleanup
+                DeleteFileA((tp + "rust_friends.dat").c_str());
+                DeleteFileA((tp + "rust_stashes.dat").c_str());
             }
 
             if (!g_UpdateLoggingEnabled) {
@@ -824,6 +862,17 @@ void MainThreadImpl()
                     DeleteFileA((tp + "rustcfg.dat").c_str());
                     DeleteFileA((tp + "rustcfg_bomza.dat").c_str());
                     DeleteFileA((tp + "rustcfg_bc.dat").c_str());
+                    // Named configs (wildcard pattern)
+                    WIN32_FIND_DATAA fd;
+                    std::string searchPattern = tp + "rustcfg_*.dat";
+                    HANDLE hFind = FindFirstFileA(searchPattern.c_str(), &fd);
+                    if (hFind != INVALID_HANDLE_VALUE) {
+                        do {
+                            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+                                DeleteFileA((tp + fd.cFileName).c_str());
+                        } while (FindNextFileA(hFind, &fd));
+                        FindClose(hFind);
+                    }
                 }
                 LOG("Production cleanup: ALL temp files deleted");
             } else {
@@ -898,13 +947,7 @@ void MainThreadImpl()
         ExitProcess(0);
 }
 
-extern "C" __declspec(dllexport) void Main()       { MainThread(nullptr); }
-extern "C" __declspec(dllexport) void Init()       { MainThread(nullptr); }
-extern "C" __declspec(dllexport) void Run()        { MainThread(nullptr); }
-extern "C" __declspec(dllexport) void Entry()      { MainThread(nullptr); }
-extern "C" __declspec(dllexport) void Start()      { MainThread(nullptr); }
-extern "C" __declspec(dllexport) void Execute()    { MainThread(nullptr); }
-extern "C" __declspec(dllexport) void Initialize() { MainThread(nullptr); }
+extern "C" __declspec(dllexport) void Main() { MainThread(nullptr); }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
